@@ -1,0 +1,13 @@
+torch
+xformers
+tiktoken
+wandb
+webdataset
+pandas
+fsspec
+tqdm
+jsonlines
+boto3==1.26.90
+Pillow
+zstandard
+llm-foundry
