@@ -11,20 +11,20 @@ OpenLM is a minimal but performative language modeling (LM) repository, aimed to
 - [Leaderboard](#leaderboard)
 - [Acknowledgements](#acknowledgements)
 
-# Release Notes 
+# Release Notes
 - 08/18/23: Updated README.md
 # Quickstart
 Here we'll go over a basic example where we start from a fresh install, download and preprocess some training data, and train a model.
 
 ## Setup
-We require python >=3.9, and a current installation of pyTorch, as well as several other packages. The full list of requirements is contained in `requirements.txt` and can be installed in your python enviornment via 
+We require python >=3.9, and a current installation of pyTorch, as well as several other packages. The full list of requirements is contained in `requirements.txt` and can be installed in your python enviornment via
 ```>>> pip install -r requirements.txt```
-Some considerations: 
+Some considerations:
 - We like [WandB](https://wandb.ai/) and [tensorboard](https://www.tensorflow.org/tensorboard) for logging. We specify how to use these during training below.
 - Currently, single GPU training is not supported. This is an open issue we are working on, but we strongly recommend using multiple GPUs for training language models anyway.
 
 ## Process Training Data
-Next you must specify a collection of tokenized data. For the purposes of this example, we will use the [Pile dataset](https://the-eye.eu/public/AI/pile/train/). If you want to download this locally, here's a bash incantation to do this (you'll likely want to do this in a detached screen, preferably overnight). 
+Next you must specify a collection of tokenized data. For the purposes of this example, we will use the [Pile dataset](https://the-eye.eu/public/AI/pile/train/). If you want to download this locally, here's a bash incantation to do this (you'll likely want to do this in a detached screen, preferably overnight).
 ```
 #!/bin/bash
 mkdir raw_data    ### or wherever you want to store raw data
@@ -58,9 +58,9 @@ Tokenized data can now be passed to the main training script, `open_lm/main.py`.
 - `report-to`: if present, can be `wandb`, `tensorboard`, or `all` to stash logging information on WandB or Tensorboard.
 
 
-Model choices and parameter sizes are contained in the following table 
+Model choices and parameter sizes are contained in the following table
 <center>
-  
+
 | Model Name  | # Parameters |
 |-------------|-------------:|
 | quark_neox  |        11.0M |
@@ -72,7 +72,7 @@ Model choices and parameter sizes are contained in the following table
 | m1b_neox    |         1.4B |
 | g3b_neox    |         2.8B |
 | 17b_neox    |         6.9B |
-  
+
 </center>
 
 An example training run can be called as follows:
@@ -102,7 +102,7 @@ An example training run can be called as follows:
  --resume latest \
  --logs path/to/logging/dir/
 ```
-Checkpoints and final model weights will be saved to the specified logs directory. 
+Checkpoints and final model weights will be saved to the specified logs directory.
 # Pretrained Models
 
 ## OpenLM 1B
@@ -178,7 +178,7 @@ OpenLM 7B is not yet done training.
 
 # Team and acknowledgements
 
-Team (so-far, * = equal contrib): Suchin Gururangan*, Mitchell Wortsman*, Samir Gadre, Achal Dave, Maciej Kilian, Weijia Shi, Georgios Smyrnis, Gabriel Ilharco, Matt Jordan, Ali Farhadi, Ludwig Schmidt.
+Team (so-far, * = equal contrib): Suchin Gururangan*, Mitchell Wortsman*, Samir Yitzhak Gadre, Achal Dave, Maciej Kilian, Weijia Shi, Georgios Smyrnis, Gabriel Ilharco, Matt Jordan, Ali Farhadi, Ludwig Schmidt.
 
 Code is based heavily on [open-clip](https://github.com/mlfoundations/open_clip) developed by a team including Ross Wightman, Romain Beaumont, Mehdi Cherti, Jenia Jitsev, and [open-flamingo](https://github.com/mlfoundations/open_flamingo), developed by a team including Anas Awadalla and Irena Gao. Additional inspiration is from [lit-llama](https://github.com/Lightning-AI/lit-llama).
 We are greatful to stability.ai for resource support.
