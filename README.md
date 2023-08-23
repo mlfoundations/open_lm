@@ -178,7 +178,7 @@ OpenLM 7B is not yet done training.
 
 # Team and acknowledgements
 
-Team (so-far, * = equal contrib): Mitchell Wortsman*, Suchin Gururangan*, Samir Gadre, Achal Dave, Maciej Kilian, Weijia Shi, Georgios Smyrnis, Gabriel Ilharco, Matt Jordan, Ali Farhadi, Ludwig Schmidt.
+Team (so-far, * = equal contrib): Suchin Gururangan*, Mitchell Wortsman*, Samir Gadre, Achal Dave, Maciej Kilian, Weijia Shi, Georgios Smyrnis, Gabriel Ilharco, Matt Jordan, Ali Farhadi, Ludwig Schmidt.
 
 Code is based heavily on [open-clip](https://github.com/mlfoundations/open_clip) developed by a team including Ross Wightman, Romain Beaumont, Mehdi Cherti, Jenia Jitsev, and [open-flamingo](https://github.com/mlfoundations/open_flamingo), developed by a team including Anas Awadalla and Irena Gao. Additional inspiration is from [lit-llama](https://github.com/Lightning-AI/lit-llama).
 We are greatful to stability.ai for resource support.
