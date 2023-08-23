@@ -90,6 +90,4 @@ done
 
 Then you can make a plot with `python plots/interpolation.py` which results in the following plot.
 
-Note this is for the 1B model and only partway through training. We will improve this when the models are finished, and we will also look at the 3B model!
-
 ![](plots/interpolation.png)
