@@ -62,6 +62,5 @@ setuptools.setup(
     url="https://github.com/mlfoundations/open_lm",
     license="MIT",
     packages=find_packages(),
-    # package_data={"": ["open_lm/model_configs/*.json"]},
     include_package_data=True,
 )
