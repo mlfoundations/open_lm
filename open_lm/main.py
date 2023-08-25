@@ -511,7 +511,12 @@ def main(args):
 
         if args.lr_scheduler == "cosine":
             scheduler = cosine_lr(
-                optimizer, args.lr, args.warmup, total_steps, args.lr_cooldown_end, args.force_min_lr
+                optimizer,
+                args.lr,
+                args.warmup,
+                total_steps,
+                args.lr_cooldown_end,
+                args.force_min_lr,
             )
         else:
             logging.error(
@@ -545,10 +550,6 @@ def main(args):
 
     if "train" not in data:
         checkpoint_root = Path(args.resume).parent
-
-        if is_master(args):
-            if os.path.exists(os.path.join(checkpoint_root, "results.jsonl")):
-                return
 
         metrics = evaluate(model, data, start_epoch, args, writer)
         metrics["checkpoint_path"] = args.resume

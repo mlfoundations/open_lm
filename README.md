@@ -58,20 +58,20 @@ Tokenized data can now be passed to the main training script, `open_lm/main.py`.
 - `report-to`: if present, can be `wandb`, `tensorboard`, or `all` to stash logging information on WandB or Tensorboard.
 
 
-Model choices and parameter sizes are contained in the following table
+Model choices are contained in the following table, where, for instance `11m` indicates an 11 million parameter model and `1b` indicates a 1 billion parameter model.
 <center>
 
-| Model Name  | # Parameters |
-|-------------|-------------:|
-| quark_neox  |        11.0M |
-| atom_neox   |        24.7M |
-| aphid_neox  |        87.5M |
-| ant_neox    |       162.4M |
-| potato_neox |       411.7M |
-| marmot_neox |       834.6M |
-| m1b_neox    |         1.4B |
-| g3b_neox    |         2.8B |
-| 17b_neox    |         6.9B |
+| Model Name    |
+|---------------|
+| `open_lm_11m` |
+| `open_lm_25m` |
+| `open_lm_87m` |
+| `open_lm_160m`|
+| `open_lm_411m`|
+| `open_lm_830m`|
+| `open_lm_1b`  |
+| `open_lm_3b`  |
+| `open_lm_7b`  |
 
 </center>
 
