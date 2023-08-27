@@ -19,6 +19,13 @@ Here we'll go over a basic example where we start from a fresh install, download
 ## Setup
 We require python >=3.9, and a current installation of pyTorch, as well as several other packages. The full list of requirements is contained in `requirements.txt` and can be installed in your python enviornment via
 ```>>> pip install -r requirements.txt```
+
+If your are using `conda`, alternatively you can run to create an environment called `open_lm`:
+```>>> conda env create --file environment.yml```
+
+To use RMS Norm, we use custom `triton` kernels, which must be run with a specific version also used in `xfromers`:
+```pip install triton==2.0.0.dev20221105 --no-deps```
+
 Some considerations:
 - We like [WandB](https://wandb.ai/) and [tensorboard](https://www.tensorflow.org/tensorboard) for logging. We specify how to use these during training below.
 - Currently, single GPU training is not supported. This is an open issue we are working on, but we strongly recommend using multiple GPUs for training language models anyway.
