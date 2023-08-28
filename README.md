@@ -21,7 +21,6 @@ We require python >=3.9, and a current installation of pyTorch, as well as sever
 ```>>> pip install -r requirements.txt```
 Some considerations:
 - We like [WandB](https://wandb.ai/) and [tensorboard](https://www.tensorflow.org/tensorboard) for logging. We specify how to use these during training below.
-- Currently, single GPU training is not supported. This is an open issue we are working on, but we strongly recommend using multiple GPUs for training language models anyway.
 
 ## Process Training Data
 Next you must specify a collection of tokenized data. For the purposes of this example, we will use the [Pile dataset](https://the-eye.eu/public/AI/pile/train/). If you want to download this locally, here's a bash incantation to do this (you'll likely want to do this in a detached screen, preferably overnight).
