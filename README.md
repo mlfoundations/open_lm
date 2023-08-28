@@ -7,9 +7,9 @@ OpenLM is a minimal but performative language modeling (LM) repository, aimed to
   - [Setup](#setup)
   - [Process training data](#process-training-data)
   - [Run training](#run-training)
+  - [Evaluate Model](#evaluate-model)
 - [Pretrained Models](#pretrained-models)
-- [Leaderboard](#leaderboard)
-- [Acknowledgements](#acknowledgements)
+- [Team and Acknowledgements](#team-and-acknowledgements)
 
 # Release Notes
 - 08/18/23: Updated README.md
@@ -79,7 +79,7 @@ An example training run can be called as follows:
 ```
 >>> export CUDA_VISIBLE_DEVICES=0,1,2,3
 >>> torchrun --nproc-per-node 4 -m open_lm.main   \
- --model g3b_neox \
+ --model open_lm_3b \
  --train-data /preproc_data/shard-{0000000..0000099}.tar \
  --train-num-samples 1000000000 \
  --workers 8 \
@@ -103,17 +103,23 @@ An example training run can be called as follows:
  --logs path/to/logging/dir/
 ```
 Checkpoints and final model weights will be saved to the specified logs directory.
-# Pretrained Models
 
-## OpenLM 1B
-OpenLM 1B is a ~1Billion parameter model trained on INSERT TRAINING DATA DETAILS. The model checkpoint can be downloaded from [HuggingFace here](https://huggingface.co/mlfoundations/open_lm_1B/tree/main). The script used to train this model (for config-copying purposes) is [located here](https://github.com/mlfoundations/open_lm/blob/main/scripts/train_example.sh). Once this checkpoint has been downloaded, you can evaluate it by running:
-
+## Evaluate Model
+Once trained, we can evaluate the model. This requires [LLM Foundry](https://github.com/mosaicml/llm-foundry), which can be installed via `pip install llm-foundry`. Next some configurations are required to pass to the evaluator: a skeleton of these parameters is located at [eval/in_memory_hf_eval.yaml](eval/in_memory_hf_eval.yaml). Then just run the following script, making sure to point it at the checkpoint of your trained model (and it's correspending config .json file): 
 ```
 cd eval
 python eval_openlm_ckpt.py \
 --eval-yaml in_memory_hf_eval.yaml \
---model-config ../open_lm/model_configs/m1b_neox.json  \ --checkpoint /path/to/openlm_checkpoint.pt
+--model-config ../open_lm/model_configs/open_lm_3b.json  \ --checkpoint /path/to/openlm_checkpoint.pt
 ```
+
+
+# Pretrained Models
+
+## OpenLM 1B
+OpenLM 1B is a ~1Billion parameter model trained on a 1.6T token dataset which consists of a mix of RedPajama, Pile, S2ORC, The Pile of Law, Deepmind Math, and RealNews (the full mixture of training data is described in [more detail here](https://docs.google.com/spreadsheets/d/1YW-_1vGsSPmVtEt2oeeJOecH6dYX2SuEuhOwZyGwy4k/edit?usp=sharing)). The model checkpoint can be downloaded from [HuggingFace here](https://huggingface.co/mlfoundations/open_lm_1B/tree/main). The script used to train this model (for config-copying purposes) is [located here](https://github.com/mlfoundations/open_lm/blob/main/scripts/train_example.sh). Once this checkpoint has been downloaded, you can evaluate it by following the directions in the [Evaluate Model](#evaluate-model) section above:
+
+
 
 | **OpenLM-1B** | **250B Tokens** | **500B tokens** | **750B tokens** | **1T Tokens** | **1.25T Tokens** | **1.5T Tokens** | **1.6T Tokens** |
 |----------------|-----------------|-----------------|-----------------|---------------|------------------|-----------------|-----------------|
