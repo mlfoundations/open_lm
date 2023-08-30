@@ -280,7 +280,7 @@ def filter_lt_seqlen(seq_len, x):
     return len(x[0]) > seq_len
     
 
-def get_wds_dataset(args, is_train, epoch=0, floor=False, tokenizer=None, data_key="json", force_num_samples=-1):
+def get_wds_dataset(args, is_train, epoch=0, floor=False, tokenizer=None, data_key="json", force_num_samples=[-1]):
     input_shards_ = args.train_data if is_train else args.val_data
     
     assert input_shards_ is not None
@@ -293,8 +293,8 @@ def get_wds_dataset(args, is_train, epoch=0, floor=False, tokenizer=None, data_k
         num_shards = None
         if is_train:
             if args.train_num_samples is not None:
-                if force_num_samples > 0:
-                    num_samples = force_num_samples
+                if force_num_samples[ii] > 0:
+                    num_samples = force_num_samples[ii]
                 else:
                     if args.train_data_mix_weights is not None:
                         num_samples = int(args.train_num_samples * args.train_data_mix_weights[ii])

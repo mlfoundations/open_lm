@@ -24,12 +24,6 @@ def parse_args(args):
         help="Directory containing a dataset in webdataset format.",
     )
     parser.add_argument(
-        "--tmp-dir",
-        type=str,
-        default="./",
-        help="Temporary directory for interfacing with s3.",
-    )
-    parser.add_argument(
         "--manifest-filename",
         type=str,
         default="manifest.json",

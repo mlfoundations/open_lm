@@ -91,7 +91,7 @@ def parse_args(args):
     parser.add_argument(
         "--dataset-metadata",
         default=None,
-        help="Uses metadata to construct a train set."
+        help="Uses metadata to construct a train set. Can accept multiple paths separated by ::"
     )
     parser.add_argument(
         "--disable-buffer",

@@ -577,15 +577,15 @@ def main(args):
             assert (
                 not args.dataset_resampled
             ), "dataset_metadata and dataset_resampled are mutually exclusive"
-            train_data_string, num_samples = get_string_for_epoch(
-                args.train_num_samples, epoch, args.dataset_metadata
+            train_data_string_per_source, num_samples_per_source = get_string_for_epoch(
+                args.train_num_samples, epoch, args.dataset_metadata, args.train_data_mix_weights
             )
-            print(f"=> epoch {epoch}, training on {train_data_string}")
+            print(f"=> epoch {epoch}, training on {train_data_string_per_source}")
             if data["train"] is not None:
                 del data["train"]
-            args.train_data = train_data_string
+            args.train_data = train_data_string_per_source
             data["train"] = get_wds_dataset(
-                args, True, epoch, force_num_samples=num_samples
+                args, True, epoch, force_num_samples=num_samples_per_source
             )
         if args.distributed:
             dist.barrier()
