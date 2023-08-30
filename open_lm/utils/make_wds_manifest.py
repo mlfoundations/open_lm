@@ -26,7 +26,7 @@ def parse_args(args):
     parser.add_argument(
         "--manifest-filename",
         type=str,
-        default="manifest.json",
+        default="manifest.jsonl",
         help="Filename for the manifest that will be stored in the webdataset directory.",
     )
     parser.add_argument("--num-workers", type=int, default=2, help="Number of workers.")
@@ -45,7 +45,7 @@ def count_samples(shard_path):
 def worker_fn(input_data):
     basename, data_dir = input_data
     shard_path = data_dir / basename
-    return {basename: count_samples(shard_path)}
+    return {"shard": basename, "num_chunks": count_samples(shard_path)}
 
 
 def main(args):
@@ -55,13 +55,15 @@ def main(args):
     input_data = [(shard.name, args.data_dir) for shard in shards]
 
     with mp.Pool(args.num_workers) as pool:
-        data = {}
+        data = []
         for worker_data in tqdm(pool.imap_unordered(worker_fn, input_data)):
-            data.update(worker_data)
+            data.append(worker_data)
 
     manifest_path = args.data_dir / args.manifest_filename
     with manifest_path.open("w") as fp:
-        simdjson.dump(data, fp)
+        for item in data:
+            simdjson.dump(item, fp)
+            fp.write("\n")
 
 
 if __name__ == "__main__":
