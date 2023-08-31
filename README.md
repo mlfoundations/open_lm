@@ -187,4 +187,4 @@ Team (so-far, * = equal contrib): Suchin Gururangan*, Mitchell Wortsman*, Samir 
 Code is based heavily on [open-clip](https://github.com/mlfoundations/open_clip) developed by a team including Ross Wightman, Romain Beaumont, Mehdi Cherti, Jenia Jitsev, and [open-flamingo](https://github.com/mlfoundations/open_flamingo), developed by a team including Anas Awadalla and Irena Gao. Additional inspiration is from [lit-llama](https://github.com/Lightning-AI/lit-llama).
 We are greatful to stability.ai for resource support.
 
-Subsatntial community contributors: Jean Mercat.
+Substantial community contributors: Jean Mercat.
