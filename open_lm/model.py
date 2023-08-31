@@ -10,9 +10,9 @@ from torch import nn
 from torch.utils.checkpoint import checkpoint
 
 import xformers.ops as xops
-from xformers.components.positional_embedding import RotaryEmbedding
 
 from open_lm.norms import get_norm_class
+from open_lm.rotary import RotaryEmbedding
 
 # from openclip
 _MODEL_CONFIG_PATHS = [Path(__file__).parent / f"model_configs/"]
@@ -71,6 +71,7 @@ class RotaryWithCast(RotaryEmbedding):
 
 
 def xformers_attn(queries, keys, values, is_causal):
+    # xformers assumes q, k, v are [batch, seq_len, heads, embed_dim]
     mask = None
     if is_causal:
         mask = xops.LowerTriangularMask()
