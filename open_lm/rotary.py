@@ -5,6 +5,7 @@
 from typing import Tuple
 
 import torch
+from xformers.components.positional_embedding import RotaryEmbedding
 
 
 def rotate_half(x):
@@ -17,12 +18,12 @@ def apply_rotary_pos_emb(x, cos, sin):
     # NOTE: This could probably be moved to Triton
 
     # Handle a possible sequence length mismatch in between q and k
-    cos = cos[:, :, : x.shape[-2], :]
-    sin = sin[:, :, : x.shape[-2], :]
+    cos = cos[:, : x.shape[1], :, :]
+    sin = sin[:, : x.shape[1], :, :]
 
     return (x * cos) + (rotate_half(x) * sin)
 
-class RotaryEmbedding(torch.nn.Module):
+class RotaryEmbeddingFix(torch.nn.Module):
     """
     The rotary position embeddings from RoFormer_ (Su et. al).
     A crucial insight from the method is that the query and keys are
@@ -67,8 +68,8 @@ class RotaryEmbedding(torch.nn.Module):
             freqs = torch.einsum("i,j->ij", t, self.inv_freq.to(x.dtype))
             emb = torch.cat((freqs, freqs), dim=-1).to(x.device)
 
-            self._cos_cached = emb.cos()[None, None, :, :].to(x.dtype)
-            self._sin_cached = emb.sin()[None, None, :, :].to(x.dtype)
+            self._cos_cached = emb.cos()[None, :, None, :].to(x.dtype)
+            self._sin_cached = emb.sin()[None, :, None, :].to(x.dtype)
 
         return self._cos_cached, self._sin_cached
 
@@ -83,3 +84,14 @@ class RotaryEmbedding(torch.nn.Module):
             apply_rotary_pos_emb(q, self._cos_cached, self._sin_cached),
             apply_rotary_pos_emb(k, self._cos_cached, self._sin_cached),
         )
+
+class RotaryWithCast(RotaryEmbedding):
+    # NOTE: this version has the bug, but we trained the 7B model with it so it's default
+    def forward(self, q, k, v):
+        q, k = super().forward(q, k)
+        return q.to(v.dtype), k.to(v.dtype), v
+
+class RotaryFixWithCast(RotaryEmbeddingFix):
+    def forward(self, q, k, v):
+        q, k = super().forward(q, k)
+        return q.to(v.dtype), k.to(v.dtype), v

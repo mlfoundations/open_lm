@@ -12,7 +12,7 @@ from torch.utils.checkpoint import checkpoint
 import xformers.ops as xops
 
 from open_lm.norms import get_norm_class
-from open_lm.rotary import RotaryEmbedding
+from open_lm.rotary import RotaryWithCast, RotaryFixWithCast
 
 # from openclip
 _MODEL_CONFIG_PATHS = [Path(__file__).parent / f"model_configs/"]
@@ -62,12 +62,7 @@ class Params:
     weight_tying: bool = False
     norm_type: nn.Module = nn.LayerNorm
     apply_qk_norm: bool = False
-
-
-class RotaryWithCast(RotaryEmbedding):
-    def forward(self, q, k, v):
-        q, k = super().forward(q, k)
-        return q.to(v.dtype), k.to(v.dtype), v
+    xformers_rotary: bool = False
 
 
 def xformers_attn(queries, keys, values, is_causal):
@@ -85,7 +80,7 @@ class CustomAttn(nn.Module):
         self.head_dim = args.dim // args.n_heads
         self.in_proj = nn.Linear(args.dim, 3 * args.n_heads * self.head_dim, bias=False)
         self.out_proj = nn.Linear(args.n_heads * self.head_dim, args.dim, bias=False)
-        self.pos_embed = RotaryWithCast(self.head_dim, args.seq_len)
+        self.pos_embed = RotaryWithCast(self.head_dim, args.seq_len) if args.xformers_rotary else RotaryFixWithCast(self.head_dim, args.seq_len)
         self.attn_fn = xformers_attn
         self.apply_qk_norm = args.apply_qk_norm
 
@@ -258,5 +253,6 @@ def create_model(args):
         weight_tying=cfg["weight_tying"],
         norm_type=get_norm_class(args),
         apply_qk_norm=args.qk_norm,
+        xformers_rotary=args.xformers_rotary
     )
     return Transformer(args)

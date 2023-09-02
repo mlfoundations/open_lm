@@ -428,6 +428,12 @@ def parse_args(args):
         help='Replace the network linear layers from the bitsandbytes library. '
         'Allows int8 training/inference, etc.'
     )
+    parser.add_argument(
+        "--xformers-rotary",
+        action="store_true",
+        default=False,
+        help="Use incorrect rotary embedding that is applied to the head dimension, which is default in xformers as of 09/01/23."
+    )
     args = parser.parse_args(args)
 
     # If some params are not passed, we use the default values based on model name.
