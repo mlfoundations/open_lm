@@ -429,7 +429,7 @@ def parse_args(args):
         'Allows int8 training/inference, etc.'
     )
     parser.add_argument(
-        "--xformers-rotary",
+        "--rotary-old",
         action="store_true",
         default=False,
         help="Use incorrect rotary embedding that is applied to the head dimension, which is default in xformers as of 09/01/23."
