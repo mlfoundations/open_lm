@@ -104,8 +104,7 @@ def rms_norm_bwd_dx_fused(
     xhat = tl.where(mask, xhat, 0.)
     wdy = tl.where(mask, wdy, 0.)
     mean1 = tl.sum(xhat * wdy, axis=0) / N
-    mean2 = tl.sum(wdy, axis=0) / N
-    dx = (wdy - (xhat * mean1 + mean2)) * rrms
+    dx = (wdy - (xhat * mean1)) * rrms
 
     # write-back dx
     cols = tl.arange(0, BLOCK_SIZE_N)

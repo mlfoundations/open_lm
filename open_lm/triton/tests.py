@@ -36,12 +36,12 @@ def test_rms_norm(M, N, dtype, eps=1e-5, device='cuda'):
     # compare
 
     # print(y_tri, y_ref)
-    print(dx_tri, dx_ref)
-    print(dw_tri, dw_ref)
+    # print(dx_tri, dx_ref)
+    # print(dw_tri, dw_ref)
 
-    # assert torch.allclose(y_tri, y_ref, atol=1e-2, rtol=0), "y does not match"
+    assert torch.allclose(y_tri, y_ref, atol=1e-2, rtol=0), "y does not match"
     assert torch.allclose(dx_tri, dx_ref, atol=1e-2, rtol=0), "dx does not match"
     assert torch.allclose(dw_tri, dw_ref, atol=1e-2, rtol=0), "dw does not match"
 
-test_rms_norm(1151, 8192, torch.bfloat16)
+test_rms_norm(1151, 8192, torch.float32)
 # bench_rms_norm.run(save_path='.', print_data=True)
