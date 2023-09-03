@@ -511,16 +511,12 @@ def main(args):
 
         if args.lr_scheduler == "cosine":
             scheduler = cosine_lr(
-<<<<<<< Updated upstream
                 optimizer,
                 args.lr,
                 args.warmup,
                 total_steps,
                 args.lr_cooldown_end,
                 args.force_min_lr,
-=======
-                optimizer, args.lr, args.warmup, total_steps, args.lr_cooldown_end, args.force_min_lr
->>>>>>> Stashed changes
             )
         else:
             logging.error(

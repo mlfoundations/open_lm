@@ -7,10 +7,7 @@ from torch import Tensor, Size
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.nn.parameter import Parameter
-<<<<<<< Updated upstream
 from .triton.rms_norm import rms_norm
-=======
->>>>>>> Stashed changes
 
 
 class LayerNorm(nn.Module):
