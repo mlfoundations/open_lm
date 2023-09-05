@@ -195,6 +195,14 @@ def train_one_epoch(
             # resetting batch / data time meters per log window
             batch_time_m.reset()
             data_time_m.reset()
+
+            if math.isnan(losses_m.val):
+                # case where loss goes to nan, we see this sometimes with bad nodes.
+                # in this case we would like to free resources and prevent other issues
+                # e.g., saving checkpoints and optmization states that may lead to skipped
+                # training on restarts.
+                raise ValueError("loss gone to NaN")
+
     # end for
 
 

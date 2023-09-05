@@ -592,21 +592,29 @@ def main(args):
             )
         if args.distributed:
             dist.barrier()
-        train_one_epoch(
-            model,
-            data,
-            loss,
-            epoch,
-            optimizer,
-            scaler,
-            scheduler,
-            args,
-            tb_writer=writer,
-        )
-        completed_epoch = epoch + 1
-        if args.distributed:
-            dist.barrier()
 
+        try:
+            train_one_epoch(
+                model,
+                data,
+                loss,
+                epoch,
+                optimizer,
+                scaler,
+                scheduler,
+                args,
+                tb_writer=writer,
+            )
+
+            if args.distributed:
+                dist.barrier()
+
+        except ValueError as e:
+            # in this case stop training, log the error and exit cleanly
+            logging.exception(e)
+            break
+
+        completed_epoch = epoch + 1
         evaluation_loss = -1
         if "val" in data:
             evaluation_loss = evaluate(model, data, completed_epoch, args, writer)[
