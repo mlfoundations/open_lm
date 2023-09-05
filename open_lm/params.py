@@ -307,6 +307,11 @@ def parse_args(args):
         action="store_true",
     )
     parser.add_argument(
+        "--fsdp-hybrid-o2",
+        default=False,
+        action="store_true",
+    )
+    parser.add_argument(
         "--fsdp-checkpoint",
         default=False,
         action="store_true",
