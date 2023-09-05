@@ -606,13 +606,16 @@ def main(args):
                 tb_writer=writer,
             )
 
+        except ValueError as e:
+            # in this case stop training, log the error and exit cleanly
             if args.distributed:
                 dist.barrier()
 
-        except ValueError as e:
-            # in this case stop training, log the error and exit cleanly
             logging.exception(e)
             break
+
+        if args.distributed:
+                dist.barrier()
 
         completed_epoch = epoch + 1
         evaluation_loss = -1
