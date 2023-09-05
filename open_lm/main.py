@@ -427,7 +427,7 @@ def main(args):
             if args.fsdp_backward_prefetch:
                 fsdp_kwargs["backward_prefetch"] = BackwardPrefetch.BACKWARD_PRE
             if args.fsdp_hybrid:
-                fsdp_kwargs["sharding_strategy"] = ShardingStrategy.HYBRID_SHARD
+                fsdp_kwargs["sharding_strategy"] = ShardingStrategy._HYBRID_SHARD_ZERO2
             print("=> FSDP kwargs: ", fsdp_kwargs)
 
             # init FSDP
