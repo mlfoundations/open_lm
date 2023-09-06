@@ -615,7 +615,7 @@ def main(args):
             break
 
         if args.distributed:
-                dist.barrier()
+            dist.barrier()
 
         completed_epoch = epoch + 1
         evaluation_loss = -1
