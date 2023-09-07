@@ -45,18 +45,21 @@ def count_samples(shard_path):
 def worker_fn(input_data):
     basename, data_dir = input_data
     shard_path = data_dir / basename
-    return {"shard": basename, "num_chunks": count_samples(shard_path)}
+    return {
+        "shard": basename.split("_")[1].split(".")[0],
+        "num_chunks": count_samples(shard_path),
+    }
 
 
 def main(args):
     args = parse_args(args)
 
-    shards = args.data_dir.iterdir()
+    shards = sorted([x for x in args.data_dir.iterdir() if x.name.endswith(".tar")])
     input_data = [(shard.name, args.data_dir) for shard in shards]
 
     with mp.Pool(args.num_workers) as pool:
         data = []
-        for worker_data in tqdm(pool.imap_unordered(worker_fn, input_data)):
+        for worker_data in tqdm(pool.map(worker_fn, input_data)):
             data.append(worker_data)
 
     manifest_path = args.data_dir / args.manifest_filename
