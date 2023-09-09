@@ -54,7 +54,13 @@ def backward(total_loss, scaler):
 
 
 def sample_chunk(chunk, seq_len):
-    start_idx = torch.randint(0, chunk.shape[1] - seq_len + 1, (1,)).item()
+    if chunk.shape[1] == seq_len + 1:
+        start_idx = 0
+    elif chunk.shape[1] > seq_len + 1:
+        start_idx = torch.randint(0, chunk.shape[1] - seq_len + 1, (1,)).item()
+    else 
+        raise Exception(f"Invalid sequence length: Sequence length {seq_len} > {chunk.shape[1]} Chunk size")
+
     inputs = chunk[:, start_idx:start_idx+seq_len-1]
     targets = chunk[:, start_idx+1:start_idx+seq_len]
     return inputs, targets
