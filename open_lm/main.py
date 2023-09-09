@@ -592,21 +592,27 @@ def main(args):
             )
         if args.distributed:
             dist.barrier()
-        train_one_epoch(
-            model,
-            data,
-            loss,
-            epoch,
-            optimizer,
-            scaler,
-            scheduler,
-            args,
-            tb_writer=writer,
-        )
-        completed_epoch = epoch + 1
+
+        success = train_one_epoch(
+                model,
+                data,
+                loss,
+                epoch,
+                optimizer,
+                scaler,
+                scheduler,
+                args,
+                tb_writer=writer,
+            )
+
         if args.distributed:
             dist.barrier()
 
+        if not success:
+            logging.info(f"Training exiting due to NaN value")
+            break
+
+        completed_epoch = epoch + 1
         evaluation_loss = -1
         if "val" in data:
             evaluation_loss = evaluate(model, data, completed_epoch, args, writer)[
