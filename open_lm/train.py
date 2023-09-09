@@ -201,9 +201,10 @@ def train_one_epoch(
                 # in this case we would like to free resources and prevent other issues
                 # e.g., saving checkpoints and optmization states that may lead to skipped
                 # training on restarts.
-                raise ValueError("loss gone to NaN")
+                return False
 
     # end for
+    return True
 
 
 def evaluate(model, data, start_epoch, args, writer):

@@ -593,8 +593,7 @@ def main(args):
         if args.distributed:
             dist.barrier()
 
-        try:
-            train_one_epoch(
+        success = train_one_epoch(
                 model,
                 data,
                 loss,
@@ -606,16 +605,12 @@ def main(args):
                 tb_writer=writer,
             )
 
-        except ValueError as e:
-            # in this case stop training, log the error and exit cleanly
-            if args.distributed:
-                dist.barrier()
-
-            logging.exception(e)
-            break
-
         if args.distributed:
             dist.barrier()
+
+        if not success:
+            logging.info(f"Training exiting due to NaN value")
+            break
 
         completed_epoch = epoch + 1
         evaluation_loss = -1
