@@ -54,7 +54,7 @@ def backward(total_loss, scaler):
 
 
 def sample_chunk(chunk, seq_len):
-    start_idx = torch.randint(0, chunk.size[1] - seq_len + 1, (1,)).item()
+    start_idx = torch.randint(0, chunk.shape[1] - seq_len + 1, (1,)).item()
     inputs = chunk[:, start_idx:start_idx+seq_len-1]
     targets = chunk[:, start_idx+1:start_idx+seq_len]
     return inputs, targets
@@ -96,8 +96,6 @@ def train_one_epoch(
 
         if args.accum_freq == 1:
             with autocast():
-                # inputs = texts[:, : args.seq_len - 1]
-                # targets = texts[:, 1 : args.seq_len]
                 inputs, targets = sample_chunk(texts, args.seq_len)
                 out, _ = model(inputs)
 
@@ -115,8 +113,6 @@ def train_one_epoch(
             ), "Batch size must be divisible by accum_freq"
             per_batch = args.batch_size // args.accum_freq
 
-            # inputs = texts[:, : args.seq_len - 1]
-            # targets = texts[:, 1 : args.seq_len]
             inputs, targets = sample_chunk(texts, args.seq_len)
 
             for ii in range(args.accum_freq):
@@ -250,8 +246,6 @@ def evaluate(model, data, start_epoch, args, writer):
         data_time_m.update(time.time() - end)
 
         with autocast():
-            # inputs = texts[:, : args.seq_len - 1]
-            # targets = texts[:, 1 : args.seq_len]
             inputs, targets = sample_chunk(texts, args.seq_len)
 
             out, _ = model(inputs)
