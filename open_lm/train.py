@@ -53,6 +53,19 @@ def backward(total_loss, scaler):
         total_loss.backward()
 
 
+def sample_chunk(chunk, seq_len):
+    if chunk.shape[1] == seq_len + 1:
+        start_idx = 0
+    elif chunk.shape[1] > seq_len + 1:
+        start_idx = torch.randint(0, chunk.shape[1] - seq_len + 1, (1,)).item()
+    else:
+        raise Exception(f"Invalid sequence length: Sequence length {seq_len} > {chunk.shape[1]} Chunk size")
+
+    inputs = chunk[:, start_idx:start_idx+seq_len-1]
+    targets = chunk[:, start_idx+1:start_idx+seq_len]
+    return inputs, targets
+
+
 def train_one_epoch(
     model, data, loss, epoch, optimizer, scaler, scheduler, args, tb_writer=None
 ):
@@ -89,8 +102,7 @@ def train_one_epoch(
 
         if args.accum_freq == 1:
             with autocast():
-                inputs = texts[:, : args.seq_len - 1]
-                targets = texts[:, 1 : args.seq_len]
+                inputs, targets = sample_chunk(texts, args.seq_len)
                 out, _ = model(inputs)
 
                 if args.log_logit_mean:
@@ -106,8 +118,9 @@ def train_one_epoch(
                 args.batch_size % args.accum_freq == 0
             ), "Batch size must be divisible by accum_freq"
             per_batch = args.batch_size // args.accum_freq
-            inputs = texts[:, : args.seq_len - 1]
-            targets = texts[:, 1 : args.seq_len]
+
+            inputs, targets = sample_chunk(texts, args.seq_len)
+
             for ii in range(args.accum_freq):
                 with autocast():
                     inputs_ii = inputs[ii * per_batch : (ii + 1) * per_batch]
@@ -239,8 +252,8 @@ def evaluate(model, data, start_epoch, args, writer):
         data_time_m.update(time.time() - end)
 
         with autocast():
-            inputs = texts[:, : args.seq_len - 1]
-            targets = texts[:, 1 : args.seq_len]
+            inputs, targets = sample_chunk(texts, args.seq_len)
+
             out, _ = model(inputs)
             total_loss = loss(out.reshape(-1, args.vocab_size), targets.reshape(-1))
             losses_m.update(total_loss.item(), inputs.shape[0])
