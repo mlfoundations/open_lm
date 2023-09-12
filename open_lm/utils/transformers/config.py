@@ -15,7 +15,8 @@ class OpenLMConfig(PretrainedConfig):
         weight_tying: bool = False,
         **kwargs
     ):
-        
+        # Used by huggingface transformers
+        super().__init__(**kwargs)
         self.hidden_dim = hidden_dim
         self.n_layers = n_layers
         self.n_heads = n_heads
@@ -23,8 +24,7 @@ class OpenLMConfig(PretrainedConfig):
         self.vocab_size = vocab_size
         self.post_embed_norm = post_embed_norm
         self.weight_tying = weight_tying
-        super().__init__(**kwargs)
-
+        self.tie_word_embeddings = weight_tying
 
 
 if __name__ == '__main__':
