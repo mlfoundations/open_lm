@@ -13,6 +13,7 @@ class OpenLMConfig(PretrainedConfig):
         vocab_size: int = 50304,
         post_embed_norm: bool = False,
         weight_tying: bool = False,
+        model_norm: str = "default_layer_norm",
         **kwargs
     ):
         # Used by huggingface transformers
@@ -25,6 +26,7 @@ class OpenLMConfig(PretrainedConfig):
         self.post_embed_norm = post_embed_norm
         self.weight_tying = weight_tying
         self.tie_word_embeddings = weight_tying
+        self.model_norm = model_norm
 
 
 if __name__ == '__main__':
