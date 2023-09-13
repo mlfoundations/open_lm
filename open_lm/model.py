@@ -10,9 +10,10 @@ from torch import nn
 from torch.utils.checkpoint import checkpoint
 
 import xformers.ops as xops
-from xformers.components.positional_embedding import RotaryEmbedding
 
 from open_lm.norms import get_norm_class
+from open_lm.positional_embedding.head_rotary import HeadRotaryWithCast
+from open_lm.positional_embedding.rotary import RotaryWithCast
 
 # from openclip
 _MODEL_CONFIG_PATHS = [Path(__file__).parent / f"model_configs/"]
@@ -62,15 +63,11 @@ class Params:
     weight_tying: bool = False
     norm_type: nn.Module = nn.LayerNorm
     apply_qk_norm: bool = False
-
-
-class RotaryWithCast(RotaryEmbedding):
-    def forward(self, q, k, v):
-        q, k = super().forward(q, k)
-        return q.to(v.dtype), k.to(v.dtype), v
+    rotary_old: bool = False
 
 
 def xformers_attn(queries, keys, values, is_causal):
+    # xformers assumes q, k, v are [batch, seq_len, heads, embed_dim]
     mask = None
     if is_causal:
         mask = xops.LowerTriangularMask()
@@ -84,7 +81,7 @@ class CustomAttn(nn.Module):
         self.head_dim = args.dim // args.n_heads
         self.in_proj = nn.Linear(args.dim, 3 * args.n_heads * self.head_dim, bias=False)
         self.out_proj = nn.Linear(args.n_heads * self.head_dim, args.dim, bias=False)
-        self.pos_embed = RotaryWithCast(self.head_dim, args.seq_len)
+        self.pos_embed = HeadRotaryWithCast(self.head_dim, args.seq_len) if args.rotary_old else RotaryWithCast(self.head_dim, args.seq_len)
         self.attn_fn = xformers_attn
         self.apply_qk_norm = args.apply_qk_norm
 
@@ -257,5 +254,6 @@ def create_model(args):
         weight_tying=cfg["weight_tying"],
         norm_type=get_norm_class(args),
         apply_qk_norm=args.qk_norm,
+        rotary_old=args.rotary_old
     )
     return Transformer(args)

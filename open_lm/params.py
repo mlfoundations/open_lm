@@ -309,6 +309,11 @@ def parse_args(args):
         action="store_true",
     )
     parser.add_argument(
+        "--fsdp-hybrid-o2",
+        default=False,
+        action="store_true",
+    )
+    parser.add_argument(
         "--fsdp-checkpoint",
         default=False,
         action="store_true",
@@ -429,6 +434,12 @@ def parse_args(args):
         default=None,
         help='Replace the network linear layers from the bitsandbytes library. '
         'Allows int8 training/inference, etc.'
+    )
+    parser.add_argument(
+        "--rotary-old",
+        action="store_true",
+        default=False,
+        help="Use incorrect rotary embedding that is applied to the head dimension, which is default in xformers as of 09/01/23."
     )
     args = parser.parse_args(args)
 
