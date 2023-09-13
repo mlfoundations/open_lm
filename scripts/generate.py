@@ -1,3 +1,5 @@
+"""Script to generate text from a trained model using HuggingFace wrappers."""
+
 import argparse
 import json
 import builtins as __builtin__
@@ -39,9 +41,9 @@ def main():
     parser.add_argument("--input-text", required=True)
     parser.add_argument("--rotary-old", action="store_true")
     parser.add_argument("--qk-norm", action="store_true")
-    parser.add_argument('--max-gen-len', default=200)
-    parser.add_argument('--temperature', default=0.8)
-    parser.add_argument('--top-p', default=0.95)
+    parser.add_argument('--max-gen-len', default=200, type=int)
+    parser.add_argument('--temperature', default=0.8, type=float)
+    parser.add_argument('--top-p', default=0.95, type=float)
     args = parser.parse_args()
 
     checkpoint = torch.load(args.checkpoint)
