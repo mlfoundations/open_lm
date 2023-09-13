@@ -12,6 +12,8 @@ from open_lm.params import parse_args
 from pathlib import Path
 
 NUM_SAMPLES = 100000
+
+# Update this to two data sources with webdataset, each with their own manifest.
 INPUT_PATHS = [
     "path1/manifest.jsonl",
     "path2/manifest.jsonl",
@@ -58,9 +60,7 @@ def retrieve_dataset_once_resampled(epoch, weights, seed):
     args.vocab_size = _MODEL_CONFIGS[args.model]["vocab_size"]
     args.seq_len = _MODEL_CONFIGS[args.model]["seq_len"]
     args.world_size = 1
-    data = get_wds_dataset(
-        args, is_train=True, epoch=epoch
-    )
+    data = get_wds_dataset(args, is_train=True, epoch=epoch)
     dl = data.dataloader
     iterator = iter(dl)
     item = next(iterator)
@@ -95,12 +95,15 @@ def test_deterministic_resampled(epoch, weights, seed):
     output2 = retrieve_dataset_once_resampled(epoch, weights, seed)
     assert output1 == output2
 
+
 def test_count_manifest():
     manifest_path = INPUT_PATHS[0]
     metadata = get_metadata_file(manifest_path)
     idx = random.randint(0, len(metadata))
     item = metadata[idx]
-    shard_path = os.path.join(str(Path(INPUT_PATHS[0]).parent), "shard_" + item["shard"] + ".tar")
+    shard_path = os.path.join(
+        str(Path(INPUT_PATHS[0]).parent), "shard_" + item["shard"] + ".tar"
+    )
     shard_ds = wds.WebDataset(str(shard_path))
     count = 0
     for _ in iter(shard_ds):
