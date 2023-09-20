@@ -2,10 +2,10 @@ import argparse
 import re
 import simdjson
 import sys
+import subprocess
 import multiprocessing as mp
 from pathlib import Path
 from cloudpathlib import CloudPath
-import webdataset as wds
 from tqdm import tqdm
 
 
@@ -35,20 +35,17 @@ def parse_args(args):
 
 
 def count_samples(shard_path):
-    shard_ds = wds.WebDataset(str(shard_path))
-    count = 0
-    for _ in iter(shard_ds):
-        count += 1
+    count = int(subprocess.check_output(f"tar tf {shard_path} | wc -l", shell=True))
     return count
 
 
 def worker_fn(input_data):
     basename, data_dir = input_data
     shard_path = data_dir / basename
-    return {
+    return (basename, {
         "shard": basename.split("_")[1].split(".")[0],
         "num_chunks": count_samples(shard_path),
-    }
+    })
 
 
 def main(args):
@@ -57,11 +54,16 @@ def main(args):
     shards = sorted([x for x in args.data_dir.iterdir() if x.name.endswith(".tar")])
     input_data = [(shard.name, args.data_dir) for shard in shards]
 
+    print(f"Shards to process: {len(shards)}")
+    print("Creating pool.")
     with mp.Pool(args.num_workers) as pool:
         data = []
-        for worker_data in tqdm(pool.map(worker_fn, input_data)):
+        for worker_data in tqdm(pool.imap_unordered(worker_fn, input_data)):
             data.append(worker_data)
+            
 
+    data = sorted(data)
+    data = [item[1] for item in data]
     manifest_path = args.data_dir / args.manifest_filename
     with manifest_path.open("w") as fp:
         for item in data:
