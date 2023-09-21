@@ -32,7 +32,7 @@ def write_to_shard(chunks, shard_writer):
 
 def upload_to_s3_and_remove(fname, s3_path, chunk_size):
     fname_split = fname.split('/')
-    s3_path = s3_path + f"{chunk_size - 1}/" + fname_split[-2] + '/' + fname_split[-1]
+    s3_path = os.path.join(s3_path, f"{chunk_size - 1}", fname_split[-2], fname_split[-1])
     cmd = f'aws s3 cp {fname} {s3_path}'
     print('COMMAND:', cmd)
     if os.system(cmd) == 0:  # Check if the command was successful
@@ -183,7 +183,7 @@ def aligner_worker(output_dir, threads, num_consumers, upload_to_s3=False, s3_pa
                 # Only move the shard if the marker file exists
                 if os.path.exists(marker_path):
                     if upload_to_s3:
-                        s3_source_path = s3_path + f"{chunk_size - 1}/{consumer_id}/{shard_file}"
+                        s3_source_path = os.path.join(s3_path, f"{chunk_size - 1}/{consumer_id}/{shard_file}" )
                         destination_path = os.path.join(s3_path, f"tars-{chunk_size - 1}", f"shard-{global_shard_id:07d}.tar")
                         cmd = f'aws s3 cp {s3_source_path} {destination_path}'
                         os.system(cmd)
