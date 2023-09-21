@@ -32,8 +32,7 @@ SHARD_SIZE = 8192
 SLEEP_TIME = 1
 S3_BUCKET = 'stability-west'
 S3_SUFFIX = 'pretraining_data/'
-# S3_BASE = f's3://stability-west/acav/openlm_tokens/{CHUNK_SIZE - 1}-v1/'
-S3_BASE = f's3://stability-west/webvid-10M_openlm_tokens/{CHUNK_SIZE - 1}-v1/'
+S3_BASE = "base path"
 
 
 def write_to_shard(chunks, shard_writer):
