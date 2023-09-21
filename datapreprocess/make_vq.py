@@ -1,7 +1,6 @@
-import jsonlines
 import glob
-import tiktoken
 import os
+import shutil
 import io
 import tempfile
 import fsspec
@@ -10,8 +9,6 @@ import threading
 from webdataset import ShardWriter
 import random
 import time
-import boto3
-import io
 import zstandard as zstd
 from contextlib import contextmanager
 import argparse
@@ -22,42 +19,32 @@ from braceexpand import braceexpand
 import numpy as np
 
 
-# VOCAB_SIZE = 1024
-VOCAB_SIZE = 16384
 QUEUE_MAX = 10000
 BUFFER_MIN = 100000
 BUFFER_MAX = 200000
-CHUNK_SIZE = 16 * (256 + 1) + 1
-SHARD_SIZE = 8192
+# VOCAB_SIZE = 1024
+VOCAB_SIZE = 16384
+N_TOKENS_PER_FRAME = 1024
+N_FRAMES = 4
+CHUNK_SIZE = N_FRAMES * (N_TOKENS_PER_FRAME + 1) + 1
+# SHARD_SIZE = 8192
+SHARD_SIZE = 1024
 SLEEP_TIME = 1
-S3_BUCKET = 'stability-west'
-S3_SUFFIX = 'pretraining_data/'
-S3_BASE = "base path"
-
 
 def write_to_shard(chunks, shard_writer):
     for idx, chunk in enumerate(chunks):
-        shard_writer.write({"__key__": f"{idx:12d}", "txt": str(chunk)})
+        shard_writer.write({"__key__": f"{idx:012d}", "txt": str(chunk)})
 
-def upload_to_s3_and_remove(fname):
+def upload_to_s3_and_remove(fname, s3_path):
     fname_split = fname.split('/')
-    s3_path = S3_BASE + fname_split[-2] + '/' + fname_split[-1]
-    cmd = f'aws s3 cp {fname} {s3_path} && rm {fname}'
+    s3_path = s3_path + f"{CHUNK_SIZE - 1}/" + fname_split[-2] + '/' + fname_split[-1]
+    cmd = f'aws s3 cp {fname} {s3_path}'
     print('COMMAND:', cmd)
-    os.system(cmd)
+    if os.system(cmd) == 0:  # Check if the command was successful
+        os.remove(fname)
+        with open(f"{fname}.s3done", 'w') as marker_file:
+            pass  # Create an empty marker file to indicate S3 upload is done
 
-@contextmanager
-def get_item_reader(file_name):
-    if file_name.endswith('.jsonl'):
-        with jsonlines.open(file_name) as reader:
-            yield reader
-    else:
-        dctx = zstd.ZstdDecompressor()
-        with open(file_name, 'rb') as compressed_file:
-            with dctx.stream_reader(compressed_file) as reader:
-                with io.TextIOWrapper(reader, encoding='utf-8') as text_reader:
-                    with jsonlines.Reader(text_reader) as jsonl_reader:
-                        yield jsonl_reader
 
 def process_files(file_list, buffer, buffer_lock):
     remaining_tokens = []
@@ -115,8 +102,8 @@ def process_files(file_list, buffer, buffer_lock):
 
 
 
-def consumer(my_id, output_dir, threads, buffer, buffer_lock, num_consumers, upload_to_s3=False):
-    output_directory = f"{output_dir}/{CHUNK_SIZE - 1}-v1/{my_id}"
+def consumer(my_id, output_dir, threads, buffer, buffer_lock, num_consumers, upload_to_s3=False, s3_path=None):
+    output_directory = f"{output_dir}/{CHUNK_SIZE - 1}/{my_id}"
     os.makedirs(output_directory, exist_ok=True)
     shard_writer = ShardWriter(os.path.join(output_directory, "shard-%07d.tar"), maxcount=SHARD_SIZE)
 
@@ -138,9 +125,14 @@ def consumer(my_id, output_dir, threads, buffer, buffer_lock, num_consumers, upl
         if len(chunks) == SHARD_SIZE:
             print(f'I am {my_id} and I am writing a shard.', len(buffer))
             write_to_shard(chunks, shard_writer)
+
             if upload_to_s3:
-                upload_to_s3_and_remove(shard_writer.fname)
-            #print("FNAME", shard_writer.fname)
+                upload_to_s3_and_remove(shard_writer.fname, s3_path)
+            else:
+                # Create a marker file to indicate that the shard is complete
+                with open(f"{shard_writer.fname}.done", 'w') as marker_file:
+                    pass  # Create an empty marker file
+
             chunks = []
             time_for_shard = time.time() - start_time
             print('shards / s', num_consumers / time_for_shard)
@@ -158,21 +150,71 @@ def consumer(my_id, output_dir, threads, buffer, buffer_lock, num_consumers, upl
                 buffer.pop(random_index)  # Remove the selected element
 
         write_to_shard(chunks, shard_writer)
+
+
         if upload_to_s3:
-            upload_to_s3_and_remove(shard_writer.fname)
+            upload_to_s3_and_remove(shard_writer.fname, s3_path)
+        else:
+            # Create a marker file to indicate that the shard is complete
+            with open(f"{shard_writer.fname}.done", 'w') as marker_file:
+                pass  # Create an empty marker file
         chunks = []
 
 
-def main(input_files, output_dir, num_workers=32, num_consumers=8, upload_to_s3=False):
+def aligner_worker(output_dir, threads, num_consumers, upload_to_s3=False, s3_path=None):
+    global_shard_id = 0
+    tar_dir = f"{output_dir}/tars-{CHUNK_SIZE - 1}"
+    os.makedirs(tar_dir, exist_ok=True)
+    marker_extension = ".s3done" if upload_to_s3 else ".done"
 
-    os.makedirs(f"{output_dir}/tars-{CHUNK_SIZE - 1}-v1", exist_ok=True)
+    # while any(t.is_alive() for t in threads):
+    while True:
+        time.sleep(SLEEP_TIME)
+        no_markers = True
 
+        for consumer_id in range(num_consumers):
+            consumer_output_directory = f"{output_dir}/{CHUNK_SIZE - 1}/{consumer_id}"
+
+            if not os.path.exists(consumer_output_directory):
+                continue
+
+            marker_files = [f for f in os.listdir(consumer_output_directory) if f.endswith(marker_extension)]
+
+            for marker_file in marker_files:
+                no_markers = False
+                shard_file = marker_file.replace(marker_extension, "")
+                marker_path = os.path.join(consumer_output_directory, marker_file)
+
+                # Only move the shard if the marker file exists
+                if os.path.exists(marker_path):
+                    if upload_to_s3:
+                        s3_source_path = s3_path + f"{CHUNK_SIZE - 1}/{consumer_id}/{shard_file}"
+                        destination_path = os.path.join(s3_path, f"tars-{CHUNK_SIZE - 1}", f"shard-{global_shard_id:07d}.tar")
+                        cmd = f'aws s3 cp {s3_source_path} {destination_path}'
+                        os.system(cmd)
+                    else:
+                        source_path = os.path.join(consumer_output_directory, shard_file)
+                        destination_path = os.path.join(tar_dir, f"shard-{global_shard_id:07d}.tar")
+                        shutil.move(source_path, destination_path)
+
+                    os.remove(marker_path)  # Remove the marker file
+                    global_shard_id += 1
+
+        if no_markers and not any(t.is_alive() for t in threads):
+            break
+    print("Aligner is done")
+
+
+def main(input_files, output_dir, num_workers=32, num_consumers=8, upload_to_s3=False, s3_path=None):
     if "*" in input_files:
         input_files = [glob.glob(input_file) for input_file in input_files]
         input_files = [x for y in input_files for x in y]
     else:
         input_files = [braceexpand(f) for f in input_files]
         input_files = [x for y in input_files for x in y]
+
+    if upload_to_s3:
+        assert s3_path is not None
 
     # Shuffle the input files
     random.shuffle(input_files)
@@ -193,9 +235,20 @@ def main(input_files, output_dir, num_workers=32, num_consumers=8, upload_to_s3=
 
     consumer_threads = []
     for i in range(num_consumers):
-        t = threading.Thread(target=consumer, args=(i, output_dir, threads, buffer, buffer_lock, num_consumers, upload_to_s3))
+        t = threading.Thread(target=consumer, args=(i, output_dir, threads, buffer, buffer_lock, num_consumers, upload_to_s3, s3_path))
         t.start()
         consumer_threads.append(t)
+
+    # Start the aligner worker thread
+    aligner_thread = threading.Thread(target=aligner_worker, args=(output_dir, threads + consumer_threads, num_consumers, upload_to_s3, s3_path))
+    aligner_thread.start()
+
+
+    # for t in threads + consumer_threads + [aligner_thread]:
+    for t in threads + consumer_threads:
+        t.join()
+
+    print("done")
 
 
 if __name__ == "__main__":
@@ -205,7 +258,8 @@ if __name__ == "__main__":
     parser.add_argument("--num-workers", type=int, default=32)
     parser.add_argument("--num-consumers", type=int, default=8)
     parser.add_argument("--upload-to-s3", action='store_true')
+    parser.add_argument("--s3-path", type=str, default=None)
 
     args = parser.parse_args()
 
-    main(args.input_files, args.output_dir, args.num_workers, args.num_consumers, args.upload_to_s3)
+    main(args.input_files, args.output_dir, args.num_workers, args.num_consumers, args.upload_to_s3, args.s3_path)
