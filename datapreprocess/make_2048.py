@@ -38,7 +38,7 @@ EOT_TOKEN = "<|endoftext|>"
 
 def write_to_shard(chunks, shard_writer):
     for idx, chunk in enumerate(chunks):
-        shard_writer.write({"__key__": f"{idx:12d}", "txt": str(chunk)})
+        shard_writer.write({"__key__": f"{idx:012d}", "txt": str(chunk)})
 
 def upload_to_s3_and_remove(fname):
     """ Uploads file to s3 and removes it from local file system """
