@@ -2,6 +2,7 @@ import glob
 import os
 import shutil
 import io
+import subprocess
 import tempfile
 import fsspec
 import tarfile
@@ -200,12 +201,20 @@ def aligner_worker(output_dir, threads, num_consumers, upload_to_s3=False, s3_pa
 
 
 def main(input_files, output_dir, num_workers=32, num_consumers=8, upload_to_s3=False, s3_path=None, chunk_size=2048, vocab_size=1024):
-    if "*" in input_files:
+    if "*" in input_files[0]:
         input_files = [glob.glob(input_file) for input_file in input_files]
         input_files = [x for y in input_files for x in y]
-    else:
+    elif "{" in input_files[0] and "}" in input_files[0]:
         input_files = [braceexpand(f) for f in input_files]
         input_files = [x for y in input_files for x in y]
+    elif "s3://" in input_files[0]:
+        cmd = f"aws s3 ls {input_files[0]} --recursive | grep '.tar$' | awk '{{print $4}}'"
+        result = subprocess.check_output(cmd, shell=True).decode('utf-8')
+        tars = [line.split("/")[-1] for line in result.splitlines()]
+        input_files = [os.path.join(input_files[0], t) for t in tars]
+    else:
+        print("Some issue with input_files")
+        return
 
     if upload_to_s3:
         assert s3_path is not None
