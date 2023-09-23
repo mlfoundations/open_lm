@@ -5,6 +5,9 @@ from open_lm.model import Params, Transformer
 import torch
 from typing import Union, Tuple, Optional, List
 
+from open_lm.norms import get_norm_class
+
+
 def create_model(cfg):
 
     model_args = Params(
@@ -15,6 +18,9 @@ def create_model(cfg):
         vocab_size=cfg.vocab_size,
         post_embed_norm=cfg.post_embed_norm,
         weight_tying=cfg.weight_tying,
+        norm_type=get_norm_class(cfg),
+        apply_qk_norm=cfg.qk_norm,
+        rotary_old=cfg.rotary_old
     )
     model = Transformer(model_args)
 
