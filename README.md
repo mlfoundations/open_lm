@@ -194,10 +194,10 @@ If you use this model in your work, please use the following BibTeX citation:
 ```bibtex
 @misc{open_lm,
   author = {Gururangan, Suchin and Wortsman, Mitchell and Gadre, Samir Yitzhak and Dave, Achal and Kilian, Maciej and Shi, Weijia and Mercat, Jean and Smyrnis, Georgios and Ilharco, Gabriel and Jordan, Matt and Heckel, Reinhard and Dimakis, Alex and Farhadi, Ali and Shankar, Vaishaal and Schmidt, Ludwig},
-  title = {{open_lm}: An Open Source Language Model Repository},
+  title = {{open_lm}:  a minimal but performative language modeling (LM) repository},
   year = {2023},
   note = {GitHub repository},
-  howpublished = {\url{https://github.com/mlfoundations/open_lm/}}
+  url = {https://github.com/mlfoundations/open_lm/}
 }
 ```
 
