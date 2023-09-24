@@ -186,3 +186,18 @@ Team (so-far, * = equal contrib): Suchin Gururangan*, Mitchell Wortsman*, Samir 
 
 Code is based heavily on [open-clip](https://github.com/mlfoundations/open_clip) developed by a team including Ross Wightman, Romain Beaumont, Cade Gordon, Mehdi Cherti, Jenia Jitsev, and [open-flamingo](https://github.com/mlfoundations/open_flamingo), developed by a team including Anas Awadalla and Irena Gao. Additional inspiration is from [lit-llama](https://github.com/Lightning-AI/lit-llama).
 We are greatful to stability.ai for resource support.
+
+Citation
+--------
+
+If you use this model in your work, please use the following BibTeX citation:
+```bibtex
+@misc{open_lm,
+  author = {Gururangan, Suchin and Wortsman, Mitchell and Gadre, Samir Yitzhak and Dave, Achal and Kilian, Maciej and Shi, Weijia and Mercat, Jean and Smyrnis, Georgios and Ilharco, Gabriel and Jordan, Matt and Heckel, Reinhard and Dimakis, Alex and Farhadi, Ali and Shankar, Vaishaal and Schmidt, Ludwig},
+  title = {{open_lm}: An Open Source Language Model Repository},
+  year = {2023},
+  note = {GitHub repository},
+  howpublished = {\url{https://github.com/mlfoundations/open_lm/}}
+}
+```
+
