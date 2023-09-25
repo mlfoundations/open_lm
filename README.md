@@ -112,13 +112,21 @@ python eval_openlm_ckpt.py \
 --model-config ../open_lm/model_configs/open_lm_3b.json  \ --checkpoint /path/to/openlm_checkpoint.pt
 ```
 
-
 # Pretrained Models
 
 ## OpenLM 1B
-OpenLM 1B is a ~1Billion parameter model trained on a 1.6T token dataset which consists of a mix of RedPajama, Pile, S2ORC, The Pile of Law, Deepmind Math, and RealNews (the full mixture of training data is described in [more detail here](https://docs.google.com/spreadsheets/d/1YW-_1vGsSPmVtEt2oeeJOecH6dYX2SuEuhOwZyGwy4k/edit?usp=sharing)). The model checkpoint can be downloaded from [HuggingFace here](https://huggingface.co/mlfoundations/open_lm_1B/tree/main). The script used to train this model (for config-copying purposes) is [located here](https://github.com/mlfoundations/open_lm/blob/main/scripts/train_example.sh). Once this checkpoint has been downloaded, you can evaluate it by following the directions in the [Evaluate Model](#evaluate-model) section above:
+OpenLM 1B is a ~1Billion parameter model trained on a 1.6T token dataset which consists of a mix of RedPajama, Pile, S2ORC, The Pile of Law, Deepmind Math, and RealNews (the full mixture of training data is described in [more detail here](https://docs.google.com/spreadsheets/d/1YW-_1vGsSPmVtEt2oeeJOecH6dYX2SuEuhOwZyGwy4k/edit?usp=sharing)).
+The model checkpoint can be downloaded from [HuggingFace here](https://huggingface.co/mlfoundations/open_lm_1B/tree/main).
+The script used to train this model (for config-copying purposes) is [located here](https://github.com/mlfoundations/open_lm/blob/main/scripts/train_example.sh).
+Once this checkpoint has been downloaded, you can evaluate it by following the directions in the [Evaluate Model](#evaluate-model) section above with the `model_configs/m1b_neox_rotary_old.json` model config.
 
-
+Note: We trained this model with rotary embeddings applied to the _head_
+dimension, which is the default in xformers as of 09/01/2023. Since these models
+were trained, we have updated openlm to correctly apply the rotary embeddings to
+the sequence dimension (see
+[this issue](https://github.com/mlfoundations/open_lm/issues/4) and [this
+issue](https://github.com/facebookresearch/xformers/issues/841) for details).
+To evaluate these models, ensure you use the `m1b_neox_rotary_old.json` config.
 
 | **OpenLM-1B** | **250B Tokens** | **500B tokens** | **750B tokens** | **1T Tokens** | **1.25T Tokens** | **1.5T Tokens** | **1.6T Tokens** |
 |----------------|-----------------|-----------------|-----------------|---------------|------------------|-----------------|-----------------|
@@ -177,7 +185,6 @@ OpenLM 7B is not yet done training.
 |                 |                 |                 |                 |                 |               |                  |                 |                 |              |            |
 | **Average**     |        **0.57** |        **0.58** |        **0.60** |        **0.60** |      **0.60** |         **0.61** |                 |                 |     **0.64** |   **0.64** |
 | **MMLU-5 shot** |                 |                 |                 |                 |               |         **0.34** |                 |                 |     **0.34** |            |
-
 
 
 # Team and acknowledgements

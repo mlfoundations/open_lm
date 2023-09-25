@@ -14,6 +14,8 @@ class OpenLMConfig(PretrainedConfig):
         post_embed_norm: bool = False,
         weight_tying: bool = False,
         model_norm: str = "default_layer_norm",
+        qk_norm: bool = False,
+        rotary_old: bool = False,
         **kwargs
     ):
         # Used by huggingface transformers
@@ -27,6 +29,8 @@ class OpenLMConfig(PretrainedConfig):
         self.weight_tying = weight_tying
         self.tie_word_embeddings = weight_tying
         self.model_norm = model_norm
+        self.qk_norm = qk_norm
+        self.rotary_old = rotary_old
 
 
 if __name__ == '__main__':

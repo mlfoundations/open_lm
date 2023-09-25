@@ -9,7 +9,6 @@ from open_lm.norms import get_norm_class
 
 
 def create_model(cfg):
-
     model_args = Params(
         dim=cfg.hidden_dim,
         n_layers=cfg.n_layers,
