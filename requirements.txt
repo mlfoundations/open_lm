@@ -11,3 +11,5 @@ boto3==1.26.90
 Pillow
 zstandard
 llm-foundry
+pysimdjson
+cloudpathlib

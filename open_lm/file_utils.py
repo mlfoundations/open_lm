@@ -113,13 +113,20 @@ def get_shards_for_epoch(num_samples, epoch, path):
     
     return shard_list[epoch % len(shard_list)], chunk_count_list[epoch % len(chunk_count_list)]
 
-def get_string_for_epoch(num_samples, epoch, path):
-    shard_list, num_samples = get_shards_for_epoch(num_samples, epoch, path)
-    shard_root = '/'.join(path.split('/')[:-1]) + '/shard_'
-    shard_string = shard_root + '{' + shard_list[0] + '..' + shard_list[-1] + '}.tar'
-    if path.startswith('s3'):
-        shard_string = f'pipe:aws s3 cp {shard_string} -'
-    return shard_string, num_samples
+def get_string_for_epoch(num_samples, epoch, paths, weights):
+    samples_per_source = [weights[i] * num_samples / sum(weights) for i in range(len(weights))]
+    num_samples_per_source = []
+    shard_strings_per_source = []
+    for i, source_path in enumerate(paths):
+        shard_list_source, num_samples_source = get_shards_for_epoch(samples_per_source[i], epoch, source_path)
+        shard_root_source = '/'.join(source_path.split('/')[:-1]) + '/shard_'
+        shard_string_source = shard_root_source + '{' + shard_list_source[0] + '..' + shard_list_source[-1] + '}.tar'
+        if source_path.startswith('s3'):
+            shard_string_source = f'pipe:aws s3 cp {shard_string_source} -'
+        shard_strings_per_source.append(shard_string_source)
+        num_samples_per_source.append(num_samples_source)
+
+    return shard_strings_per_source, num_samples_per_source
 
 
 if __name__ == '__main__':

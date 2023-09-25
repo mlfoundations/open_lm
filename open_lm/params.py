@@ -90,6 +90,8 @@ def parse_args(args):
     )
     parser.add_argument(
         "--dataset-metadata",
+        type=str,
+        nargs="+",
         default=None,
         help="Uses metadata to construct a train set."
     )
