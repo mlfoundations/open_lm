@@ -588,7 +588,7 @@ def main(args):
                 del data["train"]
             args.train_data = train_data_string
             data["train"] = get_wds_dataset(
-                args, True, epoch, force_num_samples=num_samples
+                args, True, epoch, force_num_samples=num_samples, data_key=args.data_key,
             )
         if args.distributed:
             dist.barrier()
