@@ -264,11 +264,12 @@ def evaluate(model, data, start_epoch, args, writer):
     # Save eval loss / etc.
     log_data = {
         "loss": losses_m.avg,
+        "perplexity": math.exp(losses_m.avg),
         "data_time": data_time_m.avg,
         "batch_time": batch_time_m.avg,
         "samples_per_second": sps_m.avg,
         "samples_per_second_per_gpu": spspg_m.avg,
-        "tokens": start_epoch * args.train_num_samples * args.seq_len,
+        "tokens": start_epoch * args.val_num_samples * args.seq_len,
     }
 
     for name, val in log_data.items():
