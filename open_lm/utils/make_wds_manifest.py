@@ -1,9 +1,12 @@
 import argparse
 import re
+import os
 import simdjson
 import sys
 import subprocess
+import tempfile
 import multiprocessing as mp
+import shutil
 from pathlib import Path
 from cloudpathlib import CloudPath
 from tqdm import tqdm
@@ -33,17 +36,34 @@ def parse_args(args):
     args = parser.parse_args(args)
     return args
 
-
+'''
 def count_samples(shard_path):
     count = int(subprocess.check_output(f"tar tf {shard_path} | wc -l", shell=True))
     return count
+'''
 
+def count_samples(shard_path):
+    # Check if the shard_path is a CloudPath
+    if isinstance(shard_path, CloudPath):
+        # Create a temporary file
+        with tempfile.NamedTemporaryFile(delete=False) as temp_file:
+            temp_file_path = Path(temp_file.name)
+            # Download the shard from S3 to the temporary file
+            shard_path.download_to(temp_file_path)
+            # Run the tar command on the local temporary file
+            count = int(subprocess.check_output(f"tar tf {temp_file_path} | wc -l", shell=True))
+            # Remove the temporary file
+            temp_file_path.unlink()
+    else:
+        # If shard_path is not a CloudPath, run the tar command directly on it
+        count = int(subprocess.check_output(f"tar tf {shard_path} | wc -l", shell=True))
+    return count
 
 def worker_fn(input_data):
     basename, data_dir = input_data
     shard_path = data_dir / basename
     return (basename, {
-        "shard": basename.split("_")[1].split(".")[0],
+        "shard": basename.split("-")[1].split(".")[0],
         "num_chunks": count_samples(shard_path),
     })
 

@@ -110,7 +110,7 @@ def get_shards_for_epoch(num_samples, epoch, path):
             curr_shard_list = []
             chunk_count_list.append(real_chunk_count)
             real_chunk_count = 0
-    
+   
     return shard_list[epoch % len(shard_list)], chunk_count_list[epoch % len(chunk_count_list)]
 
 def get_string_for_epoch(num_samples, epoch, paths, weights):
@@ -119,7 +119,7 @@ def get_string_for_epoch(num_samples, epoch, paths, weights):
     shard_strings_per_source = []
     for i, source_path in enumerate(paths):
         shard_list_source, num_samples_source = get_shards_for_epoch(samples_per_source[i], epoch, source_path)
-        shard_root_source = '/'.join(source_path.split('/')[:-1]) + '/shard_'
+        shard_root_source = '/'.join(source_path.split('/')[:-1]) + '/shard-'
         shard_string_source = shard_root_source + '{' + shard_list_source[0] + '..' + shard_list_source[-1] + '}.tar'
         if source_path.startswith('s3'):
             shard_string_source = f'pipe:aws s3 cp {shard_string_source} -'
