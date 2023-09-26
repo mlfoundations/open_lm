@@ -1,6 +1,6 @@
 # OpenLM
 
-[](/plots/logo.png)
+![](/plots/logo.png)
 
 OpenLM is a minimal but performative language modeling (LM) repository, aimed to facilitate research on medium sized LMs. We have verified the performance of OpenLM up to 7B parameters and 256 GPUs, with larger scales planned.
 
