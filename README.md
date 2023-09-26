@@ -114,7 +114,7 @@ python eval_openlm_ckpt.py \
 
 # Pretrained Models
 
-## OpenLM 1B
+## [OpenLM 1B](https://huggingface.co/mlfoundations/open_lm_1B)
 OpenLM 1B is a ~1Billion parameter model trained on a 1.6T token dataset which consists of a mix of RedPajama, Pile, S2ORC, The Pile of Law, Deepmind Math, and RealNews (the full mixture of training data is described in [more detail here](https://docs.google.com/spreadsheets/d/1YW-_1vGsSPmVtEt2oeeJOecH6dYX2SuEuhOwZyGwy4k/edit?usp=sharing)).
 The model checkpoint can be downloaded from [HuggingFace here](https://huggingface.co/mlfoundations/open_lm_1B/tree/main).
 The script used to train this model (for config-copying purposes) is [located here](https://github.com/mlfoundations/open_lm/blob/main/scripts/train_example.sh).
@@ -164,8 +164,8 @@ To evaluate these models, ensure you use the `m1b_neox_rotary_old.json` config.
 | **Average**      |     **0.50** |      **0.48** |      **0.49** |         **0.54** |
 
 
-## OpenLM 7B
-OpenLM 7B is not yet done training.
+## [OpenLM 7B](https://huggingface.co/mlfoundations/open_lm_7B_1.25T)
+OpenLM 7B is not yet done training, but we've released a checkpoint at 1.25T tokens. Information is the same as for OpenLM-1B above, including the information pertaining to rotary embeddings.
 
 
 | **OpenLM-7B**  | **275B Tokens** | **500B tokens** | **675B tokens** | **775B tokens** | **1T Tokens** | **1.25T Tokens** | **1.5T Tokens** | **1.6T Tokens** | **LLAMA-7B** | **MPT-7B** |
