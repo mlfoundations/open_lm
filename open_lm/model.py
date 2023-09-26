@@ -11,6 +11,8 @@ from torch.utils.checkpoint import checkpoint
 
 import xformers.ops as xops
 
+from huggingface_hub import PyTorchModelHubMixin
+
 from open_lm.norms import get_norm_class
 from open_lm.positional_embedding.head_rotary import HeadRotaryWithCast
 from open_lm.positional_embedding.rotary import RotaryWithCast
@@ -173,7 +175,7 @@ class Block(nn.Module):
         return out
 
 
-class Transformer(nn.Module):
+class Transformer(nn.Module, PyTorchModelHubMixin):
     def __init__(self, params):
         super().__init__()
         # for convenience we often share param names with llama
