@@ -480,8 +480,7 @@ def main(args):
             base_model = create_model(ModelArgs(args.mup_base_model)) 
             weight_multipliers = compute_mup_multiplier(model,base_model)
 
-            # need to fix weight decay in MuAdam
-            optimizer = MuAdam(model.named_parameters(),weight_multipliers,optim.AdamW, lr=args.lr)
+            optimizer = MuAdam(model.named_parameters(),weight_multipliers,optim.AdamW, lr=args.lr,weight_decay=args.wd)
 
         else:
             optimizer = optim.AdamW(
