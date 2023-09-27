@@ -214,8 +214,16 @@ def parse_args(args):
         "--model",
         type=str,
         default="m1b_neox",
-        help="Name of the vision backbone to use.",
+        help="Name of the transformer to use.",
     )
+    parser.add_argument(
+        "--mup_base_model",
+        type=str,
+        default="None",
+        help="Name of the base model for muparameterization to use. If none, don't use mu parameterization.",
+    )
+
+
     parser.add_argument(
         "--model-norm",
         type=str,

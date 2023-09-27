@@ -49,7 +49,7 @@ from .distributed import is_master, init_distributed_device, broadcast_object
 from .logger import setup_logging
 from .params import parse_args
 from .scheduler import cosine_lr
-from .train import train_one_epoch, evaluate
+from .train import train_one_epoch, evaluate, compute_mup_multiplier, MuAdam
 from .file_utils import (
     pt_load,
     check_exists,
@@ -469,15 +469,30 @@ def main(args):
         no_decay_params = []  # to be potentially used later
         params = [p for n, p in named_parameters if p.requires_grad]
 
-        optimizer = optim.AdamW(
-            [
-                {"params": no_decay_params, "weight_decay": 0.0},
-                {"params": params, "weight_decay": args.wd},
-            ],
-            lr=args.lr,
-            betas=(args.beta1, args.beta2),
-            eps=args.eps,
-        )
+        if args.mup_base_model != "None":
+            # assume mup is a path to a base model
+            logging.info("Using mu parameterization with based model ",args.mup_base_model)
+            class ModelArgs():
+                def __init__(self, model):
+                    self.model = model
+                    self.model_norm = "default_layer_norm"
+                    self.qk_norm = True
+            base_model = create_model(ModelArgs(args.mup_base_model)) 
+            weight_multipliers = compute_mup_multiplier(model,base_model)
+
+            # need to fix weight decay in MuAdam
+            optimizer = MuAdam(model.named_parameters(),weight_multipliers,optim.AdamW, lr=args.lr)
+
+        else:
+            optimizer = optim.AdamW(
+                [
+                    {"params": no_decay_params, "weight_decay": 0.0},
+                    {"params": params, "weight_decay": args.wd},
+                ],
+                lr=args.lr,
+                betas=(args.beta1, args.beta2),
+                eps=args.eps,
+            )
         scaler = None
         if args.precision == "amp":
             assert not args.fsdp, "FSDP not supported with amp, only amp_bfloat16"
