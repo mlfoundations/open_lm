@@ -242,9 +242,9 @@ class Transformer(nn.Module):
         return self.output
 
 
-def create_model(args):
+def create_params(args):
     cfg = deepcopy(_MODEL_CONFIGS[args.model])
-    args = Params(
+    return Params(
         dim=cfg["hidden_dim"],
         n_layers=cfg["n_layers"],
         n_heads=cfg["n_heads"],
@@ -252,8 +252,11 @@ def create_model(args):
         vocab_size=cfg["vocab_size"],
         post_embed_norm=cfg["post_embed_norm"],
         weight_tying=cfg["weight_tying"],
-        norm_type=get_norm_class(args),
+        norm_type=get_norm_class(args.model_norm),
         apply_qk_norm=args.qk_norm,
         rotary_old=args.rotary_old
     )
-    return Transformer(args)
+
+
+def create_model(args):
+    return Transformer(create_params(args))

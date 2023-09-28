@@ -7,8 +7,8 @@ import builtins as __builtin__
 import torch
 
 from composer.utils import dist, get_device
-from open_lm.utils.transformers.model import OpenLMforCausalLM
-from open_lm.utils.transformers.config import OpenLMConfig
+from open_lm.utils.transformers.hf_model import OpenLMforCausalLM
+from open_lm.utils.transformers.hf_config import OpenLMConfig
 from open_lm.utils.llm_foundry_wrapper import SimpleComposerOpenLMCausalLM
 from transformers import GPTNeoXTokenizerFast
 

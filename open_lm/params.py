@@ -22,6 +22,32 @@ class ParseKwargs(argparse.Action):
         setattr(namespace, self.dest, kw)
 
 
+def add_model_args(parser):
+    """Add arguments that change the underlying architecture.
+
+    These arguments need to be added to the eval code. Ideally, these should be moved to our model configs when we make
+    a backward-incompatible release."""
+    parser.add_argument(
+        "--model-norm",
+        type=str,
+        default="default_layer_norm",
+        choices=["default_layer_norm", "gain_only_layer_norm", "no_wb_layer_norm", "rms_norm"],
+        help="Type of normalization to employ in the model",
+    )
+    parser.add_argument(
+        "--qk-norm",
+        action="store_true",
+        default=False,
+        help="apply --model-norm to qk as in: https://arxiv.org/abs/2302.05442"
+    )
+    parser.add_argument(
+        "--rotary-old",
+        action="store_true",
+        default=False,
+        help="Use incorrect rotary embedding that is applied to the head dimension, which is default in xformers as of 09/01/23."
+    )
+
+
 def parse_args(args):
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -215,19 +241,6 @@ def parse_args(args):
         type=str,
         default="m1b_neox",
         help="Name of the vision backbone to use.",
-    )
-    parser.add_argument(
-        "--model-norm",
-        type=str,
-        default="default_layer_norm",
-        choices=["default_layer_norm", "gain_only_layer_norm", "no_wb_layer_norm", "rms_norm"],
-        help="Type of normalization to employ in the model",
-    )
-    parser.add_argument(
-        "--qk-norm",
-        action="store_true",
-        default=False,
-        help="apply --model-norm to qk as in: https://arxiv.org/abs/2302.05442"
     )
     parser.add_argument(
         "--pretrained",
@@ -433,12 +446,7 @@ def parse_args(args):
         help='Replace the network linear layers from the bitsandbytes library. '
         'Allows int8 training/inference, etc.'
     )
-    parser.add_argument(
-        "--rotary-old",
-        action="store_true",
-        default=False,
-        help="Use incorrect rotary embedding that is applied to the head dimension, which is default in xformers as of 09/01/23."
-    )
+    add_model_args(parser)
     args = parser.parse_args(args)
 
     # If some params are not passed, we use the default values based on model name.
