@@ -14,11 +14,13 @@ class ParseKwargs(argparse.Action):
     def __call__(self, parser, namespace, values, option_string=None):
         kw = {}
         for value in values:
-            key, value = value.split('=')
+            key, value = value.split("=")
             try:
                 kw[key] = ast.literal_eval(value)
             except ValueError:
-                kw[key] = str(value)  # fallback to string (avoid need to escape on command line)
+                kw[key] = str(
+                    value
+                )  # fallback to string (avoid need to escape on command line)
         setattr(namespace, self.dest, kw)
 
 
@@ -40,7 +42,7 @@ def parse_args(args):
             "When using multiple data sources with webdataset and sampling with replacement, this can be used to upsample specific data sources. "
             "Similar to --train-data, this should be a string with as many numbers as there are data sources, separated by `::` (e.g. 1::2::0.5) "
             "By default, datapoints are sampled uniformly regardless of the dataset sizes."
-        )
+        ),
     )
     parser.add_argument(
         "--train-data-upsampling-factors",
@@ -50,7 +52,7 @@ def parse_args(args):
             "When using multiple data sources with webdataset and sampling with replacement, this can be used to upsample specific data sources. "
             "Similar to --train-data, this should be a string with as many numbers as there are data sources, separated by `::` (e.g. 1::2::0.5) "
             "By default, datapoints are sampled uniformly regardless of the dataset sizes."
-        )
+        ),
     )
     parser.add_argument(
         "--val-data",
@@ -61,7 +63,7 @@ def parse_args(args):
     parser.add_argument(
         "--data-key",
         type=str,
-        default='txt',
+        default="txt",
         help="what is the extension",
     )
     parser.add_argument(
@@ -80,24 +82,24 @@ def parse_args(args):
         "--dataset-type",
         choices=["webdataset", "auto"],
         default="auto",
-        help="Which type of dataset to process."
+        help="Which type of dataset to process.",
     )
     parser.add_argument(
         "--dataset-resampled",
         default=False,
         action="store_true",
-        help="Whether to use sampling with replacement for webdataset shard selection."
+        help="Whether to use sampling with replacement for webdataset shard selection.",
     )
     parser.add_argument(
         "--dataset-metadata",
         default=None,
-        help="Uses metadata to construct a train set."
+        help="Uses metadata to construct a train set.",
     )
     parser.add_argument(
         "--disable-buffer",
         action="store_true",
         default=False,
-        help="Turns off the shuffle buffer."
+        help="Turns off the shuffle buffer.",
     )
     parser.add_argument(
         "--logs",
@@ -127,10 +129,12 @@ def parse_args(args):
         "--epochs", type=int, default=32, help="Number of epochs to train for."
     )
     parser.add_argument(
-        "--epochs-cooldown", type=int, default=None,
-        help="When scheduler w/ cooldown used, perform cooldown from total_epochs - cooldown_epochs onwards."
+        "--epochs-cooldown",
+        type=int,
+        default=None,
+        help="When scheduler w/ cooldown used, perform cooldown from total_epochs - cooldown_epochs onwards.",
     )
-    parser.add_argument("--optimizer", default='adamw', help="Optimizer.")
+    parser.add_argument("--optimizer", default="adamw", help="Optimizer.")
     parser.add_argument("--lr", type=float, default=None, help="Learning rate.")
     parser.add_argument("--beta1", type=float, default=None, help="Adam beta 1.")
     parser.add_argument("--beta2", type=float, default=None, help="Adam beta 2.")
@@ -143,19 +147,20 @@ def parse_args(args):
         "--z-loss-coefficient",
         type=float,
         default=0.0,
-        help="regularization term to make sure logits not too big, based on: https://github.com/google-research/t5x/blob/main/t5x/losses.py#L33-L38"
+        help="regularization term to make sure logits not too big, based on: https://github.com/google-research/t5x/blob/main/t5x/losses.py#L33-L38",
     )
     parser.add_argument(
         "--log-logit-mean",
         default=False,
         action="store_true",
-        help="Whether to log the logit mean to wandb etc."
+        help="Whether to log the logit mean to wandb etc.",
     )
     parser.add_argument(
         "--use-bn-sync",
         default=False,
         action="store_true",
-        help="Whether to use batch norm sync.")
+        help="Whether to use batch norm sync.",
+    )
     parser.add_argument(
         "--skip-scheduler",
         action="store_true",
@@ -165,20 +170,26 @@ def parse_args(args):
     parser.add_argument(
         "--lr-scheduler",
         type=str,
-        default='cosine',
+        default="cosine",
         help="LR scheduler. One of: 'cosine', 'const' (constant), 'const-cooldown' (constant w/ cooldown). Default: cosine",
     )
     parser.add_argument(
-        "--lr-cooldown-end", type=float, default=0.0,
-        help="End learning rate for cooldown schedule. Default: 0"
+        "--lr-cooldown-end",
+        type=float,
+        default=0.0,
+        help="End learning rate for cooldown schedule. Default: 0",
     )
     parser.add_argument(
-        "--lr-cooldown-power", type=float, default=1.0,
-        help="Power for polynomial cooldown schedule. Default: 1.0 (linear decay)"
+        "--lr-cooldown-power",
+        type=float,
+        default=1.0,
+        help="Power for polynomial cooldown schedule. Default: 1.0 (linear decay)",
     )
     parser.add_argument(
-        "--force-min-lr", type=float, default=0.0,
-        help="Force the LR to stop decaying at this value."
+        "--force-min-lr",
+        type=float,
+        default=0.0,
+        help="Force the LR to stop decaying at this value.",
     )
     parser.add_argument(
         "--save-frequency", type=int, default=1, help="How often to save checkpoints."
@@ -196,7 +207,10 @@ def parse_args(args):
         help="Compile the model, requires torch >=2.0.",
     )
     parser.add_argument(
-        "--val-frequency", type=int, default=1, help="How often to run evaluation with val data."
+        "--val-frequency",
+        type=int,
+        default=1,
+        help="How often to run evaluation with val data.",
     )
     parser.add_argument(
         "--resume",
@@ -208,7 +222,7 @@ def parse_args(args):
         "--precision",
         choices=["amp", "amp_bf16", "amp_bfloat16", "bf16", "fp16", "fp32"],
         default="amp",
-        help="Floating point precision."
+        help="Floating point precision.",
     )
     parser.add_argument(
         "--model",
@@ -220,14 +234,19 @@ def parse_args(args):
         "--model-norm",
         type=str,
         default="default_layer_norm",
-        choices=["default_layer_norm", "gain_only_layer_norm", "no_wb_layer_norm", "rms_norm"],
+        choices=[
+            "default_layer_norm",
+            "gain_only_layer_norm",
+            "no_wb_layer_norm",
+            "rms_norm",
+        ],
         help="Type of normalization to employ in the model",
     )
     parser.add_argument(
         "--qk-norm",
         action="store_true",
         default=False,
-        help="apply --model-norm to qk as in: https://arxiv.org/abs/2302.05442"
+        help="apply --model-norm to qk as in: https://arxiv.org/abs/2302.05442",
     )
     parser.add_argument(
         "--pretrained",
@@ -238,29 +257,32 @@ def parse_args(args):
     parser.add_argument(
         "--load-pretrained-state",
         default=False,
-        action='store_true',
+        action="store_true",
         help="Include the opt and schedule state when loading a pre-trained model.",
     )
     parser.add_argument(
         "--grad-checkpointing",
         default=False,
-        action='store_true',
+        action="store_true",
         help="Enable gradient checkpointing.",
     )
     parser.add_argument(
         "--torchscript",
         default=False,
-        action='store_true',
+        action="store_true",
         help="torch.jit.script the model",
     )
     parser.add_argument(
         "--trace",
         default=False,
-        action='store_true',
+        action="store_true",
         help="torch.jit.trace the model for inference / eval only",
     )
     parser.add_argument(
-        "--accum-freq", type=int, default=1, help="Update the model every --acum-freq steps."
+        "--accum-freq",
+        type=int,
+        default=1,
+        help="Update the model every --acum-freq steps.",
     )
     # arguments for distributed training
     parser.add_argument(
@@ -276,25 +298,25 @@ def parse_args(args):
         "--fsdp",
         default=False,
         action="store_true",
-        help="Use FullyShardedDataParallel for distributed training."
+        help="Use FullyShardedDataParallel for distributed training.",
     )
     parser.add_argument(
         "--fsdp-cpu-offload",
         default=False,
         action="store_true",
-        help="CPU offloading for FSDP and checkpoint saving. This does not work with gradient accumulation."
+        help="CPU offloading for FSDP and checkpoint saving. This does not work with gradient accumulation.",
     )
     parser.add_argument(
         "--fsdp-use-orig-params",
         default=False,
         action="store_true",
-        help="Passed into the FSDP constructor. This does not work for OPT models. Enables param_groups for weight_decay."
+        help="Passed into the FSDP constructor. This does not work for OPT models. Enables param_groups for weight_decay.",
     )
     parser.add_argument(
         "--fsdp-amp",
         default=False,
         action="store_true",
-        help="Use FullyShardedDataParallel for distributed training."
+        help="Use FullyShardedDataParallel for distributed training.",
     )
     parser.add_argument(
         "--fsdp-backward-prefetch",
@@ -323,27 +345,24 @@ def parse_args(args):
     )
     parser.add_argument(
         "--report-to",
-        default='',
+        default="",
         type=str,
-        help="Options are ['wandb', 'tensorboard', 'wandb,tensorboard']"
+        help="Options are ['wandb', 'tensorboard', 'wandb,tensorboard']",
     )
     parser.add_argument(
-        "--wandb-notes",
-        default='',
-        type=str,
-        help="Notes if logging with wandb"
+        "--wandb-notes", default="", type=str, help="Notes if logging with wandb"
     )
     parser.add_argument(
         "--wandb-project-name",
         type=str,
-        default='open-lm',
+        default="open-lm",
         help="Name of the project if logging with wandb.",
     )
     parser.add_argument(
         "--debug",
         default=False,
         action="store_true",
-        help="If true, more information is logged."
+        help="If true, more information is logged.",
     )
     parser.add_argument(
         "--average",
@@ -352,7 +371,7 @@ def parse_args(args):
         default=None,
         help=(
             "Apply model average on these checkpoints with the specified coefficients by --average-coefficients."
-        )
+        ),
     )
     parser.add_argument(
         "--average-coefficients",
@@ -361,29 +380,27 @@ def parse_args(args):
         default=None,
         help=(
             "Average the model weights with the specified coefficients, model weights specified by --average."
-        )
+        ),
     )
     parser.add_argument(
         "--copy-codebase",
         default=False,
         action="store_true",
-        help="If true, we copy the entire base on the log directory, and execute from there."
+        help="If true, we copy the entire base on the log directory, and execute from there.",
     )
     parser.add_argument(
         "--ddp-static-graph",
         default=False,
-        action='store_true',
+        action="store_true",
         help="Enable static graph optimization for DDP in PyTorch >= 1.11.",
     )
     parser.add_argument(
         "--no-set-device-rank",
         default=False,
         action="store_true",
-        help="Don't set device index from local rank (when CUDA_VISIBLE_DEVICES restricted to one per proc)."
+        help="Don't set device index from local rank (when CUDA_VISIBLE_DEVICES restricted to one per proc).",
     )
-    parser.add_argument(
-        "--seed", type=int, default=0, help="Default random seed."
-    )
+    parser.add_argument("--seed", type=int, default=0, help="Default random seed.")
     parser.add_argument(
         "--grad-clip-norm", type=float, default=None, help="Gradient clip."
     )
@@ -415,29 +432,40 @@ def parse_args(args):
         "--delete-previous-checkpoint",
         default=False,
         action="store_true",
-        help="If true, delete previous checkpoint after storing a new one."
+        help="If true, delete previous checkpoint after storing a new one.",
     )
     parser.add_argument(
         "--distill-model",
         default=None,
-        help='Which model arch to distill from, if any.'
+        help="Which model arch to distill from, if any.",
     )
     parser.add_argument(
         "--distill-pretrained",
         default=None,
-        help='Which pre-trained weights to distill from, if any.'
+        help="Which pre-trained weights to distill from, if any.",
     )
     parser.add_argument(
         "--use-bnb-linear",
         default=None,
-        help='Replace the network linear layers from the bitsandbytes library. '
-        'Allows int8 training/inference, etc.'
+        help="Replace the network linear layers from the bitsandbytes library. "
+        "Allows int8 training/inference, etc.",
     )
     parser.add_argument(
         "--rotary-old",
         action="store_true",
         default=False,
-        help="Use incorrect rotary embedding that is applied to the head dimension, which is default in xformers as of 09/01/23."
+        help="Use incorrect rotary embedding that is applied to the head dimension, which is default in xformers as of 09/01/23.",
+    )
+    parser.add_argument(
+        "--mup-base-fan-in",
+        default=None,
+        help="Automatically scale lr for linear layers to mup-base-fan-in / hidden_dim and create the corresponding parameter groups.",
+    )
+    parser.add_argument(
+        "--mup-scale-wd",
+        default=False,
+        action="store_true",
+        help="Scale wd for linear layers by hidden_dim / mup-base-fan-in so that wd and lr can remain decoupled.",
     )
     args = parser.parse_args(args)
 
