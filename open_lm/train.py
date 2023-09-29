@@ -294,14 +294,24 @@ def compute_mup_multiplier(model,base_model):
     for param_name, param in model.named_parameters():
         if len(param.shape) == 2:
             if 'output' not in param_name and 'embedding' not in param_name:
-                if param_name not in base_shapes:
+                # The parameters of a (Distributed)DataParallel module all have names that
+                # start with 'module'. This causes a mismatch from non-DataParallel modules.
+                # The code below tries to match the base shapes to shapes by allowing the 
+                # names to start with 'module' or not.
+                if param_name in base_shapes:
+                    weight_multipliers[param_name] = param.shape[1] / base_shapes[param_name][1]
+                elif param_name.split('module.')[1] in base_shapes:
+                    weight_multipliers[param_name] = param.shape[1] / base_shapes[ param_name.split('module.')[1] ][1]
+                elif 'module.' + param_name in base_shapes:
+                    weight_multipliers[param_name] = param.shape[1] / base_shapes['module.' + param_name][1]
+                else:
                     raise KeyError(f"'{param_name}' not found in base model")
                 # multiplier is the ratio of the fanin of the current model to the base model
-                weight_multipliers[param_name] = param.shape[1] / base_shapes[param_name][1]
+                
         elif len(param.shape) > 2:
             raise NotImplementedError('more than 2 inf dimensions')
+
     return weight_multipliers
-    # make parameter groups
 
 def MuAdam(named_params, weight_multipliers, impl, decoupled_wd=False, **kwargs):
     
@@ -324,33 +334,11 @@ def MuAdam(named_params, weight_multipliers, impl, decoupled_wd=False, **kwargs)
         The following checks if the parameter is a matrix like weight, and if 
         yes adds it to the matrix_like_p dictionary, 
         else adds it to the vector_like_p dictionary
+        '''
         if param_name in weight_multipliers: # we have a match of parameter names
-           matrix_like_p[ weight_multipliers[param_name] ]['params'].append(p)
+            matrix_like_p[ weight_multipliers[param_name] ]['params'].append(p)
         else:
             vector_like_p['params'].append(p)
-
-        The parameters of a (Distributed)DataParallel module all have names that
-        start with 'module'. This causes a mismatch from non-DataParallel modules.
-        The code below tries to match the base shapes to shapes by allowing the 
-        names to start with 'module' or not.
-
-        '''
-        if param_name.startswith('module.'):
-            param_name_striped = param_name.split('module.')[1] # remove 'module.' from the name
-            if param_name in weight_multipliers:
-                matrix_like_p[ weight_multipliers[param_name] ]['params'].append(p)
-            elif param_name_striped in weight_multipliers:
-                matrix_like_p[ weight_multipliers[param_name_striped] ]['params'].append(p)
-            else:
-                vector_like_p['params'].append(p)
-        else:
-            param_name_append_module = 'module.' + param_name
-            if param_name in weight_multipliers:
-                matrix_like_p[ weight_multipliers[param_name] ]['params'].append(p)
-            elif param_name_append_module in weight_multipliers:
-                matrix_like_p[ weight_multipliers[param_name_append_module] ]['params'].append(p)
-            else:
-                vector_like_p['params'].append(p)
    
     for width_mult, group in matrix_like_p.items():
         # Scale learning rate and weight decay accordingly
@@ -362,4 +350,4 @@ def MuAdam(named_params, weight_multipliers, impl, decoupled_wd=False, **kwargs)
         new_param_groups.extend(list(matrix_like_p.values()) + [vector_like_p])
     
     return impl(new_param_groups, **kwargs)
-
+    

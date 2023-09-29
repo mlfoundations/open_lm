@@ -471,7 +471,7 @@ def main(args):
 
         if args.mup_base_model != "None":
             # assume mup is a path to a base model
-            logging.info("Using mu parameterization with based model ",args.mup_base_model)
+            logging.info("Using mu parameterization with base model ",args.mup_base_model)
             class ModelArgs():
                 def __init__(self, model):
                     self.model = model

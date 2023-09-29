@@ -254,6 +254,6 @@ def create_model(args):
         weight_tying=cfg["weight_tying"],
         norm_type=get_norm_class(args),
         apply_qk_norm=args.qk_norm,
-        rotary_old=args.rotary_old
+        #rotary_old=args.rotary_old
     )
     return Transformer(args)
