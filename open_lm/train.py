@@ -350,4 +350,48 @@ def MuAdam(named_params, weight_multipliers, impl, decoupled_wd=False, **kwargs)
         new_param_groups.extend(list(matrix_like_p.values()) + [vector_like_p])
     
     return impl(new_param_groups, **kwargs)
+
+
+def FullMuAdam(named_params, impl, **kwargs):
+    
+    new_param_groups = []
+   
+    # split int groups, copy the lr and weight decay
+    def new_group():
+        new_g = {}
+        new_g['lr'] = kwargs['lr']
+        new_g['weight_decay'] = kwargs.get('weight_decay', 0.)
+        new_g['params'] = []
+        return new_g
+    # The matrix-like weights might need multiple groups since weights
+    # might have different width multipliers
+    matrix_like_p = defaultdict(new_group) # dictionary key is width_mult
+    vector_like_p = new_group()
+
+    for param_name, param in named_params:
+        '''
+        The following checks if the parameter is a matrix like weight, and if 
+        yes adds it to the matrix_like_p dictionary, 
+        else adds it to the vector_like_p dictionary
+        '''
+        if len(param.shape) == 2:
+            if 'output' not in param_name and 'embedding' not in param_name:
+                weight_multiplier = param.shape[1]
+                matrix_like_p[ weight_multiplier ]['params'].append(param)
+                print(param_name, weight_multiplier)
+        elif len(param.shape) > 2:
+            raise NotImplementedError('more than 2 inf dimensions')
+        elif len(param.shape) == 1:
+            vector_like_p['params'].append(param)
+
+    for width_mult, group in matrix_like_p.items():
+        # Scale learning rate and weight decay accordingly
+        print("------------------")
+        print(width_mult)
+        group['lr'] /= width_mult
+
+    new_param_groups.extend(list(matrix_like_p.values()) + [vector_like_p])
+
+    
+    return impl(new_param_groups, **kwargs)
     

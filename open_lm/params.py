@@ -223,6 +223,13 @@ def parse_args(args):
         help="Name of the base model for muparameterization to use. If none, don't use mu parameterization.",
     )
 
+        parser.add_argument(
+        "--muparam",
+        action='store_true',
+        default=False,
+        help="Name of the base model for muparameterization to use. If none, don't use mu parameterization.",
+    )
+
 
     parser.add_argument(
         "--model-norm",

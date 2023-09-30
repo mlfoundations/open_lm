@@ -482,6 +482,9 @@ def main(args):
 
             optimizer = MuAdam(model.named_parameters(),weight_multipliers,optim.AdamW, lr=args.lr,weight_decay=args.wd)
 
+        elif args.muparam:
+            optimizer = FullMuAdam(model.named_parameters(), optim.AdamW, lr=args.lr, weight_decay=args.wd)
+
         else:
             optimizer = optim.AdamW(
                 [
