@@ -49,7 +49,7 @@ from .distributed import is_master, init_distributed_device, broadcast_object
 from .logger import setup_logging
 from .params import parse_args
 from .scheduler import cosine_lr
-from .train import train_one_epoch, evaluate, compute_mup_multiplier, MuAdam
+from .train import train_one_epoch, evaluate, MuAdam
 from .file_utils import (
     pt_load,
     check_exists,
@@ -334,6 +334,7 @@ def main(args):
 
     random_seed(args.seed, 0)
     model = create_model(args)
+    model_params = model.params
     args.vocab_size = model.vocab_size
     args.seq_len = model.seq_len
     if args.train_num_samples is not None:
@@ -469,32 +470,24 @@ def main(args):
         no_decay_params = []  # to be potentially used later
         params = [p for n, p in named_parameters if p.requires_grad]
 
-        if args.mup_base_model != "None":
-            # assume mup is a path to a base model
-            logging.info("Using mu parameterization with base model ",args.mup_base_model)
-            class ModelArgs():
-                def __init__(self, model):
-                    self.model = model
-                    self.model_norm = "default_layer_norm"
-                    self.qk_norm = True
-            base_model = create_model(ModelArgs(args.mup_base_model)) 
-            weight_multipliers = compute_mup_multiplier(model,base_model)
-
-            optimizer = MuAdam(model.named_parameters(),weight_multipliers,optim.AdamW, lr=args.lr,weight_decay=args.wd)
-
-        elif args.muparam:
-            optimizer = FullMuAdam(model.named_parameters(), optim.AdamW, lr=args.lr, weight_decay=args.wd)
-
-        else:
+        if args.mup_base_dim == 0:
             optimizer = optim.AdamW(
-                [
-                    {"params": no_decay_params, "weight_decay": 0.0},
-                    {"params": params, "weight_decay": args.wd},
-                ],
-                lr=args.lr,
-                betas=(args.beta1, args.beta2),
-                eps=args.eps,
+            [
+                {"params": no_decay_params, "weight_decay": 0.0},
+                {"params": params, "weight_decay": args.wd},
+            ],
+            lr=args.lr,
+            betas=(args.beta1, args.beta2),
+            eps=args.eps,
             )
+        else:  
+            optimizer = MuAdam(model.named_parameters(),model_params, optim.AdamW, 
+                               lr=args.lr, 
+                               weight_decay=args.wd,
+                               betas=(args.beta1, args.beta2),
+                               eps=args.eps,
+                               )
+
         scaler = None
         if args.precision == "amp":
             assert not args.fsdp, "FSDP not supported with amp, only amp_bfloat16"

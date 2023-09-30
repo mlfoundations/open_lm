@@ -217,20 +217,11 @@ def parse_args(args):
         help="Name of the transformer to use.",
     )
     parser.add_argument(
-        "--mup_base_model",
-        type=str,
-        default="None",
-        help="Name of the base model for muparameterization to use. If none, don't use mu parameterization.",
+        "--mup_base_dim",
+        type=int,
+        default=0,
+        help="Parameter dim for muparameterization to use. If 0, do not use mu parameterization.",
     )
-
-        parser.add_argument(
-        "--muparam",
-        action='store_true',
-        default=False,
-        help="Name of the base model for muparameterization to use. If none, don't use mu parameterization.",
-    )
-
-
     parser.add_argument(
         "--model-norm",
         type=str,

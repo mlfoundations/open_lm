@@ -64,7 +64,7 @@ class Params:
     norm_type: nn.Module = nn.LayerNorm
     apply_qk_norm: bool = False
     rotary_old: bool = False
-    muparam: bool = False
+    mup_base_dim: int = 0
 
 
 def xformers_attn(queries, keys, values, is_causal):
@@ -85,7 +85,7 @@ class CustomAttn(nn.Module):
         self.pos_embed = HeadRotaryWithCast(self.head_dim, args.seq_len) if args.rotary_old else RotaryWithCast(self.head_dim, args.seq_len)
         self.attn_fn = xformers_attn
         self.apply_qk_norm = args.apply_qk_norm
-        self.muparam = args.muparam
+        self.mup_base_dim = args.mup_base_dim
 
         # initialize weights by trunc_normal(1/sqrt(fan_in))
         std = 1.0 / math.sqrt(args.dim)
@@ -127,13 +127,11 @@ class CustomAttn(nn.Module):
 
         queries, keys, vals = self.pos_embed(queries, keys, vals)
 
-        if self.muparam:
-            #  scale attention as 1/d instead of 1/sqrt(d)
-            output = self.attn_fn(queries, keys, vals, is_causal=is_causal) * float(self.head_dim) ** -0.5
-        else:
-            output = self.attn_fn(queries, keys, vals, is_causal=is_causal)
-        
-
+       # if self.mup_base_dim:
+       #     #  scale attention as 1/d instead of 1/sqrt(d)
+       #     output = self.attn_fn(queries, keys, vals, is_causal=is_causal) * float(self.head_dim) ** -0.5
+       # else:
+        output = self.attn_fn(queries, keys, vals, is_causal=is_causal)
 
         output = output.view(batchsize, seqlen, -1)
 
@@ -198,7 +196,6 @@ class Transformer(nn.Module):
             else nn.Identity()
         )
         self.weight_tying = params.weight_tying
-        self.muparam = params.muparam
 
         self.tok_embeddings = nn.Embedding(params.vocab_size, params.dim)
 
@@ -221,10 +218,9 @@ class Transformer(nn.Module):
         # for the embed layer (from RWKV paper) but this was better.
         
         std = 1.0 / math.sqrt(params.dim)
-        if self.muparam: # table 8 in arXiv:2203.03466
-            std = 1.0 
-            
-
+        if self.params.mup_base_dim: # table 8 in arXiv:2203.03466
+            # this is 1/ sqrt( dim * mup_base_dim / dim  ) 
+            std = 1.0 / math.sqrt(self.params.mup_base_dim)
         torch.nn.init.trunc_normal_(self.output.weight, std=std, a=-3 * std, b=3 * std)
         torch.nn.init.trunc_normal_(
             self.tok_embeddings.weight, std=std, a=-3 * std, b=3 * std
@@ -245,9 +241,9 @@ class Transformer(nn.Module):
                 x = layer(x)
 
         x = self.norm(x)
-        if self.muparam:
-            # table 8 in arXiv:2203.03466: scale output by 1 / fan_in
-            output = self.output(x) * 1.0/self.output.weight.shape[1]
+        if self.params.mup_base_dim:
+            ## table 8 in arXiv:2203.03466: scale output by 1 / fan_in
+            output = self.output(x) * 1.0/ (self.params.dim / self.params.mup_base_dim)
         else:
             output = self.output(x)
         # follow llama in casting this to float.
@@ -272,7 +268,7 @@ def create_model(args):
         weight_tying=cfg["weight_tying"],
         norm_type=get_norm_class(args),
         apply_qk_norm=args.qk_norm,
-        muparam=args.muparam,
+        mup_base_dim=args.mup_base_dim,
         #rotary_old=args.rotary_old
     )
     return Transformer(args)
