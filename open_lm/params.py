@@ -457,15 +457,15 @@ def parse_args(args):
         help="Use incorrect rotary embedding that is applied to the head dimension, which is default in xformers as of 09/01/23.",
     )
     parser.add_argument(
-        "--mup-base-fan-in",
+        "--mup-base-width",
         default=None,
-        help="Automatically scale lr for linear layers to mup-base-fan-in / hidden_dim and create the corresponding parameter groups.",
+        help="Automatically scale lr for linear layers to mup-base-width / fan-in and create the corresponding parameter groups.",
     )
     parser.add_argument(
         "--mup-scale-wd",
         default=False,
         action="store_true",
-        help="Scale wd for linear layers by hidden_dim / mup-base-fan-in so that wd and lr can remain decoupled.",
+        help="Scale wd for linear layers by fan-in / mup-base-width so that wd and lr can remain decoupled.",
     )
     args = parser.parse_args(args)
 

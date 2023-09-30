@@ -470,32 +470,53 @@ def main(args):
         named_parameters = list(model.named_parameters())
         no_decay_params = []  # to be potentially used later
 
-        if args.mup_base_fan_in:
-            linear_modules = ["in_proj", "out_proj", "w12", "w3"]
-            mup_scale = args.mup_base_fan_in / model.params.dim
-            mup_lr = args.lr * mup_scale
+        if args.mup_base_width:
+            linear_modules = ["in_proj", "out_proj", "w12", "w3", "output"]
 
-            mup_wd = args.wd
-            if args.mup_scale_wd:
-                # ensure that wd is still decoupled from lr even when the lr changes
-                mup_wd /= mup_scale
-
-            # modify all linear modules
-            linear_params = []
+            linear_params = {}
             other_params = []
+
             for n, p in named_parameters:
                 if p.requires_grad:
                     if any(m in n for m in linear_modules):
-                        linear_params.append(p)
+                        # weights are transposed so second dim is the fan-in
+                        fan_in = p.shape[-1]
+                        if fan_in in linear_params:
+                            # group parameters by their fain_in value
+                            linear_params[fan_in].append(p)
+                        else:
+                            linear_params[fan_in] = [
+                                p,
+                            ]
                     else:
+                        # all other learnable parameters that are not in linear layers
                         other_params.append(p)
 
+            optim_params = [
+                {"params": no_decay_params, "lr": args.lr, "weight_decay": 0.0},
+                {"params": other_params, "lr": args.lr, "weight_decay": args.wd},
+            ]
+
+            for fan_in in linear_params:
+                # add param group for each fan_in
+                mup_scale = args.mup_base_width / fan_in
+                mup_lr = args.lr * mup_scale
+                mup_wd = args.wd
+
+                if args.mup_scale_wd:
+                    # ensure that wd is still decoupled from lr as in original AdamW
+                    mup_wd /= mup_scale
+
+                optim_params.append(
+                    {
+                        "params": linear_params[fan_in],
+                        "lr": mup_lr,
+                        "weight_decay": mup_wd,
+                    },
+                )
+
             optimizer = optim.AdamW(
-                [
-                    {"params": no_decay_params, "lr": args.lr, "weight_decay": 0.0},
-                    {"params": other_params, "lr": args.lr, "weight_decay": args.wd},
-                    {"params": linear_params, "lr": mup_lr, "weight_decay": mup_wd},
-                ],
+                optim_params,
                 betas=(args.beta1, args.beta2),
                 eps=args.eps,
             )
