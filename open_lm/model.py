@@ -65,6 +65,7 @@ class Params:
     apply_qk_norm: bool = False
     rotary_old: bool = False
     mup_base_dim: int = 0
+    mup_base_n_heads: int = 0
 
 
 def xformers_attn(queries, keys, values, is_causal):
@@ -86,6 +87,7 @@ class CustomAttn(nn.Module):
         self.attn_fn = xformers_attn
         self.apply_qk_norm = args.apply_qk_norm
         self.mup_base_dim = args.mup_base_dim
+        self.mup_base_n_heads = args.mup_base_n_heads
 
         # initialize weights by trunc_normal(1/sqrt(fan_in))
         std = 1.0 / math.sqrt(args.dim)
@@ -127,11 +129,17 @@ class CustomAttn(nn.Module):
 
         queries, keys, vals = self.pos_embed(queries, keys, vals)
 
-       # if self.mup_base_dim:
-       #     #  scale attention as 1/d instead of 1/sqrt(d)
-       #     output = self.attn_fn(queries, keys, vals, is_causal=is_causal) * float(self.head_dim) ** -0.5
-       # else:
-        output = self.attn_fn(queries, keys, vals, is_causal=is_causal)
+        if self.mup_base_n_heads:
+            '''
+            if mup_base_n_heads = 0, we assume head_dim in the target and base model is equal
+            mup requires to scale attention as 1/d instead of 1/sqrt(d)
+            relative scaling requires 
+            '''
+            base_head_dim = self.mup_base_dim // self.mup_base_n_heads
+            multiplier = 1 / (self.head_dim / base_head_dim)
+            output = self.attn_fn(queries, keys, vals, is_causal=is_causal) * float(multiplier)
+        else:
+            output = self.attn_fn(queries, keys, vals, is_causal=is_causal)
 
         output = output.view(batchsize, seqlen, -1)
 
@@ -269,6 +277,7 @@ def create_model(args):
         norm_type=get_norm_class(args),
         apply_qk_norm=args.qk_norm,
         mup_base_dim=args.mup_base_dim,
+        mup_base_n_heads=args.mup_base_n_heads,
         #rotary_old=args.rotary_old
     )
     return Transformer(args)

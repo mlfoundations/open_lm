@@ -223,6 +223,12 @@ def parse_args(args):
         help="Parameter dim for muparameterization to use. If 0, do not use mu parameterization.",
     )
     parser.add_argument(
+        "--mup_base_n_heads",
+        type=int,
+        default=0,
+        help="Parameter n_heads for muparameterization to use. If 0, assume dim_head doesn't change.",
+    )
+    parser.add_argument(
         "--model-norm",
         type=str,
         default="default_layer_norm",
