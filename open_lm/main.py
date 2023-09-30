@@ -482,7 +482,7 @@ def main(args):
                         # weights are transposed so second dim is the fan-in
                         fan_in = p.shape[-1]
                         if fan_in in linear_params:
-                            # group parameters by their fain_in value
+                            # group parameters by their fan_in value
                             linear_params[fan_in].append(p)
                         else:
                             linear_params[fan_in] = [

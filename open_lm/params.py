@@ -459,7 +459,7 @@ def parse_args(args):
     parser.add_argument(
         "--mup-base-width",
         default=None,
-        help="Automatically scale lr for linear layers to mup-base-width / fan-in and create the corresponding parameter groups.",
+        help="Automatically scale lr for linear layers by mup-base-width / fan-in and create the corresponding parameter groups.",
     )
     parser.add_argument(
         "--mup-scale-wd",
