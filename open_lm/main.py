@@ -401,6 +401,11 @@ def main(args):
 
     if args.distributed:
         if args.fsdp:
+            # if we use mup, we use different learning rates for the parameters, 
+            # so we can't allow fsdp to put different parameters together
+            if args.mup_base_dim:
+                assert (args.fsdp_use_orig_params), "For mu-parameterization, the flag --fsdp-use-orig-params should be set."
+
             # from https://pytorch.org/blog/efficient-large-scale-training-with-pytorch/
             transformer_auto_wrapper_policy = functools.partial(
                 transformer_auto_wrap_policy,

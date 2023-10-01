@@ -138,7 +138,7 @@ class CustomAttn(nn.Module):
             '''
             base_head_dim = self.mup_base_dim // self.mup_base_n_heads
             multiplier = 1 / (self.head_dim / base_head_dim)
-            output = self.attn_fn(queries, keys, vals, is_causal=is_causal) * float(multiplier)
+            output = self.attn_fn(queries, keys * float(multiplier), vals, is_causal=is_causal) 
         else:
             output = self.attn_fn(queries, keys, vals, is_causal=is_causal)
 
@@ -280,6 +280,6 @@ def create_model(args):
         apply_qk_norm=args.qk_norm,
         mup_base_dim=args.mup_base_dim,
         mup_base_n_heads=args.mup_base_n_heads,
-        #rotary_old=args.rotary_old
+        rotary_old=args.rotary_old
     )
     return Transformer(args)
