@@ -285,8 +285,6 @@ def evaluate(model, data, start_epoch, args, writer):
 
 
 def MuAdam(named_params,params,impl,decoupled_wd=False, **kwargs):
-    
-    new_param_groups = []
 
     # split int groups, copy the lr and weight decay
     def new_group():
@@ -295,21 +293,18 @@ def MuAdam(named_params,params,impl,decoupled_wd=False, **kwargs):
         new_g['weight_decay'] = kwargs.get('weight_decay', 0.)
         new_g['params'] = []
         return new_g
-    # The matrix-like weights might need multiple groups since weights
+    # the matrix-like weights might need multiple groups since weights
     # might have different width multipliers
-    matrix_like_p = defaultdict(new_group) # dictionary key is width_mult
+    matrix_like_p = defaultdict(new_group) # dictionary key is width_multiplier
     vector_like_p = new_group()
 
     for param_name, param in named_params:
-        '''
-        The following checks if the parameter is a matrix like weight, and if 
-        yes adds it to the matrix_like_p dictionary, 
-        else adds it to the vector_like_p dictionary
-        '''
+        # parameters that go to matrix_like_p dictionary need a different lr,
+        # other parameters go to the vector_like_p dictionary
         if len(param.shape) == 2:
             if 'output' not in param_name and 'embedding' not in param_name:
-                weight_multiplier = params.dim / params.mup_base_dim
-                matrix_like_p[ weight_multiplier ]['params'].append(param)
+                width_multiplier = params.dim / params.mup_base_dim
+                matrix_like_p[ width_multiplier ]['params'].append(param)
             else: 
                 # do not scale learning rates of output and embedding layers
                 matrix_like_p[ 1.0 ]['params'].append(param) 
@@ -318,13 +313,13 @@ def MuAdam(named_params,params,impl,decoupled_wd=False, **kwargs):
         elif len(param.shape) == 1:
             vector_like_p['params'].append(param)
 
-    for width_mult, group in matrix_like_p.items():
-        # Scale learning rate and weight decay accordingly
-        group['lr'] /= width_mult
+    for width_multiplier, group in matrix_like_p.items():
+        # scale learning rate and weight decay according to table 8 in arXiv:2203.03466
+        group['lr'] /= width_multiplier
         if not decoupled_wd:
-            group['weight_decay'] *= width_mult
+            group['weight_decay'] *= width_multiplier
+    
+    param_groups = list(matrix_like_p.values()) + [vector_like_p]
 
-    new_param_groups.extend(list(matrix_like_p.values()) + [vector_like_p])
-
-    return impl(new_param_groups, **kwargs)
+    return impl(param_groups, **kwargs)
     

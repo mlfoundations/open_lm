@@ -131,9 +131,10 @@ class CustomAttn(nn.Module):
 
         if self.mup_base_n_heads:
             '''
-            if mup_base_n_heads = 0, we assume head_dim in the target and base model is equal
-            mup requires to scale attention as 1/d instead of 1/sqrt(d)
-            relative scaling requires 
+            if mup_base_n_heads = 0, the parameter is not given and we do not scale.
+            If head_dim==mup_base_n_heads no scaling would be required.
+            mup requires to scale attention as 1/d instead of 1/sqrt(d), 
+            thus the relative scaling as below
             '''
             base_head_dim = self.mup_base_dim // self.mup_base_n_heads
             multiplier = 1 / (self.head_dim / base_head_dim)
@@ -226,8 +227,9 @@ class Transformer(nn.Module):
         # for the embed layer (from RWKV paper) but this was better.
         
         std = 1.0 / math.sqrt(params.dim)
-        if self.params.mup_base_dim: # table 8 in arXiv:2203.03466
-            # this is 1/ sqrt( dim * mup_base_dim / dim  ) 
+        if self.params.mup_base_dim: 
+            #table 8 in arXiv:2203.03466, adam requires constant variance init here
+            #this is 1/ sqrt( dim * mup_base_dim / dim  ) 
             std = 1.0 / math.sqrt(self.params.mup_base_dim)
         torch.nn.init.trunc_normal_(self.output.weight, std=std, a=-3 * std, b=3 * std)
         torch.nn.init.trunc_normal_(
@@ -250,7 +252,7 @@ class Transformer(nn.Module):
 
         x = self.norm(x)
         if self.params.mup_base_dim:
-            ## table 8 in arXiv:2203.03466: scale output by 1 / fan_in
+            # table 8 in arXiv:2203.03466: scale output by 1 / fan_in
             output = self.output(x) * 1.0/ (self.params.dim / self.params.mup_base_dim)
         else:
             output = self.output(x)
