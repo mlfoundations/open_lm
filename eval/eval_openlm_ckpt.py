@@ -4,14 +4,16 @@ import time
 import sys
 from typing import List
 import builtins as __builtin__
+from open_lm.model import create_params
 
 import torch
 from composer.loggers import InMemoryLogger, LoggerDestination
 from composer.trainer import Trainer
 from composer.utils import dist, get_device, reproducibility
 from omegaconf import OmegaConf as om
-from open_lm.utils.transformers.model import OpenLMforCausalLM
-from open_lm.utils.transformers.config import OpenLMConfig
+from open_lm.params import add_model_args
+from open_lm.utils.transformers.hf_model import OpenLMforCausalLM
+from open_lm.utils.transformers.hf_config import OpenLMConfig
 from open_lm.utils.llm_foundry_wrapper import SimpleComposerOpenLMCausalLM
 from transformers import GPTNeoXTokenizerFast
 
@@ -76,35 +78,38 @@ def evaluate(model, tokenizer, cfg):
         torch.cuda.synchronize()
     b = time.time()
 
-    print(f'Ran eval in: {b-a} seconds')
+    print(f"Ran eval in: {b-a} seconds")
 
     for key in logger_keys:
         if key in in_memory_logger.data:
             result = in_memory_logger.data[key][0][1].item()
-            print(f'{key}: {result}')
+            print(f"{key}: {result}")
 
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--checkpoint')
-    parser.add_argument('--model-config')
-    parser.add_argument('--eval-yaml')
+    parser.add_argument("--checkpoint")
+    parser.add_argument(
+        "--model", type=str, default="m1b_neox", help="Name of the model to use."
+    )
+    parser.add_argument("--eval-yaml")
+    add_model_args(parser)
     args = parser.parse_args()
+
     with open(args.eval_yaml) as f:
         eval_cfg = om.load(f)
 
     print("Loading checkpoint from disk")
     checkpoint = torch.load(args.checkpoint)
-    with open(args.model_config, 'r') as f:
-        model_cfg = json.load(f)
 
     print("Loading model into the right classes")
-    open_lm = OpenLMforCausalLM(OpenLMConfig(**model_cfg))
+    open_lm = OpenLMforCausalLM(OpenLMConfig(create_params(args)))
     tokenizer = GPTNeoXTokenizerFast.from_pretrained("EleutherAI/gpt-neox-20b")
 
     state_dict = checkpoint["state_dict"]
     state_dict = {x.replace("module.", ""): y for x, y in state_dict.items()}
     open_lm.model.load_state_dict(state_dict)
+    open_lm.model.eval()
 
     evaluate(open_lm, tokenizer, eval_cfg)
 

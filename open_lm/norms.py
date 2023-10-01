@@ -104,18 +104,18 @@ class RmsNorm(nn.Module):
         return "{normalized_shape}, eps={eps} ".format(**self.__dict__)
 
 
-def get_norm_class(params):
-    if params.model_norm == "default_layer_norm":
+def get_norm_class(model_norm):
+    if model_norm == "default_layer_norm":
         return torch.nn.LayerNorm
 
-    elif params.model_norm == "gain_only_layer_norm":
+    elif model_norm == "gain_only_layer_norm":
         return partial(LayerNorm, elementwise_gain=True, elementwise_bias=False)
 
-    elif params.model_norm == "no_wb_layer_norm":
+    elif model_norm == "no_wb_layer_norm":
         return partial(LayerNorm, elementwise_gain=False, elementwise_bias=False)
 
-    elif params.model_norm == "rms_norm":
+    elif model_norm == "rms_norm":
         return RmsNorm
 
     else:
-        raise ValueError(f"Unsupported model-norm: {params.model_norm}")
+        raise ValueError(f"Unsupported model-norm: {model_norm}")
