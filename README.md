@@ -16,6 +16,7 @@ OpenLM is a minimal but performative language modeling (LM) repository, aimed to
 - [Team and Acknowledgements](#team-and-acknowledgements)
 
 # Release Notes
+- 09/26/23: Public release and featured on [Laion Blog](https://laion.ai/blog/open-lm/)
 - 08/18/23: Updated README.md
 # Quickstart
 Here we'll go over a basic example where we start from a fresh install, download and preprocess some training data, and train a model.
