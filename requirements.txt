@@ -13,3 +13,4 @@ zstandard
 llm-foundry
 apache_beam
 datasets
+huggingface_hub
