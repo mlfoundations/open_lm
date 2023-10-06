@@ -11,6 +11,7 @@ OpenLM is a minimal but performative language modeling (LM) repository, aimed to
   - [Process training data](#process-training-data)
   - [Run training](#run-training)
   - [Evaluate Model](#evaluate-model)
+  - [Generate Text](#generate-text)
 - [Pretrained Models](#pretrained-models)
 - [Team and Acknowledgements](#team-and-acknowledgements)
 
@@ -107,9 +108,24 @@ cd eval
 
 python eval_openlm_ckpt.py \
 --eval-yaml in_memory_hf_eval.yaml \
---model open_lm_3b  \
+--model open_lm_1b  \
 --checkpoint /path/to/openlm_checkpoint.pt
+--rotary-old 
 ```
+Note that `--rotary-old` is only necessary if using the pretrained `open_lm_1b` model hosted below. See discussion in the next section about this.
+
+## Generate Text
+One can also use a trained model to generate text. This is accessible via the script located at [scripts/generate.py](scripts/generate.py). The parameters are similar to those used in evaluation:
+```
+cd scripts
+
+python generate.py \
+--model open_lm_1b \
+--checkpoint /path/to/openlm_checkpoint.pt \
+--rotary-old \
+--input-text "Please give me a recipe for chocolate chip cookies"
+```
+Again, note that `--rotary-old` is only necessary for the pretrained `open_lm_1b` model hosted below. 
 
 # Pretrained Models
 
