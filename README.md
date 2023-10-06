@@ -28,7 +28,7 @@ Some considerations:
 - We like [WandB](https://wandb.ai/) and [tensorboard](https://www.tensorflow.org/tensorboard) for logging. We specify how to use these during training below.
 
 ## Process Training Data
-Next you must specify a collection of tokenized data. For the purposes of this example, we will use a recent dump of english Wikipedia, available on HuggingFace. To download this locally, we've included a script located at [datapreprocess/wiki_download.py](#datapreprocess/wiki_download.py). All you have to do is specify an output directory for where the raw data should be stored:
+Next you must specify a collection of tokenized data. For the purposes of this example, we will use a recent dump of english Wikipedia, available on HuggingFace. To download this locally, we've included a script located at [datapreprocess/wiki_download.py](datapreprocess/wiki_download.py). All you have to do is specify an output directory for where the raw data should be stored:
 ```
 python datapreprocess/wiki_download.py --output-dir path/to/raw_data
 ```
