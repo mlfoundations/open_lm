@@ -31,7 +31,7 @@ def add_model_args(parser):
         "--model-norm",
         type=str,
         default="default_layer_norm",
-        choices=["default_layer_norm", "gain_only_layer_norm", "no_wb_layer_norm", "rms_norm"],
+        choices=["default_layer_norm", "lp_layer_norm", "gain_only_layer_norm", "no_wb_layer_norm", "rms_norm"],
         help="Type of normalization to employ in the model",
     )
     parser.add_argument(
