@@ -11,10 +11,12 @@ OpenLM is a minimal but performative language modeling (LM) repository, aimed to
   - [Process training data](#process-training-data)
   - [Run training](#run-training)
   - [Evaluate Model](#evaluate-model)
+  - [Generate Text](#generate-text)
 - [Pretrained Models](#pretrained-models)
 - [Team and Acknowledgements](#team-and-acknowledgements)
 
 # Release Notes
+- 09/26/23: Public release and featured on [Laion Blog](https://laion.ai/blog/open-lm/)
 - 08/18/23: Updated README.md
 # Quickstart
 Here we'll go over a basic example where we start from a fresh install, download and preprocess some training data, and train a model.
@@ -22,11 +24,13 @@ Here we'll go over a basic example where we start from a fresh install, download
 ## Setup
 We require python >=3.9, and a current installation of pyTorch, as well as several other packages. The full list of requirements is contained in `requirements.txt` and can be installed in your python enviornment via
 ```>>> pip install -r requirements.txt```
+Next, to access `open_lm` everywhere in your virtual environment, install it using pip (from within the top level github repo)
+```>>> pip install --editable . ```
 Some considerations:
 - We like [WandB](https://wandb.ai/) and [tensorboard](https://www.tensorflow.org/tensorboard) for logging. We specify how to use these during training below.
 
 ## Process Training Data
-Next you must specify a collection of tokenized data. For the purposes of this example, we will use a recent dump of english Wikipedia, available on HuggingFace. To download this locally, we've included a script located at [datapreprocess/wiki_download.py](#datapreprocess/wiki_download.py). All you have to do is specify an output directory for where the raw data should be stored:
+Next you must specify a collection of tokenized data. For the purposes of this example, we will use a recent dump of english Wikipedia, available on HuggingFace. To download this locally, we've included a script located at [datapreprocess/wiki_download.py](datapreprocess/wiki_download.py). All you have to do is specify an output directory for where the raw data should be stored:
 ```
 python datapreprocess/wiki_download.py --output-dir path/to/raw_data
 ```
@@ -107,9 +111,24 @@ cd eval
 
 python eval_openlm_ckpt.py \
 --eval-yaml in_memory_hf_eval.yaml \
---model open_lm_3b  \
+--model open_lm_1b  \
 --checkpoint /path/to/openlm_checkpoint.pt
+--rotary-old 
 ```
+Note that `--rotary-old` is only necessary if using the pretrained `open_lm_1b` model hosted below. See discussion in the next section about this.
+
+## Generate Text
+One can also use a trained model to generate text. This is accessible via the script located at [scripts/generate.py](scripts/generate.py). The parameters are similar to those used in evaluation:
+```
+cd scripts
+
+python generate.py \
+--model open_lm_1b \
+--checkpoint /path/to/openlm_checkpoint.pt \
+--rotary-old \
+--input-text "Please give me a recipe for chocolate chip cookies"
+```
+Again, note that `--rotary-old` is only necessary for the pretrained `open_lm_1b` model hosted below. 
 
 # Pretrained Models
 
