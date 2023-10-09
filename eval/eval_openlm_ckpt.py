@@ -1,7 +1,7 @@
 import argparse
 import json
 import time
-import sys; sys.path.append('..')
+import sys
 from typing import List
 import builtins as __builtin__
 from open_lm.model import create_params
