@@ -24,6 +24,8 @@ Here we'll go over a basic example where we start from a fresh install, download
 ## Setup
 We require python >=3.9, and a current installation of pyTorch, as well as several other packages. The full list of requirements is contained in `requirements.txt` and can be installed in your python enviornment via
 ```>>> pip install -r requirements.txt```
+Next, to access `open_lm` everywhere in your virtual environment, install it using pip (from within the top level github repo)
+```>>> pip install --editable . ```
 Some considerations:
 - We like [WandB](https://wandb.ai/) and [tensorboard](https://www.tensorflow.org/tensorboard) for logging. We specify how to use these during training below.
 
