@@ -166,6 +166,9 @@ def parse_args(args):
         "--warmup", type=int, default=10000, help="Number of steps to warmup for."
     )
     parser.add_argument(
+        "--fused-xent", action="store_true", default=False, help="Whether to use fused cross entropy"
+    )
+    parser.add_argument(
         "--z-loss-coefficient",
         type=float,
         default=0.0,
