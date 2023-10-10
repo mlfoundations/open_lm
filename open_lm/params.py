@@ -34,6 +34,7 @@ def add_model_args(parser):
         choices=["default_layer_norm", "lp_layer_norm", "gain_only_layer_norm", "no_wb_layer_norm", "rms_norm"],
         help="Type of normalization to employ in the model",
     )
+    parser.add_argument("--ffn-type", choices=["swiglu", "gelu"], default="swiglu")
     parser.add_argument(
         "--qk-norm",
         action="store_true",
