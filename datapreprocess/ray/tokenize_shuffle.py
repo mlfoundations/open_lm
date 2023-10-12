@@ -199,19 +199,20 @@ if __name__ == "__main__":
     parser.add_argument("--wds_chunk_size", type=int, default=1024)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--ray_address", type=str, default=None)
+    parser.add_argument("--ray_spill_location", type=str, default="s3://dcnlp-hub/ray_spill")
 
     args = parser.parse_args()
+    # configure remote spilling
+
     if args.ray_address is None:
         ray.init()
     else:
         ray.init(args.ray_address)
-    # TODO  support multiple inputs 
+    # TODO  support multiple inputs
     input_paths = list(
         braceexpand(args.input)
     )  # TODO assumes this is brace expand format, future handle more cases
     output_path = args.output
-    tokenize = not args.no_tokenize
-    shuffle = not args.no_shuffle
     seqlen = args.seqlen
     batch_size = args.initial_batch_size
     wds_chunk_size = args.wds_chunk_size
@@ -221,8 +222,6 @@ if __name__ == "__main__":
         pad_type = PadType.PAD_TOKEN
     else:
         raise ValueError(f"Unknown pad_type = {args.pad_type}")
-    print(f"Tokenize: {tokenize}")
-    print(f"Shuffle: {shuffle}")
 
     ctx = DataContext.get_current()
     ctx.use_push_based_shuffle = True

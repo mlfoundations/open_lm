@@ -1,5 +1,5 @@
 # An unique identifier for the head node and workers of this cluster.
-cluster_name: sort-test
+cluster_name: ray-shuffle-tokenize
 max_workers: 10
 upscaling_speed: 0.0
 available_node_types:
@@ -8,7 +8,7 @@ available_node_types:
         node_config:
             SubnetIds: [subnet-0aa43f554b080bc71, subnet-0788d34e592b0adf3, subnet-0d7f60196af561fab]
             ImageId: ami-0efcece6bed30fd98 # ray us-west-2
-            InstanceType: r5.24xlarge
+            InstanceType: i4i.4xlarge
             IamInstanceProfile:
                 Arn: arn:aws:iam::753985720788:instance-profile/ray-autoscaler-v1
     ray.worker.default:
@@ -17,7 +17,7 @@ available_node_types:
         node_config:
             SubnetIds: [subnet-0aa43f554b080bc71, subnet-0788d34e592b0adf3, subnet-0d7f60196af561fab]
             ImageId: ami-0efcece6bed30fd98 # ray us-west-2
-            InstanceType: r5.24xlarge
+            InstanceType: i4i.4xlarge
             IamInstanceProfile:
                 Arn: arn:aws:iam::753985720788:instance-profile/ray-autoscaler-v1
 
@@ -46,7 +46,7 @@ setup_commands:
     - pip install pyarrow
     - pip install webdataset
     - pip install transformers
-      #- sudo mkfs -t xfs /dev/nvme1n1
-      #- sudo mount /dev/nvme1n1 /tmp
-      #- sudo chown -R $USER /tmp
+    - sudo mkfs -t xfs /dev/nvme1n1
+    - sudo mount /dev/nvme1n1 /tmp
+    - sudo chown -R $USER /tmp
 
