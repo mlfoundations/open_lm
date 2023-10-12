@@ -69,19 +69,10 @@ class LayerNorm(nn.Module):
         )
 
 
-class LPLayerNorm(torch.nn.LayerNorm):
+class LPLayerNorm(LayerNorm):
     """From MosaicML composer.
 
     See: https://github.com/mosaicml/composer/blob/6acca4c70425455be7280a5459dbf02e1ac5591d/composer/algorithms/low_precision_layernorm/low_precision_layernorm.py#L63"""
-    def __init__(self, normalized_shape, eps=1e-05, elementwise_affine=True, device=None, dtype=None):
-        super().__init__(
-            normalized_shape=normalized_shape,
-            eps=eps,
-            elementwise_affine=elementwise_affine,
-            device=device,
-            dtype=dtype,
-        )
-
     def forward(self, x):
         module_device = x.device
         downcast_x = _cast_if_autocast_enabled(x)
