@@ -314,6 +314,12 @@ def parse_args(args):
         help="Use FullyShardedDataParallel for distributed training."
     )
     parser.add_argument(
+        "--fsdp-pure-bf16",
+        default=False,
+        action="store_true",
+        help="Use pure bf16 FullyShardedDataParallel for distributed training."
+    )
+    parser.add_argument(
         "--fsdp-backward-prefetch",
         default=False,
         action="store_true",
