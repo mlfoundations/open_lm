@@ -34,7 +34,6 @@
    ```
    aws configure
    ```
-   Enter the AWS credentials for Ludwig's account.
 
 2. **Initialize the cluster**:  
    ```
