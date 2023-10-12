@@ -1,0 +1,52 @@
+# An unique identifier for the head node and workers of this cluster.
+cluster_name: sort-test
+max_workers: 10
+upscaling_speed: 0.0
+available_node_types:
+    ray.head.default:
+        resources: {}
+        node_config:
+            SubnetIds: [subnet-0aa43f554b080bc71, subnet-0788d34e592b0adf3, subnet-0d7f60196af561fab]
+            ImageId: ami-0efcece6bed30fd98 # ray us-west-2
+            InstanceType: r5.24xlarge
+            IamInstanceProfile:
+                Arn: arn:aws:iam::753985720788:instance-profile/ray-autoscaler-v1
+    ray.worker.default:
+        min_workers: 10
+        max_workers: 10
+        node_config:
+            SubnetIds: [subnet-0aa43f554b080bc71, subnet-0788d34e592b0adf3, subnet-0d7f60196af561fab]
+            ImageId: ami-0efcece6bed30fd98 # ray us-west-2
+            InstanceType: r5.24xlarge
+            IamInstanceProfile:
+                Arn: arn:aws:iam::753985720788:instance-profile/ray-autoscaler-v1
+
+# Cloud-provider specific configuration.
+provider:
+    type: aws
+    region: us-west-2
+    cache_stopped_nodes: False
+
+
+
+setup_commands:
+    # - sudo apt-get update
+    - wget https://repo.anaconda.com/miniconda/Miniconda3-py310_23.3.1-0-Linux-x86_64.sh -O miniconda.sh
+    - bash ~/miniconda.sh -f -b -p miniconda3/
+    - echo 'export PATH="$HOME/miniconda3/bin/:$PATH"' >> ~/.bashrc
+    # if you have AWS CREDS fill them out here
+    - pip install --upgrade pip setuptools wheel
+    # - pip install ray
+    - pip install -U "ray[default] @ https://s3-us-west-2.amazonaws.com/ray-wheels/latest/ray-3.0.0.dev0-cp310-cp310-manylinux2014_x86_64.whl"
+    - pip install boto3==1.26.90
+    - pip install s3fs==2022.11.0
+    - pip install psutil
+    - pip install pysimdjson
+    - pip install pandas
+    - pip install pyarrow
+    - pip install webdataset
+    - pip install transformers
+      #- sudo mkfs -t xfs /dev/nvme1n1
+      #- sudo mount /dev/nvme1n1 /tmp
+      #- sudo chown -R $USER /tmp
+
