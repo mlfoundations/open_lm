@@ -143,16 +143,15 @@ class Block(nn.Module):
         self.head_dim = args.dim // args.n_heads
         self.attention = CustomAttn(layer_id, args)
 
-
         if args.ffn_type == "swiglu":
             # this follows llama / lit llama -- go to multiple of 256
             hidden_dim = 256 * ((int(2 * 4 * args.dim / 3) + 256 - 1) // 256)
             self.feed_forward = xops.SwiGLU(args.dim, hidden_dim, args.dim, bias=False)
         elif args.ffn_type == "gelu":
-            # Follows mosaic mpt7b
+            # Follows mosaic mpt7b, but without a bias.
             hidden_dim = args.dim * 4
-            self._ff_w1 = nn.Linear(args.dim, hidden_dim, bias=True)
-            self._ff_w2 = nn.Linear(hidden_dim, args.dim, bias=True)
+            self._ff_w1 = nn.Linear(args.dim, hidden_dim, bias=False)
+            self._ff_w2 = nn.Linear(hidden_dim, args.dim, bias=False)
             self.feed_forward = nn.Sequential(
                 self._ff_w1, nn.GELU(approximate="none"), self._ff_w2
             )
