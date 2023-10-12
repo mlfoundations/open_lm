@@ -41,6 +41,7 @@ def count_samples(shard_path, tmp_dir):
         shard_path.download_to(temp_shard_path)
     else:
         temp_shard_path = shard_path
+
     count = int(subprocess.check_output(f"tar tf {temp_shard_path} | wc -l", shell=True))
 
     if isinstance(shard_path, CloudPath):
