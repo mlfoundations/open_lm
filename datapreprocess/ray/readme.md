@@ -1,6 +1,3 @@
-Here's a cleaned-up version of your `readme.md`:
-
----
 
 # Ray Cluster Setup and Execution Guide
 
