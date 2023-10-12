@@ -66,6 +66,7 @@ class Params:
     norm_type: nn.Module = nn.LayerNorm
     apply_qk_norm: bool = False
     rotary_old: bool = False
+    ffn_type: str = "swiglu"
 
 
 def xformers_attn(queries, keys, values, is_causal):
@@ -142,10 +143,18 @@ class Block(nn.Module):
         self.head_dim = args.dim // args.n_heads
         self.attention = CustomAttn(layer_id, args)
 
-        # this follows llama / lit llama -- go to multiple of 256
-        hidden_dim = 256 * ((int(2 * 4 * args.dim / 3) + 256 - 1) // 256)
-
-        self.feed_forward = xops.SwiGLU(args.dim, hidden_dim, args.dim, bias=False)
+        if args.ffn_type == "swiglu":
+            # this follows llama / lit llama -- go to multiple of 256
+            hidden_dim = 256 * ((int(2 * 4 * args.dim / 3) + 256 - 1) // 256)
+            self.feed_forward = xops.SwiGLU(args.dim, hidden_dim, args.dim, bias=False)
+        elif args.ffn_type == "gelu":
+            # Follows mosaic mpt7b, but without a bias.
+            hidden_dim = args.dim * 4
+            self._ff_w1 = nn.Linear(args.dim, hidden_dim, bias=False)
+            self._ff_w2 = nn.Linear(hidden_dim, args.dim, bias=False)
+            self.feed_forward = nn.Sequential(
+                self._ff_w1, nn.GELU(approximate="none"), self._ff_w2
+            )
         self.layer_id = layer_id
         self.attention_norm = args.norm_type(
             args.dim,
@@ -157,17 +166,25 @@ class Block(nn.Module):
         )
         self.attention.seq_len = args.seq_len
 
-        # initialize weights trunc_normal(1/sqrt(fan_in))
-        std = 1.0 / math.sqrt(args.dim)
-        torch.nn.init.trunc_normal_(
-            self.feed_forward.w12.weight, std=std, a=-3 * std, b=3 * std
-        )
-        # scale init by depth as in https://arxiv.org/abs/1908.11365 -- worked slightly better.
-        std = 1.0 / math.sqrt(hidden_dim)
-        std = std / math.sqrt(2 * (layer_id + 1))
-        torch.nn.init.trunc_normal_(
-            self.feed_forward.w3.weight, std=std, a=-3 * std, b=3 * std
-        )
+        if args.ffn_type == "swiglu":
+            # initialize weights trunc_normal(1/sqrt(fan_in))
+            std = 1.0 / math.sqrt(args.dim)
+            torch.nn.init.trunc_normal_(
+                self.feed_forward.w12.weight, std=std, a=-3 * std, b=3 * std
+            )
+            # scale init by depth as in https://arxiv.org/abs/1908.11365 -- worked slightly better.
+            std = 1.0 / math.sqrt(hidden_dim)
+            std = std / math.sqrt(2 * (layer_id + 1))
+            torch.nn.init.trunc_normal_(
+                self.feed_forward.w3.weight, std=std, a=-3 * std, b=3 * std
+            )
+        elif args.ffn_type == "gelu":
+            std = 1.0 / math.sqrt(args.dim)
+            torch.nn.init.trunc_normal_(self._ff_w1.weight, std=std, a=-3 * std, b=3 * std)
+
+            std = (1.0 / math.sqrt(hidden_dim))
+            std = std / math.sqrt(2 * (layer_id + 1))
+            torch.nn.init.trunc_normal_(self._ff_w2.weight, std=std, a=-3 * std, b=3 * std)
 
     def forward(self, x):
         h = x + self.attention(self.attention_norm(x), is_causal=True)
@@ -256,7 +273,8 @@ def create_params(args):
         weight_tying=cfg["weight_tying"],
         norm_type=get_norm_class(args.model_norm),
         apply_qk_norm=args.qk_norm,
-        rotary_old=args.rotary_old
+        rotary_old=args.rotary_old,
+        ffn_type=args.ffn_type,
     )
 
 

@@ -31,9 +31,10 @@ def add_model_args(parser):
         "--model-norm",
         type=str,
         default="default_layer_norm",
-        choices=["default_layer_norm", "gain_only_layer_norm", "no_wb_layer_norm", "rms_norm"],
+        choices=["default_layer_norm", "lp_layer_norm", "gain_only_layer_norm", "no_wb_layer_norm", "rms_norm"],
         help="Type of normalization to employ in the model",
     )
+    parser.add_argument("--ffn-type", choices=["swiglu", "gelu"], default="swiglu")
     parser.add_argument(
         "--qk-norm",
         action="store_true",
@@ -164,6 +165,9 @@ def parse_args(args):
     parser.add_argument("--wd", type=float, default=0.2, help="Weight decay.")
     parser.add_argument(
         "--warmup", type=int, default=10000, help="Number of steps to warmup for."
+    )
+    parser.add_argument(
+        "--fused-xent", action="store_true", default=False, help="Whether to use fused cross entropy"
     )
     parser.add_argument(
         "--z-loss-coefficient",
@@ -308,6 +312,12 @@ def parse_args(args):
         default=False,
         action="store_true",
         help="Use FullyShardedDataParallel for distributed training."
+    )
+    parser.add_argument(
+        "--fsdp-pure-bf16",
+        default=False,
+        action="store_true",
+        help="Use pure bf16 FullyShardedDataParallel for distributed training."
     )
     parser.add_argument(
         "--fsdp-backward-prefetch",
