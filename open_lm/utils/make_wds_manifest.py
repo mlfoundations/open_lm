@@ -29,7 +29,7 @@ def parse_args(args):
         default="manifest.jsonl",
         help="Filename for the manifest that will be stored in the webdataset directory.",
     )
-    parser.add_argument("--tmp_dir", type=str, default=None, help="Temporary directory.")
+    parser.add_argument("--tmp-dir", type=str, default=None, help="Temporary directory.")
     parser.add_argument("--num-workers", type=int, default=2, help="Number of workers.")
     args = parser.parse_args(args)
     return args
