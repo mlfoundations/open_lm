@@ -14,3 +14,4 @@ llm-foundry
 apache_beam
 datasets
 huggingface_hub
+flash_attn
