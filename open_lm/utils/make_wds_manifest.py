@@ -29,22 +29,32 @@ def parse_args(args):
         default="manifest.jsonl",
         help="Filename for the manifest that will be stored in the webdataset directory.",
     )
+    parser.add_argument("--tmp_dir", type=str, default=None, help="Temporary directory.")
     parser.add_argument("--num-workers", type=int, default=2, help="Number of workers.")
     args = parser.parse_args(args)
     return args
 
 
-def count_samples(shard_path):
-    count = int(subprocess.check_output(f"tar tf {shard_path} | wc -l", shell=True))
+def count_samples(shard_path, tmp_dir):
+    if isinstance(shard_path, CloudPath):
+        temp_shard_path = Path(tmp_dir) / shard_path.name
+        shard_path.download_to(temp_shard_path)
+    else:
+        temp_shard_path = shard_path
+    count = int(subprocess.check_output(f"tar tf {temp_shard_path} | wc -l", shell=True))
+
+    if isinstance(shard_path, CloudPath):
+        temp_shard_path.unlink()
+
     return count
 
 
 def worker_fn(input_data):
-    basename, data_dir = input_data
+    basename, data_dir, tmp_dir = input_data
     shard_path = data_dir / basename
     return (basename, {
         "shard": basename.split("_")[1].split(".")[0],
-        "num_chunks": count_samples(shard_path),
+        "num_chunks": count_samples(shard_path, tmp_dir),
     })
 
 
@@ -52,7 +62,7 @@ def main(args):
     args = parse_args(args)
 
     shards = sorted([x for x in args.data_dir.iterdir() if x.name.endswith(".tar")])
-    input_data = [(shard.name, args.data_dir) for shard in shards]
+    input_data = [(shard.name, args.data_dir, args.tmp_dir) for shard in shards]
 
     print(f"Shards to process: {len(shards)}")
     print("Creating pool.")
