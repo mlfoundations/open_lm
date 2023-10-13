@@ -101,9 +101,7 @@ def test_deterministic_resampled(epoch, weights, seed):
 def test_min_shards(epoch, weights, min_shards_needed):
     shard_strings, _, _ = get_string_for_epoch(NUM_SAMPLES, epoch, INPUT_PATHS, weights, min_shards_needed)
     for item in shard_strings:
-        edge_shards = item.split("..")
-        edge_shards = [int(edge_shards[0].split("{")[1]), int(edge_shards[1].split("}")[0])]
-        num_shards = edge_shards[1] - edge_shards[0] + 1
+        num_shards = len(item.split(","))
         assert num_shards >= min_shards_needed
 
 

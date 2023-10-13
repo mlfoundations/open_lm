@@ -94,6 +94,12 @@ def get_metadata_file(path):
     return out
 
 def get_shards_for_chunk(num_samples, chunk, path):
+    """ Function to get a chunk of shards to train on.
+
+    Chunks are groups of shards with samples roughly equal to the number of samples
+    that will be seen during training. This function uses the dataset manifest
+    to split the shards into chunks, and assign shards to each chunk.
+    """
     metadata = get_metadata_file(path)
     shard_list = []
     curr_shard_list = []
@@ -120,9 +126,17 @@ def enough_shards(shard_lists, min_shards_needed):
             return False
     return True
 
+
+def source_exhausted(paths, shard_list_per_source):
+    for i, source in enumerate(paths):
+        data = get_metadata_file(source)
+        if len(data) < len(shard_list_per_source[i]):
+            return True
+    return False
+
+
 def get_string_for_epoch(num_samples, starting_chunk, paths, weights, min_shards_needed):
     samples_per_source = [weights[i] * num_samples / sum(weights) for i in range(len(weights))]
-    
     shard_strings_per_source = []
     next_chunk = starting_chunk
     shard_list_per_source = [[] for _ in range(len(paths))]
@@ -133,12 +147,17 @@ def get_string_for_epoch(num_samples, starting_chunk, paths, weights, min_shards
             shard_list_per_source[i].extend(shard_list_source)
             num_samples_per_source[i] += num_samples_source 
         next_chunk += 1
+        if source_exhausted(paths, shard_list_per_source):
+            raise ValueError(
+                "Number of shards requested is more than the number of shards available."
+                "Consider lowering the number of workers and / or the number of GPUs."
+            )
 
     for i, source_path in enumerate(paths):
         shard_list_source = shard_list_per_source[i]
         num_samples_source = num_samples_per_source[i]
         shard_root_source = '/'.join(source_path.split('/')[:-1]) + '/shard_'
-        shard_string_source = shard_root_source + '{' + shard_list_source[0] + '..' + shard_list_source[-1] + '}.tar'
+        shard_string_source = shard_root_source + '{' + ",".join(shard_list_source) + '}.tar'
         if source_path.startswith('s3'):
             shard_string_source = f'pipe:aws s3 cp {shard_string_source} -'
         shard_strings_per_source.append(shard_string_source)

@@ -407,13 +407,13 @@ def get_wds_dataset(args, is_train, epoch=0, floor=False, tokenizer=None, data_k
         total_num_batches = num_batches
         total_num_samples = num_samples
 
-    print('persistent workers:', args.dataset_metadata is None)
+    print('persistent workers:', args.dataset_manifest is None)
     dataloader = wds.WebLoader(
         dataset,
         batch_size=None,
         shuffle=False,
         num_workers=args.workers,
-        persistent_workers=args.dataset_metadata is None,
+        persistent_workers=args.dataset_manifest is None,
     )
 
     # FIXME not clear which approach is better, with_epoch before vs after dataloader?
