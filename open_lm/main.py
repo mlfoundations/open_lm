@@ -600,7 +600,7 @@ def main(args):
                 not args.dataset_resampled
             ), "dataset_metadata and dataset_resampled are mutually exclusive"
             train_data_string_per_source, num_samples_per_source, next_chunk = get_string_for_epoch(
-                args.train_num_samples, next_chunk, args.dataset_metadata, args.train_data_mix_weights, args.num_workers * args.world_size
+                args.train_num_samples, next_chunk, args.dataset_metadata, args.train_data_mix_weights, args.workers * args.world_size
             )
             print(f"=> epoch {epoch}, training on {train_data_string_per_source}")
             if data["train"] is not None:
