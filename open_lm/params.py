@@ -89,11 +89,11 @@ def parse_args(args):
         help="Whether to use sampling with replacement for webdataset shard selection."
     )
     parser.add_argument(
-        "--dataset-metadata",
+        "--dataset-manifest",
         type=str,
         nargs="+",
         default=None,
-        help="Uses metadata to construct a train set."
+        help="Uses manifest to construct a train set."
     )
     parser.add_argument(
         "--disable-buffer",

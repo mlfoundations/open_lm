@@ -112,7 +112,7 @@ This will create a file called ```manifest.jsonl``` under ```/preproc_data```. T
 >>> export CUDA_VISIBLE_DEVICES=0,1,2,3
 >>> torchrun --nproc-per-node 4 -m open_lm.main   \
  --model open_lm_3b \
- --dataset-metadata /preproc_data/manifest.jsonl \
+ --dataset-manifest /preproc_data/manifest.jsonl \
  --train-num-samples 1000000000 \
  --workers 8 \
  --precision amp_bfloat16 \

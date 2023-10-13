@@ -410,9 +410,9 @@ def main(args):
         model.load_state_dict(state_dict)
 
     # Add data chunk when resuming (only for dataset without resampling)
-    if args.dataset_metadata is not None:
+    if args.dataset_manifest is not None:
         next_chunk = 0
-        if args.resume is not None and args.dataset_metadata is not None:
+        if args.resume is not None and args.dataset_manifest is not None:
             next_chunk = load_data_chunk(args)
     else:
         next_chunk = None
@@ -483,7 +483,7 @@ def main(args):
     optimizer = None
     scaler = None
 
-    if args.train_data or (args.dataset_metadata is not None):
+    if args.train_data or (args.dataset_manifest is not None):
         named_parameters = list(model.named_parameters())
         no_decay_params = []  # to be potentially used later
         params = [p for n, p in named_parameters if p.requires_grad]
@@ -514,7 +514,7 @@ def main(args):
         args,
         epoch=start_epoch,
         tokenizer=None,
-        skip_train=args.dataset_metadata is not None,
+        skip_train=args.dataset_manifest is not None,
     )
 
     if args.torchcompile:
@@ -524,7 +524,7 @@ def main(args):
     # create scheduler if train
     scheduler = None
     if "train" in data and optimizer is not None:
-        if args.dataset_metadata is not None:
+        if args.dataset_manifest is not None:
             total_steps = (args.train_num_samples * args.epochs) // (
                 args.batch_size * args.world_size
             )
@@ -595,12 +595,12 @@ def main(args):
         if is_master(args):
             logging.info(f"Start epoch {epoch}")
 
-        if args.dataset_metadata is not None:
+        if args.dataset_manifest is not None:
             assert (
                 not args.dataset_resampled
-            ), "dataset_metadata and dataset_resampled are mutually exclusive"
+            ), "dataset_manifest and dataset_resampled are mutually exclusive"
             train_data_string_per_source, num_samples_per_source, next_chunk = get_string_for_epoch(
-                args.train_num_samples, next_chunk, args.dataset_metadata, args.train_data_mix_weights, args.workers * args.world_size
+                args.train_num_samples, next_chunk, args.dataset_manifest, args.train_data_mix_weights, args.workers * args.world_size
             )
             print(f"=> epoch {epoch}, training on {train_data_string_per_source}")
             if data["train"] is not None:
