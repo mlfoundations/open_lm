@@ -3,11 +3,11 @@ import argparse
 import random
 import os
 import webdataset as wds
-
+import glob
 from open_lm.model import _MODEL_CONFIGS
 from open_lm.main import random_seed
 from open_lm.data import get_wds_dataset
-from open_lm.file_utils import get_string_for_epoch, get_metadata_file
+from open_lm.file_utils import get_string_for_epoch, get_metadata_file, get_shards_for_chunk
 from open_lm.params import parse_args
 from pathlib import Path
 
@@ -15,16 +15,16 @@ NUM_SAMPLES = 100000
 
 # Update this to two data sources with webdataset, each with their own manifest.
 INPUT_PATHS = [
-    "path1/manifest.jsonl",
-    "path2/manifest.jsonl",
+    "/scratch/08002/gsmyrnis/open_lm_tokenized/rpj/manifest.jsonl",
+    "/scratch/08002/gsmyrnis/open_lm_tokenized/not_rpj/manifest.jsonl",
 ]
 
 
-def retrieve_dataset_once(epoch, weights, seed, disable_buffer):
+def retrieve_dataset_once(epoch, weights, seed, disable_buffer, min_shards_needed=2):
     args = parse_args("")
     random_seed(seed)
-    train_data_string_per_source, num_samples_per_source = get_string_for_epoch(
-        NUM_SAMPLES, epoch, INPUT_PATHS, weights
+    train_data_string_per_source, num_samples_per_source, _ = get_string_for_epoch(
+        NUM_SAMPLES, epoch, INPUT_PATHS, weights, min_shards_needed
     )
     args.train_num_samples = NUM_SAMPLES
     args.train_data = train_data_string_per_source
@@ -45,11 +45,11 @@ def retrieve_dataset_once(epoch, weights, seed, disable_buffer):
     return item
 
 
-def retrieve_dataset_once_resampled(epoch, weights, seed):
+def retrieve_dataset_once_resampled(epoch, weights, seed, min_shards_needed=2):
     args = parse_args("")
     random_seed(seed)
-    train_data_string_per_source, _ = get_string_for_epoch(
-        NUM_SAMPLES, epoch, INPUT_PATHS, weights
+    train_data_string_per_source, _, _ = get_string_for_epoch(
+        NUM_SAMPLES, epoch, INPUT_PATHS, weights, min_shards_needed
     )
     args.train_num_samples = NUM_SAMPLES
     args.train_data = train_data_string_per_source
@@ -94,6 +94,17 @@ def test_deterministic_resampled(epoch, weights, seed):
     output1 = retrieve_dataset_once_resampled(epoch, weights, seed)
     output2 = retrieve_dataset_once_resampled(epoch, weights, seed)
     assert output1 == output2
+
+@pytest.mark.parametrize("epoch", [0, 2])
+@pytest.mark.parametrize("weights", [[0.5, 0.5], [0.9, 0.1]])
+@pytest.mark.parametrize("min_shards_needed", [2, 10])
+def test_min_shards(epoch, weights, min_shards_needed):
+    shard_strings, _, _ = get_string_for_epoch(NUM_SAMPLES, epoch, INPUT_PATHS, weights, min_shards_needed)
+    for item in shard_strings:
+        edge_shards = item.split("..")
+        edge_shards = [int(edge_shards[0].split("{")[1]), int(edge_shards[1].split("}")[0])]
+        num_shards = edge_shards[1] - edge_shards[0] + 1
+        assert num_shards >= min_shards_needed
 
 
 def test_count_manifest():
