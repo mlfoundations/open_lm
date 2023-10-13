@@ -11,12 +11,12 @@ from open_lm.file_utils import get_string_for_epoch, get_metadata_file, get_shar
 from open_lm.params import parse_args
 from pathlib import Path
 
-NUM_SAMPLES = 100000
+NUM_SAMPLES = 10000
 
 # Update this to two data sources with webdataset, each with their own manifest.
 INPUT_PATHS = [
-    "/scratch/08002/gsmyrnis/open_lm_tokenized/rpj/manifest.jsonl",
-    "/scratch/08002/gsmyrnis/open_lm_tokenized/not_rpj/manifest.jsonl",
+    "tests/assets/source_1/manifest.jsonl",
+    "tests/assets/source_2/manifest.jsonl",
 ]
 
 
@@ -97,7 +97,7 @@ def test_deterministic_resampled(epoch, weights, seed):
 
 @pytest.mark.parametrize("epoch", [0, 2])
 @pytest.mark.parametrize("weights", [[0.5, 0.5], [0.9, 0.1]])
-@pytest.mark.parametrize("min_shards_needed", [2, 10])
+@pytest.mark.parametrize("min_shards_needed", [2, 4])
 def test_min_shards(epoch, weights, min_shards_needed):
     shard_strings, _, _ = get_string_for_epoch(NUM_SAMPLES, epoch, INPUT_PATHS, weights, min_shards_needed)
     for item in shard_strings:
