@@ -118,6 +118,7 @@ def load_model(args, model):
         logging.info(f"=> resuming checkpoint '{args.resume}' (epoch {start_epoch})")
     else:
         # loading a bare (model only) checkpoint for fine-tune or evaluation
+        start_epoch = 0
         model.load_state_dict(checkpoint)
         logging.info(f"=> loaded checkpoint '{args.resume}' (epoch {start_epoch})")
     return start_epoch
