@@ -157,6 +157,7 @@ def get_string_for_epoch(num_samples, starting_chunk, paths, weights, min_shards
             num_samples_per_source[i] += num_samples_source 
         next_chunk += 1
         if source_exhausted(paths, shard_list_per_source):
+            print(shard_list_per_source)
             raise ValueError(
                 "Number of shards requested is more than the number of shards available."
                 "Consider lowering the number of workers and / or the number of GPUs."
