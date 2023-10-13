@@ -7,6 +7,7 @@ import fsspec
 import torch
 from tqdm import tqdm
 import sys
+import numpy as np
 
 def remote_sync_s3(local_dir, remote_dir):
     # skip epoch_latest which can change during sync.
@@ -145,7 +146,7 @@ def source_exhausted(paths, shard_list_per_source):
 
 
 def get_string_for_epoch(num_samples, starting_chunk, paths, weights, min_shards_needed):
-    needed_samples_per_source = [weights[i] * num_samples / sum(weights) for i in range(len(weights))]
+    needed_samples_per_source = [int(np.ceil(weights[i] * num_samples / sum(weights))) for i in range(len(weights))]
     shard_strings_per_source = []
     next_chunk = starting_chunk
     shard_list_per_source = [[] for _ in range(len(paths))]
