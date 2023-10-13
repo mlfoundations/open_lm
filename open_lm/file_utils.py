@@ -105,24 +105,33 @@ def get_shards_for_chunk(num_samples, chunk, path):
     curr_shard_list = []
     chunk_count_list = []
     curr_chunk_count = 0
-    real_chunk_count = 0
     for m in metadata:
         curr_chunk_count += m['num_chunks']
-        real_chunk_count += m['num_chunks']
         curr_shard_list.append(m['shard'])
         if curr_chunk_count >= num_samples:
             shard_list.append(curr_shard_list)
-            curr_chunk_count = curr_chunk_count - num_samples
+            chunk_count_list.append(curr_chunk_count)
             curr_shard_list = []
-            chunk_count_list.append(real_chunk_count)
-            real_chunk_count = 0
+            curr_chunk_count = 0
     
+    # Append remaining shards
+    if len(curr_shard_list) > 0:
+        shard_list.append(curr_shard_list)
+        chunk_count_list.append(curr_chunk_count)
+
     return shard_list[chunk % len(shard_list)], chunk_count_list[chunk % len(chunk_count_list)]
 
 
 def enough_shards(shard_lists, min_shards_needed):
     for sl in shard_lists:
         if len(sl) < min_shards_needed:
+            return False
+    return True
+
+
+def enough_samples(num_samples_per_source, needed_samples_per_source):
+    for i, number in enumerate(num_samples_per_source):
+        if number < needed_samples_per_source[i]:
             return False
     return True
 
@@ -136,14 +145,14 @@ def source_exhausted(paths, shard_list_per_source):
 
 
 def get_string_for_epoch(num_samples, starting_chunk, paths, weights, min_shards_needed):
-    samples_per_source = [weights[i] * num_samples / sum(weights) for i in range(len(weights))]
+    needed_samples_per_source = [weights[i] * num_samples / sum(weights) for i in range(len(weights))]
     shard_strings_per_source = []
     next_chunk = starting_chunk
     shard_list_per_source = [[] for _ in range(len(paths))]
     num_samples_per_source = [0 for _ in range(len(paths))]
-    while not enough_shards(shard_list_per_source, min_shards_needed):
+    while not enough_shards(shard_list_per_source, min_shards_needed) or not enough_samples(num_samples_per_source, needed_samples_per_source):
         for i, source_path in enumerate(paths):
-            shard_list_source, num_samples_source = get_shards_for_chunk(samples_per_source[i], next_chunk, source_path)
+            shard_list_source, num_samples_source = get_shards_for_chunk(needed_samples_per_source[i], next_chunk, source_path)
             shard_list_per_source[i].extend(shard_list_source)
             num_samples_per_source[i] += num_samples_source 
         next_chunk += 1
