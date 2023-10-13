@@ -143,7 +143,15 @@ def load_optimizer(args, model, optimizer, scaler):
         logging.info(f"=> WARNING: not resuming optimizer.")
 
 
-def save_checkpoint(args, model, optimizer, scaler, completed_epoch, evaluation_loss):
+def load_data_chunk(args):
+    checkpoint = pt_load(args.resume, map_location="cpu")
+    if "data_chunk" in checkpoint:
+        return checkpoint["data_chunk"]
+    else:
+        logging.info(f"=> WARNING: tried to resume a checkpoint without data chunk info. Assuming next_chunk = 0.")
+
+
+def save_checkpoint(args, model, optimizer, scaler, completed_epoch, evaluation_loss, next_chunk=None):
     cpu_state, optim_state = None, None
     if args.logs and args.logs.lower() != "none" and args.fsdp:
         save_policy = FullStateDictConfig(offload_to_cpu=True, rank0_only=True)
@@ -158,6 +166,9 @@ def save_checkpoint(args, model, optimizer, scaler, completed_epoch, evaluation_
             "state_dict": cpu_state if args.fsdp else model.state_dict(),
             "evaluation_loss": evaluation_loss,
         }
+        if next_chunk is not None:
+            checkpoint_dict_model["data_chunk"] = next_chunk
+
         checkpoint_dict_opt = {
             "epoch": completed_epoch,
             "name": args.name,
@@ -398,6 +409,14 @@ def main(args):
                 )
         model.load_state_dict(state_dict)
 
+    # Add data chunk when resuming (only for dataset without resampling)
+    if args.dataset_metadata is not None:
+        next_chunk = 0
+        if args.resume is not None and args.dataset_metadata is not None:
+            next_chunk = load_data_chunk(args)
+    else:
+        next_chunk = None
+
     if args.distributed:
         if args.fsdp:
             # from https://pytorch.org/blog/efficient-large-scale-training-with-pytorch/
@@ -580,8 +599,8 @@ def main(args):
             assert (
                 not args.dataset_resampled
             ), "dataset_metadata and dataset_resampled are mutually exclusive"
-            train_data_string_per_source, num_samples_per_source = get_string_for_epoch(
-                args.train_num_samples, epoch, args.dataset_metadata, args.train_data_mix_weights
+            train_data_string_per_source, num_samples_per_source, next_chunk = get_string_for_epoch(
+                args.train_num_samples, epoch, args.dataset_metadata, args.train_data_mix_weights, next_chunk
             )
             print(f"=> epoch {epoch}, training on {train_data_string_per_source}")
             if data["train"] is not None:
@@ -622,7 +641,7 @@ def main(args):
         # 613 - 610 at halfway
         # Saving checkpoints.
         save_checkpoint(
-            args, model, optimizer, scaler, completed_epoch, evaluation_loss
+            args, model, optimizer, scaler, completed_epoch, evaluation_loss, next_chunk=next_chunk
         )
 
     if args.wandb and is_master(args):

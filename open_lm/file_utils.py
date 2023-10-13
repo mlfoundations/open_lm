@@ -93,7 +93,7 @@ def get_metadata_file(path):
     out = [json.loads(o) for o in out.decode('utf-8').split('\n')[:-1]]
     return out
 
-def get_shards_for_epoch(num_samples, epoch, path):
+def get_shards_for_chunk(num_samples, chunk, path):
     metadata = get_metadata_file(path)
     shard_list = []
     curr_shard_list = []
@@ -111,22 +111,39 @@ def get_shards_for_epoch(num_samples, epoch, path):
             chunk_count_list.append(real_chunk_count)
             real_chunk_count = 0
     
-    return shard_list[epoch % len(shard_list)], chunk_count_list[epoch % len(chunk_count_list)]
+    return shard_list[chunk % len(shard_list)], chunk_count_list[chunk % len(chunk_count_list)]
 
-def get_string_for_epoch(num_samples, epoch, paths, weights):
+
+def enough_shards(shard_lists, min_shards_needed):
+    for sl in shard_lists:
+        if len(sl) < min_shards_needed:
+            return False
+    return True
+
+def get_string_for_epoch(num_samples, starting_chunk, paths, weights, min_shards_needed):
     samples_per_source = [weights[i] * num_samples / sum(weights) for i in range(len(weights))]
-    num_samples_per_source = []
+    
     shard_strings_per_source = []
+    next_chunk = starting_chunk
+    shard_list_per_source = [[] for _ in range(len(paths))]
+    num_samples_per_source = [0 for _ in range(len(paths))]
+    while not enough_shards(shard_list_per_source, min_shards_needed):
+        for i, source_path in enumerate(paths):
+            shard_list_source, num_samples_source = get_shards_for_chunk(samples_per_source[i], next_chunk, source_path)
+            shard_list_per_source[i].extend(shard_list_source)
+            num_samples_per_source[i] += num_samples_source 
+        next_chunk += 1
+
     for i, source_path in enumerate(paths):
-        shard_list_source, num_samples_source = get_shards_for_epoch(samples_per_source[i], epoch, source_path)
+        shard_list_source = shard_list_per_source[i]
+        num_samples_source = num_samples_per_source[i]
         shard_root_source = '/'.join(source_path.split('/')[:-1]) + '/shard_'
         shard_string_source = shard_root_source + '{' + shard_list_source[0] + '..' + shard_list_source[-1] + '}.tar'
         if source_path.startswith('s3'):
             shard_string_source = f'pipe:aws s3 cp {shard_string_source} -'
         shard_strings_per_source.append(shard_string_source)
-        num_samples_per_source.append(num_samples_source)
 
-    return shard_strings_per_source, num_samples_per_source
+    return shard_strings_per_source, num_samples_per_source, next_chunk
 
 
 if __name__ == '__main__':
