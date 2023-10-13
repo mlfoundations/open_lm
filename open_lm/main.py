@@ -26,10 +26,8 @@ from torch.distributed.fsdp import (
     FullStateDictConfig,
     StateDictType,
     CPUOffload,
-    ShardingStrategy,
 )
 from torch.distributed.fsdp.wrap import transformer_auto_wrap_policy
-from flash_attn.losses.cross_entropy import CrossEntropyLoss as FusedCrossEntropyLoss
 
 from .model import Block
 from .losses import CrossEntropyLossWithZLoss
@@ -574,12 +572,8 @@ def main(args):
 
         return
 
-    if args.fused_xent:
-        loss = FusedCrossEntropyLoss()
-    else:
-        loss = torch.nn.CrossEntropyLoss()
+    loss = torch.nn.CrossEntropyLoss()
     if args.z_loss_coefficient != 0.0:
-        assert not args.fused_xent
         if is_master(args):
             logging.info("Using CrossEntropyLossWithZLoss.")
         loss = CrossEntropyLossWithZLoss(args.z_loss_coefficient)
