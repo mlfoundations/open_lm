@@ -145,7 +145,7 @@ were trained, we have updated openlm to correctly apply the rotary embeddings to
 the sequence dimension (see
 [this issue](https://github.com/mlfoundations/open_lm/issues/4) and [this
 issue](https://github.com/facebookresearch/xformers/issues/841) for details).
-To evaluate these models, ensure you use the `m1b_neox_rotary_old.json` config.
+To evaluate these models, ensure you pass `--rotary-old` to the eval command.
 
 | **OpenLM-1B** | **250B Tokens** | **500B tokens** | **750B tokens** | **1T Tokens** | **1.25T Tokens** | **1.5T Tokens** | **1.6T Tokens** |
 |----------------|-----------------|-----------------|-----------------|---------------|------------------|-----------------|-----------------|
