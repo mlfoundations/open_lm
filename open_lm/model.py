@@ -16,8 +16,11 @@ from huggingface_hub import PyTorchModelHubMixin
 from open_lm.norms import get_norm_class
 from open_lm.positional_embedding.head_rotary import HeadRotaryWithCast
 from open_lm.positional_embedding.rotary import RotaryWithCast
+from open_lm.positional_embedding.rotary_llama import (
+    precompute_freqs_cis,
+    apply_rotary_emb,
+)
 
-from typing import Tuple
 
 # from openclip
 _MODEL_CONFIG_PATHS = [Path(__file__).parent / f"model_configs/"]
@@ -69,35 +72,7 @@ class Params:
     apply_qk_norm: bool = False
     rotary_old: bool = False
     ffn_type: str = "swiglu"
-
-
-def precompute_freqs_cis(dim: int, end: int, theta: float = 10000.0):
-    freqs = 1.0 / (theta ** (torch.arange(0, dim, 2)[: (dim // 2)].float() / dim))
-    t = torch.arange(end, device=freqs.device)  # type: ignore
-    freqs = torch.outer(t, freqs).float()  # type: ignore
-    freqs_cis = torch.polar(torch.ones_like(freqs), freqs)  # complex64
-    return freqs_cis
-
-
-def reshape_for_broadcast(freqs_cis: torch.Tensor, x: torch.Tensor):
-    ndim = x.ndim
-    assert 0 <= 1 < ndim
-    assert freqs_cis.shape == (x.shape[1], x.shape[-1])
-    shape = [d if i == 1 or i == ndim - 1 else 1 for i, d in enumerate(x.shape)]
-    return freqs_cis.view(*shape)
-
-
-def apply_rotary_emb(
-    xq: torch.Tensor,
-    xk: torch.Tensor,
-    freqs_cis: torch.Tensor,
-) -> Tuple[torch.Tensor, torch.Tensor]:
-    xq_ = torch.view_as_complex(xq.float().reshape(*xq.shape[:-1], -1, 2))
-    xk_ = torch.view_as_complex(xk.float().reshape(*xk.shape[:-1], -1, 2))
-    freqs_cis = reshape_for_broadcast(freqs_cis, xq_)
-    xq_out = torch.view_as_real(xq_ * freqs_cis).flatten(3)
-    xk_out = torch.view_as_real(xk_ * freqs_cis).flatten(3)
-    return xq_out.type_as(xq), xk_out.type_as(xk)
+    llama: bool = False
 
 
 def xformers_attn(queries, keys, values, is_causal):
@@ -111,10 +86,13 @@ def xformers_attn(queries, keys, values, is_causal):
 class CustomAttn(nn.Module):
     def __init__(self, layer_id, args: Params):
         super().__init__()
+        self.args = args
         self.n_heads = args.n_heads
         self.head_dim = args.dim // args.n_heads
         self.in_proj = nn.Linear(args.dim, 3 * args.n_heads * self.head_dim, bias=False)
         self.out_proj = nn.Linear(args.n_heads * self.head_dim, args.dim, bias=False)
+        if not args.llama:
+            self.pos_embed = HeadRotaryWithCast(self.head_dim, args.seq_len) if args.rotary_old else RotaryWithCast(self.head_dim, args.seq_len)
         self.attn_fn = xformers_attn
         self.apply_qk_norm = args.apply_qk_norm
 
@@ -156,7 +134,10 @@ class CustomAttn(nn.Module):
         keys = keys.view(batchsize, seqlen, self.n_heads, self.head_dim)
         vals = vals.view(batchsize, seqlen, self.n_heads, self.head_dim)
 
-        queries, keys = apply_rotary_emb(queries, keys, freqs_cis=freqs_cis)
+        if self.args.llama:
+            queries, keys = apply_rotary_emb(queries, keys, freqs_cis=freqs_cis)
+        else:
+            queries, keys, vals = self.pos_embed(queries, keys, vals)
 
         output = self.attn_fn(queries, keys, vals, is_causal=is_causal)
 
@@ -189,7 +170,7 @@ class Block(nn.Module):
         self.attention_norm = args.norm_type(
             args.dim,
             eps=args.norm_eps,
-        )  # make sure params.model_norm == "rms_norm" for Llama
+        )
         self.ffn_norm = args.norm_type(
             args.dim,
             eps=args.norm_eps,
@@ -265,21 +246,25 @@ class Transformer(nn.Module, PyTorchModelHubMixin):
             self.tok_embeddings.weight, std=std, a=-3 * std, b=3 * std
         )
 
-        self.freqs_cis = precompute_freqs_cis(
-            self.params.dim // self.params.n_heads, self.params.seq_len * 2
-        )
+        if params.llama:
+            self.freqs_cis = precompute_freqs_cis(
+                self.params.dim // self.params.n_heads, self.params.seq_len * 2
+            )
 
     @torch.jit.ignore
     def set_grad_checkpointing(self, enable=True):
         self.grad_checkpointing = enable
 
-    def forward(self, input, start_pos=0):  # TODO: start_pos is unused
+    def forward(self, input):
         _bsz, seqlen = input.shape
         x = self.tok_embeddings(input)
         x = self.post_embed_norm(x)
 
-        self.freqs_cis = self.freqs_cis.to(x.device)
-        freqs_cis = self.freqs_cis[:seqlen]
+        if self.params.llama:
+            self.freqs_cis = self.freqs_cis.to(x.device)
+            freqs_cis = self.freqs_cis[:seqlen]
+        else:
+            freqs_cis = None
 
         for layer in self.layers:
             if self.grad_checkpointing:
