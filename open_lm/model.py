@@ -26,14 +26,20 @@ def _natural_key(string_):
     return [int(s) if s.isdigit() else s for s in re.split(r"(\d+)", string_.lower())]
 
 
-def _rescan_model_configs():
+def _rescan_model_configs(model_config_paths=None):
     global _MODEL_CONFIGS
+
+    config_iter = None
+    if model_config_paths is not None:
+        config_iter = model_config_paths
+    else:
+        config_iter = _MODEL_CONFIG_PATHS
 
     config_ext = (".json",)
     config_files = []
-    for config_path in _MODEL_CONFIG_PATHS:
+    for config_path in config_iter:
         if config_path.is_file() and config_path.suffix in config_ext:
-            config_files.append(config_path)
+            config_files.append(Path(config_path))
         elif config_path.is_dir():
             for ext in config_ext:
                 config_files.extend(config_path.glob(f"*{ext}"))
@@ -84,7 +90,11 @@ class CustomAttn(nn.Module):
         self.head_dim = args.dim // args.n_heads
         self.in_proj = nn.Linear(args.dim, 3 * args.n_heads * self.head_dim, bias=False)
         self.out_proj = nn.Linear(args.n_heads * self.head_dim, args.dim, bias=False)
-        self.pos_embed = HeadRotaryWithCast(self.head_dim, args.seq_len) if args.rotary_old else RotaryWithCast(self.head_dim, args.seq_len)
+        self.pos_embed = (
+            HeadRotaryWithCast(self.head_dim, args.seq_len)
+            if args.rotary_old
+            else RotaryWithCast(self.head_dim, args.seq_len)
+        )
         self.attn_fn = xformers_attn
         self.apply_qk_norm = args.apply_qk_norm
 
@@ -180,11 +190,15 @@ class Block(nn.Module):
             )
         elif args.ffn_type == "gelu":
             std = 1.0 / math.sqrt(args.dim)
-            torch.nn.init.trunc_normal_(self._ff_w1.weight, std=std, a=-3 * std, b=3 * std)
+            torch.nn.init.trunc_normal_(
+                self._ff_w1.weight, std=std, a=-3 * std, b=3 * std
+            )
 
-            std = (1.0 / math.sqrt(hidden_dim))
+            std = 1.0 / math.sqrt(hidden_dim)
             std = std / math.sqrt(2 * (layer_id + 1))
-            torch.nn.init.trunc_normal_(self._ff_w2.weight, std=std, a=-3 * std, b=3 * std)
+            torch.nn.init.trunc_normal_(
+                self._ff_w2.weight, std=std, a=-3 * std, b=3 * std
+            )
 
     def forward(self, x):
         h = x + self.attention(self.attention_norm(x), is_causal=True)
@@ -262,7 +276,17 @@ class Transformer(nn.Module, PyTorchModelHubMixin):
 
 
 def create_params(args):
-    cfg = deepcopy(_MODEL_CONFIGS[args.model])
+    cfg = None
+
+    if args.model.endswith(".json"):
+        _rescan_model_configs(model_config_paths=args.model)
+        args.model = Path(args.model).stem
+
+    if args.model in _MODEL_CONFIGS:
+        cfg = deepcopy(_MODEL_CONFIGS[args.model])
+    else:
+        raise ValueError("Pass a pre-defined open_lm model name or a json config")
+
     return Params(
         dim=cfg["hidden_dim"],
         n_layers=cfg["n_layers"],
