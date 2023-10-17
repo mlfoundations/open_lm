@@ -31,7 +31,9 @@ def _rescan_model_configs(model_config_paths=None):
 
     config_iter = None
     if model_config_paths is not None:
-        config_iter = model_config_paths
+        config_iter = [
+            Path(model_config_paths),
+        ]
     else:
         config_iter = _MODEL_CONFIG_PATHS
 
