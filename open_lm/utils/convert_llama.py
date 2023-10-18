@@ -76,5 +76,5 @@ if __name__ == "__main__":
         )
         sys.exit(1)
     llama_state_dict = torch.load(sys.argv[1])
-    openlm_state_dict = convert(llama_state_dict)
+    openlm_state_dict = {"state_dict": convert(llama_state_dict)}
     torch.save(openlm_state_dict, sys.argv[2])

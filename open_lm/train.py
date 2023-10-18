@@ -221,7 +221,6 @@ def train_one_epoch(
     # end for
     return True
 
-
 @torch.inference_mode()
 def evaluate(model, data, start_epoch, args, writer):
     """
@@ -238,8 +237,6 @@ def evaluate(model, data, start_epoch, args, writer):
         start_epoch
     )  # set epoch in process safe manner via sampler or shared_epoch
     dataloader = data["val"].dataloader
-    num_batches_per_epoch = dataloader.num_batches
-    sample_digits = math.ceil(math.log(dataloader.num_samples + 1, 10))
 
     losses_m = AverageMeter()
     batch_time_m = AverageMeter()

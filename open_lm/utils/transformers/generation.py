@@ -1,4 +1,4 @@
-from utils.transformers.model import OpenLMforCausalLM
+from utils.transformers.hf_model import OpenLMforCausalLM
 from transformers import GPTNeoXTokenizerFast
 import argparse 
 

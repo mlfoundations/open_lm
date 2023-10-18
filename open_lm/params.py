@@ -41,20 +41,25 @@ def add_model_args(parser):
             "no_wb_layer_norm",
             "rms_norm",
         ],
-        help="Type of normalization to employ in the model",
+        help="Type of normalization to employ in the model. This might be overridden by the model config.",
     )
-    parser.add_argument("--ffn-type", choices=["swiglu", "gelu"], default="swiglu")
+    parser.add_argument(
+        "--ffn-type",
+        choices=["swiglu", "gelu"],
+        default="swiglu",
+        help="Type of feedforward layer to use. This might be overridden by the model config."
+    )
     parser.add_argument(
         "--qk-norm",
         action="store_true",
         default=False,
-        help="apply --model-norm to qk as in: https://arxiv.org/abs/2302.05442",
+        help="apply --model-norm to qk as in: https://arxiv.org/abs/2302.05442. This might be overridden by the model config.",
     )
     parser.add_argument(
-        "--rotary-old",
-        action="store_true",
-        default=False,
-        help="Use incorrect rotary embedding that is applied to the head dimension, which is default in xformers as of 09/01/23.",
+        "--positional_embedding_type",
+        type=str,
+        default="rotary",
+        help="Type of positional embedding to use. This might be overridden by the model config.",
     )
 
 
