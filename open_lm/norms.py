@@ -7,6 +7,7 @@ from torch import Tensor, Size
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.nn.parameter import Parameter
+from xformers.ops.rmsnorm import RMSNorm as XformersRmsNorm
 
 
 class LayerNorm(nn.Module):
@@ -72,27 +73,40 @@ class LayerNorm(nn.Module):
 class LPLayerNorm(LayerNorm):
     """From MosaicML composer.
 
-    See: https://github.com/mosaicml/composer/blob/6acca4c70425455be7280a5459dbf02e1ac5591d/composer/algorithms/low_precision_layernorm/low_precision_layernorm.py#L63"""
+    See: https://github.com/mosaicml/composer/blob/6acca4c70425455be7280a5459dbf02e1ac5591d/composer/algorithms/low_precision_layernorm/low_precision_layernorm.py#L63
+    """
+
     def forward(self, x):
         module_device = x.device
         downcast_x = _cast_if_autocast_enabled(x)
-        downcast_weight = _cast_if_autocast_enabled(self.weight) if self.weight is not None else self.weight
-        downcast_bias = _cast_if_autocast_enabled(self.bias) if self.bias is not None else self.bias
+        downcast_weight = (
+            _cast_if_autocast_enabled(self.weight)
+            if self.weight is not None
+            else self.weight
+        )
+        downcast_bias = (
+            _cast_if_autocast_enabled(self.bias) if self.bias is not None else self.bias
+        )
         with torch.autocast(enabled=False, device_type=module_device.type):
-            return F.layer_norm(downcast_x, self.normalized_shape, downcast_weight, downcast_bias, self.eps)
+            return F.layer_norm(
+                downcast_x,
+                self.normalized_shape,
+                downcast_weight,
+                downcast_bias,
+                self.eps,
+            )
 
 
 def _cast_if_autocast_enabled(tensor):
     if torch.is_autocast_enabled():
-        if tensor.device.type == 'cuda':
+        if tensor.device.type == "cuda":
             dtype = torch.get_autocast_gpu_dtype()
-        elif tensor.device.type == 'cpu':
+        elif tensor.device.type == "cpu":
             dtype = torch.get_autocast_cpu_dtype()
         else:
             raise NotImplementedError()
         return tensor.to(dtype=dtype)
     return tensor
-
 
 
 class RmsNorm(nn.Module):
@@ -139,12 +153,13 @@ def get_norm_class(model_norm):
         return partial(LPLayerNorm, elementwise_gain=True, elementwise_bias=False)
     elif model_norm == "gain_only_layer_norm":
         return partial(LayerNorm, elementwise_gain=True, elementwise_bias=False)
-
-    elif model_norm == "no_wb_layer_norm":
+    elif model_norm == "nonparametric_layer_norm":
         return partial(LayerNorm, elementwise_gain=False, elementwise_bias=False)
-
     elif model_norm == "rms_norm":
         return RmsNorm
-
+    elif model_norm == "xformers_rms_norm":
+        return XformersRmsNorm
+    elif model_norm == "xformers_nonparametric_rms_norm":
+        return partial(XformersRmsNorm, include_weight=False)
     else:
         raise ValueError(f"Unsupported model-norm: {model_norm}")
