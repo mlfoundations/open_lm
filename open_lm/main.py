@@ -208,7 +208,12 @@ def main(args):
     # get the name of the experiments
     if args.name is None:
         # sanitize model name for filesystem / uri use, easier if we don't use / in name as a rule?
-        model_name_safe = args.model.replace("/", "-")
+        model_name_safe = None
+        if Path(args.model).is_file():
+            model_name_safe = Path(args.model).stem.replace("/", "-")
+        else:
+            model_name_safe = args.model.replace("/", "-")
+
         date_str = datetime.now().strftime("%Y_%m_%d-%H_%M_%S")
         if args.distributed:
             # sync date_str from master to all ranks
@@ -430,7 +435,9 @@ def main(args):
                 print(f"Before FSDP {torch.cuda.memory_allocated()/1024**3:.3} GB")
 
             fsdp_kwargs = {}
-            assert not (args.fsdp_hybrid and args.fsdp_hybrid_o2), "Only --fsdp-hybrid or --fsdp-hybrid-o2 should be set."
+            assert not (
+                args.fsdp_hybrid and args.fsdp_hybrid_o2
+            ), "Only --fsdp-hybrid or --fsdp-hybrid-o2 should be set."
             if args.fsdp_backward_prefetch:
                 fsdp_kwargs["backward_prefetch"] = BackwardPrefetch.BACKWARD_PRE
             if args.fsdp_hybrid:
@@ -600,16 +607,16 @@ def main(args):
             dist.barrier()
 
         success = train_one_epoch(
-                model,
-                data,
-                loss,
-                epoch,
-                optimizer,
-                scaler,
-                scheduler,
-                args,
-                tb_writer=writer,
-            )
+            model,
+            data,
+            loss,
+            epoch,
+            optimizer,
+            scaler,
+            scheduler,
+            args,
+            tb_writer=writer,
+        )
 
         if args.distributed:
             dist.barrier()
