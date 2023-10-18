@@ -40,8 +40,7 @@ def add_model_args(parser):
             "gain_only_layer_norm",
             "nonparametric_layer_norm",
             "rms_norm",
-            "xformers_rms_norm",
-            "xformers_nonparametric_rms_norm",
+            "fused_rms_norm",
         ],
         help="Type of normalization to employ in the model",
     )

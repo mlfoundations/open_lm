@@ -7,7 +7,8 @@ from torch import Tensor, Size
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.nn.parameter import Parameter
-from xformers.ops.rmsnorm import RMSNorm as XformersRmsNorm
+
+from .triton.rms_norm import rms_norm
 
 
 class LayerNorm(nn.Module):
@@ -144,6 +145,44 @@ class RmsNorm(nn.Module):
         return "{normalized_shape}, eps={eps} ".format(**self.__dict__)
 
 
+class FusedRmsNorm(nn.Module):
+    """
+    Handle a rms normalization.
+
+    .. NOTE: Computations under Torch AMP are kept as float32 by default, one can change this to be float16
+        by setting the flag `open_lm.triton.rms_norm._triton_rmsnorm_fp16_enabled = True`
+
+    """
+
+    def __init__(
+        self,
+        normalized_shape,
+        eps=1e-6,
+        device=None,
+        dtype=None,
+    ) -> None:
+        factory_kwargs = {"device": device, "dtype": dtype}
+        super().__init__()
+
+        if isinstance(normalized_shape, numbers.Integral):
+            # mypy error: incompatible types in assignment
+            normalized_shape = (normalized_shape,)  # type: ignore[assignment]
+        self.normalized_shape = tuple(normalized_shape)  # type: ignore[arg-type]
+        self.eps = eps
+        self.weight = Parameter(torch.empty(self.normalized_shape, **factory_kwargs))
+        self.reset_parameters()
+
+    def forward(self, x):
+        return rms_norm(x, self.weight, self.eps)
+
+    def reset_parameters(self) -> None:
+        with torch.no_grad():
+            self.weight.fill_(1.0)
+
+    def extra_repr(self) -> str:
+        return "{normalized_shape}, eps={eps} ".format(**self.__dict__)
+
+
 def get_norm_class(model_norm):
     if model_norm == "default_layer_norm":
         return torch.nn.LayerNorm
@@ -157,9 +196,7 @@ def get_norm_class(model_norm):
         return partial(LayerNorm, elementwise_gain=False, elementwise_bias=False)
     elif model_norm == "rms_norm":
         return RmsNorm
-    elif model_norm == "xformers_rms_norm":
-        return XformersRmsNorm
-    elif model_norm == "xformers_nonparametric_rms_norm":
-        return partial(XformersRmsNorm, include_weight=False)
+    elif model_norm == "fused_rms_norm":
+        return FusedRmsNorm
     else:
         raise ValueError(f"Unsupported model-norm: {model_norm}")
