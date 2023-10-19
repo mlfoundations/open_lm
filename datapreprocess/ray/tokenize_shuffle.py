@@ -41,16 +41,16 @@ class PadType(Enum):
     PAD_TOKEN = 1
 
 
-def jsonl_to_tokens(jsonl, tokenizer, keep_text=False, discard_meta=False):
+def jsonl_to_tokens(jsonl, tokenizer, content_key='text', keep_text=False, discard_meta=False):
     all_rows = {"tokens": []}
-    jsonl_text = jsonl["text"]
+    jsonl_text = jsonl[content_key]
     tokens = tokenizer(jsonl_text) + [SpecialTokens.END_OF_TEXT.value]
     out_dict = {}
     if not discard_meta:
         out_dict["metadata"] = jsonl.copy()
-        del out_dict["metadata"]["text"]
+        del out_dict["metadata"][content_key]
     if keep_text:
-        out_dict["text"] = jsonl["text"]
+        out_dict["text"] = jsonl[content_key]
     out_dict["tokens"] = tokens
     return out_dict
 
@@ -190,8 +190,9 @@ def glob_files(path, suffix=".jsonl"):
             prefix += '/'
 
         # List the objects in the bucket with the given prefix
-        objects = s3.list_objects_v2(Bucket=bucket_name, Prefix=prefix)
-        all_files = [f"s3://{bucket_name}/{obj['Key']}" for obj in objects.get('Contents', [])]
+        paginator = s3.get_paginator('list_objects_v2')
+        pages = paginator.paginate(Bucket=bucket_name, Prefix=prefix)
+        all_files = [f"s3://{bucket_name}/{obj['Key']}" for objects in pages for obj in objects.get("Contents",[])]
         
         # Filter out the files based on the suffix
         matching_files = [f for f in all_files if f.endswith(suffix)]
@@ -219,12 +220,13 @@ if __name__ == "__main__":
         required=True
         # e.g s3://dcnlp-data/rpj_tokenized_upsampled_eleutherai_deduplicated/
     )
+    parser.add_argument("--content_key", type=str, default='text')
     parser.add_argument("--keep_text", action="store_true")
     parser.add_argument("--discard_metadata", action="store_true")
     parser.add_argument(
         "--no_shuffle", help="do not dedup + random shuffle", action="store_true"
     )
-    parser.add_argument("--seqlen", type=int, default=1024)
+    parser.add_argument("--seqlen", type=int, default=2048)
     parser.add_argument("--pad_type", type=str, default="circular")
     parser.add_argument("--tokenizer", type=str, default="EleutherAI/gpt-neox-20b")
     parser.add_argument("--initial_batch_size", type=int, default=128)
@@ -269,6 +271,7 @@ if __name__ == "__main__":
         lambda x: jsonl_to_tokens(
             x,
             tokenizer=tokenizer,
+            content_key=args.content_key,
             keep_text=args.keep_text,
             discard_meta=args.discard_metadata,
         )
