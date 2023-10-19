@@ -388,10 +388,11 @@ def get_wds_dataset(
                 ]
             )
 
+        map_dict_handler = {"handler": log_and_continue} if args.ignore_parse_errors else {}
         if data_key == "json":
             pipeline.extend(
                 [
-                    wds.map_dict(json=partial(preprocess_json, vocab_size=args.vocab_size)),
+                    wds.map_dict(json=partial(preprocess_json, vocab_size=args.vocab_size), **map_dict_handler),
                     wds.to_tuple("json"),
                     wds.select(partial(filter_lt_seqlen, args.seq_len)),
                     wds.batched(args.batch_size, partial=not is_train),
@@ -400,7 +401,7 @@ def get_wds_dataset(
         else:
             pipeline.extend(
                 [
-                    wds.map_dict(txt=partial(preprocess_txt, vocab_size=args.vocab_size)),
+                    wds.map_dict(txt=partial(preprocess_txt, vocab_size=args.vocab_size), **map_dict_handler),
                     wds.to_tuple("txt"),
                     wds.select(partial(filter_lt_seqlen, args.seq_len)),
                     wds.batched(args.batch_size, partial=not is_train),
