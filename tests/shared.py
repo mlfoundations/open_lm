@@ -1,10 +1,10 @@
 class MockArgs:
     def __init__(self, model):
-        self.model = model
+        self.model = model #part of model config
         self.model_norm = "gain_only_layer_norm"
         self.rotary_old = False
         self.qk_norm = False
-        self.train_data = ""
+        self.train_data = "/gscratch/cse/jrfish/open_lm/tests/shard_00099999.tar"
         self.log_logit_mean = False
         self.device = 0
         self.precision = "amp_bfloat16"
@@ -21,3 +21,22 @@ class MockArgs:
         self.rank = 0
         self.local_rank = 0
         self.log_every_n_steps = 1e8  # v big as no logging needed
+        self.dataset_type = 'webdataset'
+        self.data_key = "json"
+        self.ffn_type = "swiglu"
+        self.train_num_samples = 250000
+        self.train_data_mix_weights = None
+        self.train_data_upsampling_factors = None
+        self.disable_buffer = False
+        self.seed = 1
+        self.vocab_size = 50432 # part of model config
+        self.seq_len = 300 # not sure about this one...
+        self.workers = 1
+        self.world_size = 1 # this is not defined in params.py
+        self.dataset_metadata = None
+        self.val_data = None
+        self.lr_cooldown_end = 3e-5
+        self.force_min_lr = 0.0
+        self.scaler = None # not sure about this one either...
+        self.accum_freq = 1
+        
