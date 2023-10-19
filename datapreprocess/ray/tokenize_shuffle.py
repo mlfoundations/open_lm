@@ -11,6 +11,7 @@ import traceback
 from enum import Enum
 from io import BytesIO
 from typing import List
+from loguru import logger
 
 import boto3
 import fsspec
@@ -169,6 +170,38 @@ def load_tokenizer(tokenizer):
         return lambda x: enc(x).input_ids
     else:
         raise ValueError(f"Unknown Tokenizer: {tokenizer}")
+    
+def glob_files(path, suffix=".jsonl"):
+    """
+    Glob files based on a given path and suffix. 
+    Supports both local and S3 paths.
+
+    :param path: path to glob. Can be local or S3 (e.g., s3://bucket-name/path/)
+    :param suffix: suffix of files to match. Defaults to ".jsonl"
+    :return: list of file paths matching the pattern
+    """
+    if path.startswith("s3://"):
+        # Use boto3 for S3 paths
+        s3 = boto3.client('s3')
+        bucket_name, prefix = path[5:].split('/', 1)
+
+        # Ensure the prefix ends with a '/'
+        if not prefix.endswith('/'):
+            prefix += '/'
+
+        # List the objects in the bucket with the given prefix
+        objects = s3.list_objects_v2(Bucket=bucket_name, Prefix=prefix)
+        all_files = [f"s3://{bucket_name}/{obj['Key']}" for obj in objects.get('Contents', [])]
+        
+        # Filter out the files based on the suffix
+        matching_files = [f for f in all_files if f.endswith(suffix)]
+
+    else:
+        # Use glob for local paths
+        search_pattern = f"{path.rstrip('/')}/*{suffix}"
+        matching_files = glob.glob(search_pattern)
+
+    return matching_files
 
 
 if __name__ == "__main__":
@@ -178,7 +211,6 @@ if __name__ == "__main__":
         help="input path",
         type=str,
         required=True
-        # e.g. s3://dcnlp-data/rpj_tokenized_upsampled_eleutherai/shard_{00000000..00099999}.tar
     )
     parser.add_argument(
         "--output",
@@ -198,6 +230,7 @@ if __name__ == "__main__":
     parser.add_argument("--initial_batch_size", type=int, default=128)
     parser.add_argument("--wds_chunk_size", type=int, default=1024)
     parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--subset", type=int, default=None)
     parser.add_argument("--ray_address", type=str, default=None)
     parser.add_argument("--ray_spill_location", type=str, default="s3://dcnlp-hub/ray_spill")
 
@@ -209,9 +242,10 @@ if __name__ == "__main__":
     else:
         ray.init(args.ray_address)
     # TODO  support multiple inputs
-    input_paths = list(
-        braceexpand(args.input)
-    )  # TODO assumes this is brace expand format, future handle more cases
+    input_paths = glob_files(args.input, suffix=".jsonl")
+    if args.subset is not None:
+        input_paths = input_paths[:args.subset]
+        
     output_path = args.output
     seqlen = args.seqlen
     batch_size = args.initial_batch_size
@@ -244,6 +278,11 @@ if __name__ == "__main__":
         batch_size=batch_size,
         fn_kwargs={"pad_type": pad_type, "seqlen": seqlen},
     )
+    count = ds.count()
+    tokenize_end_time = time.time()
+    print(f"Total num contexts = {count}")
+    print("Tokenize Finished in", tokenize_end_time - start_time)
+    #exit()
     ds = ds.random_shuffle(seed=args.seed)
     num_rows = ds.count()
     ds_indices = ray.data.range(num_rows).map_batches(
