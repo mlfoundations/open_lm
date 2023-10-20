@@ -4,7 +4,7 @@ class MockArgs:
         self.model_norm = "gain_only_layer_norm"
         self.rotary_old = False
         self.qk_norm = False
-        self.train_data = ["/gscratch/cse/jrfish/open_lm/tests/shard_00099999.tar",]
+        self.train_data = ["/gscratch/cse/jrfish/open_lm/tests/shard_00000000.tar",]
         self.log_logit_mean = False
         self.device = 0
         self.precision = "amp_bfloat16"
@@ -16,7 +16,7 @@ class MockArgs:
         self.warmup = 2
         self.skip_scheduler = False
         self.accum_freq = 1
-        self.batch_size = 32
+        self.batch_size = 8
         self.grad_clip_norm = 1.0
         self.rank = 0
         self.local_rank = 0
@@ -30,14 +30,14 @@ class MockArgs:
         self.disable_buffer = False
         self.seed = 1
         self.vocab_size = 50432 # part of model config
-        self.seq_len = 300 # not sure about this one...
+        self.seq_len = 300 
         self.workers = 1
         self.world_size = 1 # this is not defined in params.py
         self.dataset_metadata = None
         self.val_data = None
         self.lr_cooldown_end = 3e-5
         self.force_min_lr = 0.0
-        self.scaler = None # not sure about this one either...
+        self.scaler = None 
         self.accum_freq = 1
         self.device = "cuda:0" # need to change this to be more general
         self.wandb = False
