@@ -28,6 +28,8 @@ from ray.data._internal.util import _check_pyarrow_version
 from ray.data.block import Block, BlockMetadata
 from ray.data.context import DataContext
 from ray.data.datasource import Datasource, ReadTask
+import pyarrow.fs as fs
+import pyarrow.json
 
 
 class SpecialTokens(Enum):
@@ -54,55 +56,23 @@ def jsonl_to_tokens(jsonl, tokenizer, content_key='text', keep_text=False, disca
     out_dict["tokens"] = tokens
     return out_dict
 
-
-def repartition_and_pad(input_list, seq_len, pad_type, meta_lists={}):
-    """Repartition the input list into sublists of size seq_len.
-    If the last sublist isn't seq_len long, pad it with values from the beginning."""
-
-    # Flatten the list
-    flat_list = [item for sublist in input_list for item in sublist]
-    # Calculate the number of elements needed to pad the last sublist
-    pad_len = (
-        seq_len - (len(flat_list) % seq_len) if len(flat_list) % seq_len != 0 else 0
-    )
-
-    if pad_type == PadType.CIRCULAR:
-        # Pad the flattened list with values from its beginning
-        flat_list.extend(flat_list[:pad_len])
-    elif pad_type == PadType.PAD_TOKEN:
-        flat_list.extend([SpecialTokens.PAD.value] * pad_len)
-    # Repartition the flattened list into sublists of size seq_len
-    repartioned_lists = [
-        flat_list[i : i + seq_len] for i in range(0, len(flat_list), seq_len)
-    ]
-    repartioned_meta_lists = collections.defaultdict(list)
-    for k, _meta_list in meta_lists.items():
-        idx = 0
-        for sublist in repartioned_lists:
-            current_meta_list = []
-            sublist_len = len(sublist)
-            while sublist_len > 0 and idx <= len(_meta_list):
-                current_meta_list.append(_meta_list[idx])
-                sublist_len -= len(input_list[idx])
-                if pad_type == PadType.CIRCULAR:
-                    idx = (idx + 1) % len(input_list)
-                else:
-                    idx += 1
-            repartioned_meta_lists[k].append(current_meta_list)
-
-    return repartioned_lists, repartioned_meta_lists
-
-
 def cut_to_context(jsonl_batch, seqlen=1024, pad_type=PadType.CIRCULAR):
-    tokens_list = jsonl_batch.pop("tokens")
-    repartioned_lists, repartioned_meta_lists = repartition_and_pad(
-        tokens_list, seq_len=seqlen, pad_type=pad_type, meta_lists=jsonl_batch
-    )
-    out = {"tokens": repartioned_lists}
-    for k, v in repartioned_meta_lists.items():
-        out[k] = v
-    return out
+    tokens_list = jsonl_batch["tokens"]
+    flat_token_list = [item for sublist in tokens_list for item in sublist]
+    repartioned_lists = [
+        flat_token_list[i : i + seqlen] for i in range(0, len(flat_token_list), seqlen)
+    ]
+    end_len = len(repartioned_lists[-1]) 
+    if len(repartioned_lists[-1]) < seqlen:
+        if pad_type == PadType.CIRCULAR:
+            repartioned_lists[-1] = repartioned_lists[-1] + repartioned_lists[0][:(seqlen - end_len)]
+        else:
+            repartioned_lists[-1] = repartioned_lists[-1] + [SpecialTokens.PAD.value]*(seqlen - end_len)
+    return {"tokens": repartioned_lists}
 
+def add_hash(item, column="tokens"):
+    item["hash"] = hash(str(item[column]))
+    return item
 
 def map_write_wds(batch, batch_size, folder, total_count=None):
     # Calculate tar index based on the first id
@@ -205,6 +175,24 @@ def glob_files(path, suffix=".jsonl"):
     return matching_files
 
 
+
+def get_filesystem(environment):
+    """
+    Create a pyarrow.fs.FileSystem based on provided AWS credentials.
+
+    :param environment: Dictionary containing AWS credentials.
+    :return: pyarrow.fs.S3FileSystem
+    """
+    # Extract the AWS credentials from the environment dictionary
+    access_key = environment.get('AWS_ACCESS_KEY_ID')
+    secret_key = environment.get('AWS_SECRET_ACCESS_KEY')
+    session_token = environment.get('AWS_SESSION_TOKEN', None)  # Session token might be optional
+
+    # Create and return the S3FileSystem
+    return fs.S3FileSystem(access_key=access_key, secret_key=secret_key, session_token=session_token, region="us-west-2")
+
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -229,25 +217,34 @@ if __name__ == "__main__":
     parser.add_argument("--seqlen", type=int, default=2048)
     parser.add_argument("--pad_type", type=str, default="circular")
     parser.add_argument("--tokenizer", type=str, default="EleutherAI/gpt-neox-20b")
-    parser.add_argument("--initial_batch_size", type=int, default=128)
-    parser.add_argument("--wds_chunk_size", type=int, default=1024)
+    parser.add_argument("--initial_batch_size", type=int, default=16384)
+    parser.add_argument("--wds_chunk_size", type=int, default=2048)
     parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--per_node_parallelism", type=int, default=8)
     parser.add_argument("--subset", type=int, default=None)
+    parser.add_argument("--materialize", action="store_true")
     parser.add_argument("--ray_address", type=str, default=None)
     parser.add_argument("--ray_spill_location", type=str, default="s3://dcnlp-hub/ray_spill")
 
     args = parser.parse_args()
     # configure remote spilling
-
-    if args.ray_address is None:
-        ray.init()
+    creds = {k:v for k,v in os.environ.items() if k.startswith("AWS")}
+    runtime_env = {"env_vars": creds}
+    
+    if "AWS_ACCESS_KEY_ID" in creds:
+        fs = get_filesystem(creds)
     else:
-        ray.init(args.ray_address)
+        fs = None
+    if args.ray_address is None:
+        ray.init(runtime_env=runtime_env)
+    else:
+        ray.init(args.ray_address, runtime_env=runtime_env)
+    num_nodes = len(ray.nodes())
     # TODO  support multiple inputs
     input_paths = glob_files(args.input, suffix=".jsonl")
     if args.subset is not None:
         input_paths = input_paths[:args.subset]
-        
+    print(f"num files ={len(input_paths)}")
     output_path = args.output
     seqlen = args.seqlen
     batch_size = args.initial_batch_size
@@ -261,11 +258,13 @@ if __name__ == "__main__":
 
     ctx = DataContext.get_current()
     ctx.use_push_based_shuffle = True
+    ctx.execution_options.resource_limits.object_store_memory = float("inf")
     ray.data.DataContext.get_current().execution_options.verbose_progress = True
-
     start_time = time.time()
     tokenizer = load_tokenizer(args.tokenizer)
-    ds = ray.data.read_json(input_paths)
+    read_options = pyarrow.json.ReadOptions(block_size=(25 << 20))
+    
+    ds = ray.data.read_json(input_paths, filesystem=fs, read_options=read_options, parallelism=args.per_node_parallelism*num_nodes)
     # convert to tokens
     ds = ds.map(
         lambda x: jsonl_to_tokens(
@@ -280,16 +279,17 @@ if __name__ == "__main__":
         cut_to_context,
         batch_size=batch_size,
         fn_kwargs={"pad_type": pad_type, "seqlen": seqlen},
+        zero_copy_batch=True
     )
-    count = ds.count()
-    tokenize_end_time = time.time()
-    print(f"Total num contexts = {count}")
-    print("Tokenize Finished in", tokenize_end_time - start_time)
-    #exit()
-    ds = ds.random_shuffle(seed=args.seed)
+    ds = ds.map(add_hash)
+    read_end = time.time()
+    # sorting by hash is a random shuffle
+    ds = ds.sort(key="hash")
+    if args.materialize:
+        ds = ds.materialize()
     num_rows = ds.count()
     ds_indices = ray.data.range(num_rows).map_batches(
-        lambda x: x, batch_format="pandas"
+        lambda x: x, batch_format="pyarrow"
     )
     ds = ds_indices.zip(ds)
     ds = ds.map_batches(
