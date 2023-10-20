@@ -222,6 +222,7 @@ def train_one_epoch(
     return True
 
 
+@torch.inference_mode()
 def evaluate(model, data, start_epoch, args, writer):
     """
     evaluates perplexity on validation data
