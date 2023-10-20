@@ -135,6 +135,8 @@ def get_norm_class(model_norm):
         return torch.nn.LayerNorm
     elif model_norm == "lp_layer_norm":
         return LPLayerNorm
+    elif model_norm == "gain_only_lp_layer_norm":
+        return partial(LPLayerNorm, elementwise_gain=True, elementwise_bias=False)
     elif model_norm == "gain_only_layer_norm":
         return partial(LayerNorm, elementwise_gain=True, elementwise_bias=False)
 
