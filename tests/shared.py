@@ -4,7 +4,7 @@ class MockArgs:
         self.model_norm = "gain_only_layer_norm"
         self.rotary_old = False
         self.qk_norm = False
-        self.train_data = "/gscratch/cse/jrfish/open_lm/tests/shard_00099999.tar"
+        self.train_data = ["/gscratch/cse/jrfish/open_lm/tests/shard_00099999.tar",]
         self.log_logit_mean = False
         self.device = 0
         self.precision = "amp_bfloat16"
@@ -16,7 +16,7 @@ class MockArgs:
         self.warmup = 2
         self.skip_scheduler = False
         self.accum_freq = 1
-        self.batch_size = 8
+        self.batch_size = 32
         self.grad_clip_norm = 1.0
         self.rank = 0
         self.local_rank = 0
@@ -39,4 +39,7 @@ class MockArgs:
         self.force_min_lr = 0.0
         self.scaler = None # not sure about this one either...
         self.accum_freq = 1
+        self.device = "cuda:0" # need to change this to be more general
+        self.wandb = False
+        self.fsdp = False
         

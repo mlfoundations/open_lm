@@ -10,13 +10,160 @@ from open_lm.scheduler import cosine_lr
 from tests.shared import MockArgs
 
 
-def test_grad_acc(accum_freq = 4, threshold = 1e-1):
+def create_optimizer(args, model):
+    named_parameters = list(model.named_parameters())
+    params = [p for _, p in named_parameters if p.requires_grad]
+    optimizer = optim.AdamW(
+        [
+            {"params": params, "weight_decay": args.wd},
+        ],
+        lr=args.lr,
+        betas=(args.beta1, args.beta2),
+        eps=args.eps,
+    )
+    return(optimizer)
+
+
+def test_grad_acc(accum_freq = 2, threshold = 1e-7):
     args = MockArgs("open_lm_11m")
 
     # create models
     random_seed()
-    model_accum_grad = create_model(args)
-    model_no_accum_grad = copy.deepcopy(model_accum_grad) #should I be using copy.deepcopy or clone?
+    model_accum_grad = create_model(args).to(args.device)
+    model_no_accum_grad = copy.deepcopy(model_accum_grad).to(args.device) #should I be using copy.deepcopy or clone? or model2.load_state_dict(model1.state_dict())
+
+    # check that original models are the same
+    sum_layer_weight_diff = []
+    for weight_model_1, weight_model_2 in zip(model_accum_grad.state_dict().items(), model_no_accum_grad.state_dict().items()):
+        sum_layer_weight_diff.append(torch.sum(weight_model_1[1] - weight_model_2[1])) 
+    assert torch.mean(torch.tensor(sum_layer_weight_diff)) < threshold
+        
+    # create dataloader
+    data = get_data(
+        args,
+        epoch=0,
+        tokenizer=None,
+        skip_train=False,
+    )
+
+    # create optimizer
+    optimizer = create_optimizer(args, model_accum_grad)
+    
+    # create scheduler
+    scheduler = cosine_lr(
+        optimizer,
+        args.lr,
+        args.warmup,
+        10,
+        args.lr_cooldown_end,
+        args.force_min_lr,
+    )
+
+    # create loss
+    loss = torch.nn.CrossEntropyLoss()
+
+    # train on mock data with/without grad accumulation for one epoch
+    for model, accum_freq in zip([model_accum_grad, model_no_accum_grad], [accum_freq, 1]):
+        args.accum_freq = accum_freq
+        train_one_epoch(
+            model,
+            data,
+            loss,
+            0,
+            optimizer,
+            args.scaler, 
+            scheduler,
+            args
+        )
+        
+    # check that models weights are similar (within some threshold)
+    sum_layer_weight_diff = []
+    for weight_model_1, weight_model_2 in zip(model_accum_grad.state_dict().items(), model_no_accum_grad.state_dict().items()):
+        sum_layer_weight_diff.append(torch.sum(weight_model_1[1] - weight_model_2[1])) 
+    assert torch.mean(torch.tensor(sum_layer_weight_diff)) < threshold
+        
+    # for p1, p2 in zip(model_accum_grad.parameters(), model_no_accum_grad.parameters()):
+    #     assertTrue(
+    #         torch.allclose(p1, p2, atol=1e-7),
+    #         "Weights differ between accumulation modes.",
+    #     )
+
+
+# def test_grad_acc(accum_freq = 4, threshold = 1e-1):
+#     args = MockArgs("open_lm_11m")
+
+#     # create models
+#     random_seed()
+#     model_accum_grad = create_model(args).to(args.device)
+#     model_no_accum_grad = copy.deepcopy(model_accum_grad).to(args.device) #should I be using copy.deepcopy or clone? or model2.load_state_dict(model1.state_dict())
+
+#     # create dataloader
+#     data = get_data(
+#         args,
+#         epoch=0,
+#         tokenizer=None,
+#         skip_train=False,
+#     )
+
+#     # create optimizer
+#     named_parameters = list(model_accum_grad.named_parameters())
+#     params = [p for _, p in named_parameters if p.requires_grad]
+#     optimizer = optim.AdamW(
+#         [
+#             {"params": params, "weight_decay": args.wd},
+#         ],
+#         lr=args.lr,
+#         betas=(args.beta1, args.beta2),
+#         eps=args.eps,
+#     )
+
+#     # create scheduler
+#     scheduler = cosine_lr(
+#         optimizer,
+#         args.lr,
+#         args.warmup,
+#         10,
+#         args.lr_cooldown_end,
+#         args.force_min_lr,
+#     )
+
+#     # create loss
+#     loss = torch.nn.CrossEntropyLoss()
+
+#     # train on mock data with/without grad accumulation for one epoch
+#     for model, accum_freq in zip([model_accum_grad, model_no_accum_grad], [accum_freq, 1]):
+#         args.accum_freq = accum_freq
+#         train_one_epoch(
+#             model,
+#             data,
+#             loss,
+#             0,
+#             optimizer,
+#             args.scaler, 
+#             scheduler,
+#             args
+#         )
+        
+#     # check that models weights are similar (within some threshold)
+#     sum_layer_weight_diff = []
+#     for weight_model_1, weight_model_2 in zip(model_accum_grad.state_dict().items(), model_no_accum_grad.state_dict().items()):
+#         sum_layer_weight_diff.append(torch.sum(weight_model_1[1] - weight_model_2[1])) 
+#     assert torch.mean(sum_layer_weight_diff) < threshold
+        
+#     for p1, p2 in zip(model_accum_grad.parameters(), model_no_accum_grad.parameters()):
+#         assertTrue(
+#             torch.allclose(p1, p2, atol=1e-7),
+#             "Weights differ between accumulation modes.",
+#         )
+
+def test_grad_acc_fsdp():
+    # TODO: similar to above but also init fsdp
+    args = MockArgs("open_lm_11m")
+    args.fsdp = True
+    # create models
+    random_seed()
+    model_accum_grad = create_model(args).to(args.device)
+    model_no_accum_grad = copy.deepcopy(model_accum_grad).to(args.device) #should I be using copy.deepcopy or clone? or model2.load_state_dict(model1.state_dict())
 
     # create dataloader
     data = get_data(
@@ -27,17 +174,8 @@ def test_grad_acc(accum_freq = 4, threshold = 1e-1):
     )
 
     # create optimizer
-    named_parameters = list(model_accum_grad.named_parameters())
-    params = [p for _, p in named_parameters if p.requires_grad]
-    optimizer = optim.AdamW(
-        [
-            {"params": params, "weight_decay": args.wd},
-        ],
-        lr=args.lr,
-        betas=(args.beta1, args.beta2),
-        eps=args.eps,
-    )
-
+    optimizer = create_optimizer(args, model)
+    
     # create scheduler
     scheduler = cosine_lr(
         optimizer,
@@ -71,9 +209,10 @@ def test_grad_acc(accum_freq = 4, threshold = 1e-1):
         sum_layer_weight_diff.append(torch.sum(weight_model_1[1] - weight_model_2[1])) 
     assert torch.mean(sum_layer_weight_diff) < threshold
         
-
-def test_grad_acc_fsdp():
-    # TODO: similar to above but also init fsdp
-    pass
+    for p1, p2 in zip(model_accum_grad.parameters(), model_no_accum_grad.parameters()):
+        assertTrue(
+            torch.allclose(p1, p2, atol=1e-7),
+            "Weights differ between accumulation modes.",
+        )
 
 test_grad_acc()
