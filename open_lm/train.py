@@ -124,8 +124,6 @@ def train_one_epoch(
             for ii in range(args.accum_freq):
                 with autocast():
                     inputs_ii = inputs[ii * per_batch : (ii + 1) * per_batch]
-                    if inputs_ii.shape[0] == 0:
-                        break
                     targets_ii = targets[ii * per_batch : (ii + 1) * per_batch]
                     out, _ = model(inputs_ii)
 
@@ -134,7 +132,7 @@ def train_one_epoch(
 
                     local_loss = (
                         loss(out.reshape(-1, args.vocab_size), targets_ii.reshape(-1))
-                        * inputs_ii.shape[0] / inputs.shape[0]
+                        / args.accum_freq
                     )
                 backward(local_loss, scaler)
                 if ii == 0:
