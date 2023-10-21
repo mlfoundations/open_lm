@@ -38,8 +38,9 @@ def add_model_args(parser):
             "lp_layer_norm",
             "gain_only_lp_layer_norm",
             "gain_only_layer_norm",
-            "no_wb_layer_norm",
+            "nonparametric_layer_norm",
             "rms_norm",
+            "fused_rms_norm",
         ],
         help="Type of normalization to employ in the model",
     )

@@ -114,7 +114,7 @@ python eval_openlm_ckpt.py \
 --eval-yaml in_memory_hf_eval.yaml \
 --model open_lm_1b  \
 --checkpoint /path/to/openlm_checkpoint.pt
---rotary-old 
+--rotary-old
 ```
 Note that `--rotary-old` is only necessary if using the pretrained `open_lm_1b` model hosted below. See discussion in the next section about this.
 
@@ -129,7 +129,7 @@ python generate.py \
 --rotary-old \
 --input-text "Please give me a recipe for chocolate chip cookies"
 ```
-Again, note that `--rotary-old` is only necessary for the pretrained `open_lm_1b` model hosted below. 
+Again, note that `--rotary-old` is only necessary for the pretrained `open_lm_1b` model hosted below.
 
 # Pretrained Models
 
@@ -205,6 +205,14 @@ OpenLM 7B is not yet done training, but we've released a checkpoint at 1.25T tok
 | **Average**     |        **0.57** |        **0.58** |        **0.60** |        **0.60** |      **0.60** |         **0.61** |                 |                 |     **0.64** |   **0.64** |
 | **MMLU-5 shot** |                 |                 |                 |                 |               |         **0.34** |                 |                 |     **0.34** |            |
 
+# Unit testing
+
+Unit testing is an active area of development. We use `pytest` for testing. For testing support, first run `pip install pytest`.
+
+To run tests, make sure your machine is GPU enabled. From the root directory run:
+```
+pytest tests/
+```
 
 # Team and acknowledgements
 
