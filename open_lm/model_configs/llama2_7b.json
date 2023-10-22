@@ -1,0 +1,12 @@
+{
+    "hidden_dim": 4096,
+    "n_layers": 32,
+    "n_heads": 32,
+    "seq_len": 4096,
+    "vocab_size": 32000,
+    "post_embed_norm": false,
+    "weight_tying": false,
+    "positional_embedding_type": "llama_rotary",
+    "model_norm": "rms_norm",
+    "ffn_type": "swiglu"
+}

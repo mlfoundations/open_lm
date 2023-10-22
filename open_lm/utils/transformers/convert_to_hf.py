@@ -1,7 +1,7 @@
 import argparse
-from utils.transformers.model import OpenLMModel
+from utils.transformers.hf_model import OpenLMModel
 from transformers import GPTNeoXTokenizerFast
-from utils.transformers.config import OpenLMConfig
+from utils.transformers.hf_config import OpenLMConfig
 import torch
 import json
 
