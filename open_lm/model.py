@@ -86,7 +86,7 @@ class Params:
     seq_len: int = 2048
     post_embed_norm: bool = False
     weight_tying: bool = False
-    norm_type: nn.Module = nn.LayerNorm
+    norm_type: str = "default_layer_norm"
     attn_func: Callable = xformers_attn if torch.cuda.is_available() else torch_attn
     apply_qk_norm: bool = False
     moe_loss_weight: float = 0.1
@@ -123,9 +123,10 @@ class CustomAttn(nn.Module):
         self.attn_fn = xformers_attn if torch.cuda.is_available() else torch_attn
         self.apply_qk_norm = args.apply_qk_norm
 
+        norm_type = get_norm_class(args.norm_type)
         # initialize norm layers for queries and keys if needed
         self.q_norm = (
-            args.norm_type(
+            norm_type(
                 args.n_heads * self.head_dim,
                 eps=args.norm_eps,
             )
@@ -133,7 +134,7 @@ class CustomAttn(nn.Module):
             else nn.Identity()
         )
         self.k_norm = (
-            args.norm_type(
+            norm_type(
                 args.n_heads * self.head_dim,
                 eps=args.norm_eps,
             )
@@ -222,11 +223,12 @@ class Block(nn.Module):
             self.feed_forward = MoE(moe_args)
 
         self.layer_id = layer_id
-        self.attention_norm = args.norm_type(
+        norm_type = get_norm_class(args.norm_type)
+        self.attention_norm = norm_type(
             args.dim,
             eps=args.norm_eps,
         )
-        self.ffn_norm = args.norm_type(
+        self.ffn_norm = norm_type(
             args.dim,
             eps=args.norm_eps,
         )
@@ -276,8 +278,9 @@ class Transformer(nn.Module, PyTorchModelHubMixin):
         self.n_layers = params.n_layers
         self.moe_num_experts = params.moe_num_experts
         self.seq_len = params.seq_len
+        norm_type = get_norm_class(params.norm_type)
         self.post_embed_norm = (
-            params.norm_type(
+            norm_type(
                 params.dim,
                 eps=params.norm_eps,
             )
@@ -298,7 +301,7 @@ class Transformer(nn.Module, PyTorchModelHubMixin):
             self.layers.append(Block(layer_id, params))
 
         # get class for normalization layers
-        self.norm = params.norm_type(
+        self.norm = norm_type(
             params.dim,
             eps=params.norm_eps,
         )
@@ -359,7 +362,10 @@ def create_params(args):
     else:
         raise ValueError("Pass a pre-defined open_lm model name or a json config")
 
-    # Note: here all the parameters should come from the config file
+    # Validate norm parameter
+    get_norm_class(cfg.get("model_norm", args.model_norm))
+
+    # Note: here all the parameters should come from the config file 
     # but for retro-compatibility, we add new model parameters to the args (with a default value that matches the old version)
     # These args are managed separately by the argparser
     # If a parameter is in the model config, regardless of the args, we use the config parameters
@@ -381,7 +387,7 @@ def create_params(args):
             vocab_size=cfg["vocab_size"],
             post_embed_norm=cfg["post_embed_norm"],
             weight_tying=cfg["weight_tying"],
-            norm_type=get_norm_class(cfg.get("model_norm", args.model_norm)),
+            norm_type=cfg.get("model_norm", args.model_norm),
             attn_func=get_attn_func(
                 args.attn_name, args.attn_activation, args.attn_seq_scalar, args.attn_seq_scalar_alpha
             ),
