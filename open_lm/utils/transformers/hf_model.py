@@ -4,6 +4,7 @@ from open_lm.utils.transformers.hf_config import OpenLMConfig
 from open_lm.model import Transformer
 import torch
 from typing import Union, Tuple, Optional, List
+import os
 
 
 class OpenLMModel(PreTrainedModel):
@@ -22,8 +23,7 @@ class OpenLMforCausalLM(OpenLMModel):
 
     def __init__(self, config):
         super().__init__(config)
-        self.model = Transformer(config)
-        self.lm_head = None
+        self.lm_head = None        
         # Initialize weights and apply final processing
         self.post_init()
 
@@ -121,6 +121,24 @@ class OpenLMforCausalLM(OpenLMModel):
         for layer_past in past_key_values:
             reordered_cache += (tuple(past_state.index_select(0, beam_idx) for past_state in layer_past),)
         return reordered_cache
+
+    @classmethod
+    def from_pretrained(
+        cls, pretrained_model_name_or_path: Optional[Union[str, os.PathLike]], **kwargs
+    ):
+        if os.path.isdir(pretrained_model_name_or_path):
+            print("Loading model from directory")
+            checkpoint_path = os.path.join(
+                pretrained_model_name_or_path, "checkpoint.pt"
+            )
+            checkpoint = torch.load(checkpoint_path)
+
+            state_dict = checkpoint["state_dict"]
+            state_dict = {x.replace("module.", ""): y for x, y in state_dict.items()}
+            state_dict = {f"model.{x}": y for x, y in state_dict.items()}
+            return super().from_pretrained(None, state_dict=state_dict, **kwargs)
+        else:
+            return super().from_pretrained(cls, pretrained_model_name_or_path, **kwargs)
 
 
 if __name__ == "__main__":
