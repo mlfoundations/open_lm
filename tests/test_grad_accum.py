@@ -1,7 +1,6 @@
 import torch
 from torch import optim
 import copy
-from datasets import load_dataset
 
 from open_lm.train import train_one_epoch
 from open_lm.main import random_seed
