@@ -18,7 +18,7 @@ class TestsForAccumulatingGradients:
     # Setup data, optimizer, and other basic settings
     args = MockArgs("open_lm_11m")
 
-    # # download small shard file from huggingface
+    # download small shard file from huggingface
     train_data = download("testing_data", "open_lm/open_lm/tests")
     args.train_data = ["open_lm/open_lm/tests/testing_data",]
 
