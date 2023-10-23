@@ -11,8 +11,7 @@ def download(name: str, root: str = None):
         raise RuntimeError(f"{root} must not be None")
 
     cloud_checkpoints = {
-        "testing_data": {
-            # 'url': 'file://' + os.path.abspath('./assets/nsfw_torch.pt'),
+        "shard_00000000": {
             "url": "https://huggingface.co/datasets/mlfoundations/open_lm_example_data/blob/main/example_train_data/shard_00000000.tar",
             "sha256": "ec9fd5ed97b00815e0dbb7af82f528385c659ae7772f4fcaa82b4574a2ace689",
         },

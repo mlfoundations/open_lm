@@ -1,10 +1,14 @@
+
+from tests.testing_utils import download
+
 class MockArgs:
     def __init__(self, model):
         self.model = model #part of model config
         self.model_norm = "gain_only_layer_norm"
         self.rotary_old = False
         self.qk_norm = False
-        self.train_data = ["/gscratch/cse/jrfish/open_lm/tests/shard_00000000.tar",]
+        download("shard_00000000", "./tests/assets/")
+        self.train_data = ["./tests/assets/shard_00000000.tar",]
         self.log_logit_mean = False
         self.device = 0
         self.precision = "amp_bfloat16"

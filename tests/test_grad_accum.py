@@ -1,4 +1,5 @@
 import torch
+import os
 from torch import optim
 import copy
 
@@ -7,7 +8,6 @@ from open_lm.main import random_seed
 from open_lm.model import create_model
 from open_lm.data import get_data
 from open_lm.scheduler import cosine_lr
-from tests.testing_utils import download
 from tests.shared import MockArgs
 
 
@@ -16,10 +16,6 @@ class TestsForAccumulatingGradients:
 
     # Setup data, optimizer, and other basic settings
     args = MockArgs("open_lm_11m")
-
-    # download small shard file from huggingface
-    train_data = download("testing_data", "open_lm/open_lm/tests/")
-    args.train_data = ["open_lm/open_lm/tests/testing_data",]
 
     # only want to look at one batch
     args.train_num_samples = args.batch_size
@@ -66,26 +62,22 @@ class TestsForAccumulatingGradients:
     loss = torch.nn.CrossEntropyLoss()      
 
     def test_grad_acc(self, accum_freq = 2, threshold = 1e-7):
+        args = self.args
         # create testing models
-        model_accum_grad = copy.deepcopy(model).to(args.device) 
+        model_accum_grad = copy.deepcopy(self.model).to(args.device) 
         model_no_accum_grad = copy.deepcopy(model_accum_grad).to(args.device) 
-
-        # check that models weights are similar (within some threshold)
-        for p1, p2 in zip(model_accum_grad.parameters(), model_no_accum_grad.parameters()):
-            assert torch.allclose(p1, p2, atol=threshold)
-        
 
         # train on mock data with/without grad accumulation for one epoch
         for model, accum_freq in zip([model_accum_grad, model_no_accum_grad], [accum_freq, 1]):
             args.accum_freq = accum_freq
             train_one_epoch(
                 model,
-                data,
-                loss,
+                self.data,
+                self.loss,
                 0,
-                optimizer,
+                self.optimizer,
                 args.scaler, 
-                scheduler,
+                self.scheduler,
                 args
             )
             
@@ -95,32 +87,30 @@ class TestsForAccumulatingGradients:
                 
 
     def test_grad_acc_fsdp(self, accum_freq = 2, threshold = 1e-7):
+        args = self.args
         args.fsdp = True
         args.fsdp_amp = True
         
         # create models
         random_seed()
-        model_accum_grad = copy.deepcopy(model).to(args.device) 
+        model_accum_grad = copy.deepcopy(self.model).to(args.device) 
         model_no_accum_grad = copy.deepcopy(model_accum_grad).to(args.device) 
-
-        # check that models weights are similar (within some threshold)
-        for p1, p2 in zip(model_accum_grad.parameters(), model_no_accum_grad.parameters()):
-            assert torch.allclose(p1, p2, atol=threshold)
 
         # train on mock data with/without grad accumulation for one epoch
         for model, accum_freq in zip([model_accum_grad, model_no_accum_grad], [accum_freq, 1]):
             args.accum_freq = accum_freq
             train_one_epoch(
                 model,
-                data,
-                loss,
+                self.data,
+                self.loss,
                 0,
-                optimizer,
+                self.optimizer,
                 args.scaler, 
-                scheduler,
+                self.scheduler,
                 args
             )
             
         # check that models weights are similar (within some threshold)
             for p1, p2 in zip(model_accum_grad.parameters(), model_no_accum_grad.parameters()):
                 assert torch.allclose(p1, p2, atol=threshold)
+
