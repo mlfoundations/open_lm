@@ -20,7 +20,7 @@ class MockArgs:
         self.grad_clip_norm = 1.0
         self.rank = 0
         self.local_rank = 0
-        self.log_every_n_steps = 1e8  # v big as no logging needed
+        self.log_every_n_steps = 1e8  
         self.dataset_type = 'webdataset'
         self.data_key = "json"
         self.ffn_type = "swiglu"
@@ -29,17 +29,17 @@ class MockArgs:
         self.train_data_upsampling_factors = None
         self.disable_buffer = False
         self.seed = 1
-        self.vocab_size = 50432 # part of model config
+        self.vocab_size = 50432 
         self.seq_len = 300 
         self.workers = 1
-        self.world_size = 1 # this is not defined in params.py
+        self.world_size = 1 
         self.dataset_metadata = None
         self.val_data = None
         self.lr_cooldown_end = 3e-5
         self.force_min_lr = 0.0
         self.scaler = None 
         self.accum_freq = 1
-        self.device = "cuda:0" # need to change this to be more general
+        self.device = "cuda:0" 
         self.wandb = False
         self.fsdp = False
         
