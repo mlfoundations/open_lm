@@ -19,7 +19,7 @@ class TestsForAccumulatingGradients:
     args = MockArgs("open_lm_11m")
 
     # download small shard file from huggingface
-    train_data = download("testing_data", "open_lm/open_lm/tests")
+    train_data = download("testing_data", "open_lm/open_lm/tests/")
     args.train_data = ["open_lm/open_lm/tests/testing_data",]
 
     # only want to look at one batch
