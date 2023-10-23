@@ -307,10 +307,13 @@ class ResampledShards2(IterableDataset):
 
 
 def filter_lt_seqlen(seq_len, x):
-    logging.warning(
-        f"Sample sequence length: {len(x[0])} not larger than seq_len: {seq_len}. Skipping sample. Note: sample sequence length should be one greater than seq_len."
-    )
-    return len(x[0]) > seq_len
+    valid_sample = len(x[0]) > seq_len
+    if not valid_sample:
+        logging.warning(
+            f"Sample sequence length: {len(x[0])} not larger than seq_len: {seq_len}. Skipping sample. NOTE: sample sequence length should be one greater than seq_len."
+        )
+
+    return valid_sample
 
 
 def get_wds_dataset(
