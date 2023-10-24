@@ -4,16 +4,17 @@ import urllib.request
 import hashlib
 import warnings
 
-def download(name: str, root: str = None):
+
+def download_val_data(name: str, root: str = None):
     # modified from oai _download clip function
 
     if root is None:
         raise RuntimeError(f"{root} must not be None")
 
     cloud_checkpoints = {
-        "shard_00000000": {
-            "url": "https://huggingface.co/datasets/mlfoundations/open_lm_example_data/blob/main/example_train_data/shard_00000000.tar",
-            "sha256": "ec9fd5ed97b00815e0dbb7af82f528385c659ae7772f4fcaa82b4574a2ace689",
+        "shard_00000000.tar": {
+            "url": "https://huggingface.co/datasets/mlfoundations/open_lm_example_data/resolve/main/example_train_data/shard_00000000.tar",
+            "sha256": "f53d2cbaf5ffc0532aaefe95299e1ef5e1641f0a1cbf7ae12642f71eaa892d30",
         },
     }
 
@@ -25,7 +26,7 @@ def download(name: str, root: str = None):
     os.makedirs(root, exist_ok=True)
 
     expected_sha256 = cloud_checkpoints[name]["sha256"]
-    download_target = os.path.join(root, f"{name}.tar")
+    download_target = os.path.join(root, f"{name}")
     url = cloud_checkpoints[name]["url"]
 
     if os.path.exists(download_target) and not os.path.isfile(download_target):
@@ -67,4 +68,3 @@ def download(name: str, root: str = None):
         )
 
     return download_target
-

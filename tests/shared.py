@@ -1,14 +1,19 @@
+import torch
 
-from tests.testing_utils import download
+from tests.testing_utils import download_val_data
+
 
 class MockArgs:
     def __init__(self, model):
-        self.model = model #part of model config
+        data_path = download_val_data("shard_00000000.tar", "./tests/assets/")
+
+        self.model = model  # part of model config
         self.model_norm = "gain_only_layer_norm"
         self.rotary_old = False
         self.qk_norm = False
-        download("shard_00000000", "./tests/assets/")
-        self.train_data = ["./tests/assets/shard_00000000.tar",]
+        self.train_data = [
+            data_path,
+        ]
         self.log_logit_mean = False
         self.device = 0
         self.precision = "amp_bfloat16"
@@ -24,8 +29,8 @@ class MockArgs:
         self.grad_clip_norm = 1.0
         self.rank = 0
         self.local_rank = 0
-        self.log_every_n_steps = 1e8  
-        self.dataset_type = 'webdataset'
+        self.log_every_n_steps = 1e8
+        self.dataset_type = "webdataset"
         self.data_key = "json"
         self.ffn_type = "swiglu"
         self.train_num_samples = 250000
@@ -33,17 +38,17 @@ class MockArgs:
         self.train_data_upsampling_factors = None
         self.disable_buffer = False
         self.seed = 1
-        self.vocab_size = 50432 
-        self.seq_len = 300 
+        self.vocab_size = 50432
+        self.seq_len = 300
         self.workers = 1
-        self.world_size = 1 
+        self.world_size = 1
         self.dataset_metadata = None
         self.val_data = None
         self.lr_cooldown_end = 3e-5
         self.force_min_lr = 0.0
-        self.scaler = None 
+        self.scaler = None
         self.accum_freq = 1
-        self.device = "cuda:0" 
+        self.device = "cuda:0"
         self.wandb = False
         self.fsdp = False
-        
+        self.fsdp_amp = False
