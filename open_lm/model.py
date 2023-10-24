@@ -16,6 +16,7 @@ from huggingface_hub import PyTorchModelHubMixin
 from open_lm.norms import get_norm_class
 from open_lm.positional_embedding.head_rotary import HeadRotaryWithCast
 from open_lm.positional_embedding.rotary import RotaryWithCast
+from open_lm.positional_embedding.llama_rotary import LLaMARotaryWithCast
 
 # from openclip
 _MODEL_CONFIG_PATHS = [Path(__file__).parent / f"model_configs/"]
@@ -26,14 +27,22 @@ def _natural_key(string_):
     return [int(s) if s.isdigit() else s for s in re.split(r"(\d+)", string_.lower())]
 
 
-def _rescan_model_configs():
+def _rescan_model_configs(model_config_paths=None):
     global _MODEL_CONFIGS
+
+    config_iter = None
+    if model_config_paths is not None:
+        config_iter = [
+            Path(model_config_paths),
+        ]
+    else:
+        config_iter = _MODEL_CONFIG_PATHS
 
     config_ext = (".json",)
     config_files = []
-    for config_path in _MODEL_CONFIG_PATHS:
+    for config_path in config_iter:
         if config_path.is_file() and config_path.suffix in config_ext:
-            config_files.append(config_path)
+            config_files.append(Path(config_path))
         elif config_path.is_dir():
             for ext in config_ext:
                 config_files.extend(config_path.glob(f"*{ext}"))
@@ -65,7 +74,7 @@ class Params:
     weight_tying: bool = False
     norm_type: nn.Module = nn.LayerNorm
     apply_qk_norm: bool = False
-    rotary_old: bool = False
+    positional_embedding_type: str = "rotary"
     ffn_type: str = "swiglu"
 
 
@@ -77,6 +86,19 @@ def xformers_attn(queries, keys, values, is_causal):
     return xops.memory_efficient_attention(queries, keys, values, attn_bias=mask)
 
 
+def get_pos_embed(args: Params):
+    head_dim = args.dim // args.n_heads
+    if args.positional_embedding_type == "rotary":
+        return RotaryWithCast(head_dim, args.seq_len)
+    elif args.positional_embedding_type == "llama_rotary":
+        return LLaMARotaryWithCast(head_dim, args.n_heads, args.seq_len)
+    elif args.positional_embedding_type == "head_rotary":
+        return HeadRotaryWithCast(head_dim, args.seq_len)
+    else:
+        raise RuntimeError(
+            f"Unknown positional embedding type {args.positional_embedding_type}"
+        )
+
 class CustomAttn(nn.Module):
     def __init__(self, layer_id, args: Params):
         super().__init__()
@@ -84,7 +106,7 @@ class CustomAttn(nn.Module):
         self.head_dim = args.dim // args.n_heads
         self.in_proj = nn.Linear(args.dim, 3 * args.n_heads * self.head_dim, bias=False)
         self.out_proj = nn.Linear(args.n_heads * self.head_dim, args.dim, bias=False)
-        self.pos_embed = HeadRotaryWithCast(self.head_dim, args.seq_len) if args.rotary_old else RotaryWithCast(self.head_dim, args.seq_len)
+        self.pos_embed = get_pos_embed(args)
         self.attn_fn = xformers_attn
         self.apply_qk_norm = args.apply_qk_norm
 
@@ -180,11 +202,15 @@ class Block(nn.Module):
             )
         elif args.ffn_type == "gelu":
             std = 1.0 / math.sqrt(args.dim)
-            torch.nn.init.trunc_normal_(self._ff_w1.weight, std=std, a=-3 * std, b=3 * std)
+            torch.nn.init.trunc_normal_(
+                self._ff_w1.weight, std=std, a=-3 * std, b=3 * std
+            )
 
-            std = (1.0 / math.sqrt(hidden_dim))
+            std = 1.0 / math.sqrt(hidden_dim)
             std = std / math.sqrt(2 * (layer_id + 1))
-            torch.nn.init.trunc_normal_(self._ff_w2.weight, std=std, a=-3 * std, b=3 * std)
+            torch.nn.init.trunc_normal_(
+                self._ff_w2.weight, std=std, a=-3 * std, b=3 * std
+            )
 
     def forward(self, x):
         h = x + self.attention(self.attention_norm(x), is_causal=True)
@@ -262,7 +288,22 @@ class Transformer(nn.Module, PyTorchModelHubMixin):
 
 
 def create_params(args):
-    cfg = deepcopy(_MODEL_CONFIGS[args.model])
+    cfg = None
+
+    if args.model.endswith(".json"):
+        _rescan_model_configs(model_config_paths=args.model)
+        args.model = Path(args.model).stem
+
+    if args.model in _MODEL_CONFIGS:
+        cfg = deepcopy(_MODEL_CONFIGS[args.model])
+    else:
+        raise ValueError("Pass a pre-defined open_lm model name or a json config")
+
+    # Note: here all the parameters should come from the config file 
+    # but for retro-compatibility, we add new model parameters to the args (with a default value that matches the old version)
+    # These args are managed separately by the argparser
+    # If a parameter is in the model config, regardless of the args, we use the config parameters
+    # If a parameter is not in the model config, we use the args parameter
     return Params(
         dim=cfg["hidden_dim"],
         n_layers=cfg["n_layers"],
@@ -271,10 +312,10 @@ def create_params(args):
         vocab_size=cfg["vocab_size"],
         post_embed_norm=cfg["post_embed_norm"],
         weight_tying=cfg["weight_tying"],
-        norm_type=get_norm_class(args.model_norm),
-        apply_qk_norm=args.qk_norm,
-        rotary_old=args.rotary_old,
-        ffn_type=args.ffn_type,
+        norm_type=get_norm_class(cfg.get("model_norm", args.model_norm)),
+        apply_qk_norm=cfg.get("qk_norm", args.qk_norm),
+        positional_embedding_type=cfg.get("positional_embedding_type", args.positional_embedding_type),
+        ffn_type=cfg.get("ffn_type", args.ffn_type),
     )
 
 

@@ -124,6 +124,8 @@ def train_one_epoch(
             for ii in range(args.accum_freq):
                 with autocast():
                     inputs_ii = inputs[ii * per_batch : (ii + 1) * per_batch]
+                    if inputs_ii.shape[0] == 0:
+                        break
                     targets_ii = targets[ii * per_batch : (ii + 1) * per_batch]
                     out, _ = model(inputs_ii)
 
@@ -132,7 +134,7 @@ def train_one_epoch(
 
                     local_loss = (
                         loss(out.reshape(-1, args.vocab_size), targets_ii.reshape(-1))
-                        / args.accum_freq
+                        * inputs_ii.shape[0] / inputs.shape[0]
                     )
                 backward(local_loss, scaler)
                 if ii == 0:
@@ -219,7 +221,7 @@ def train_one_epoch(
     # end for
     return True
 
-
+@torch.inference_mode()
 def evaluate(model, data, start_epoch, args, writer):
     """
     evaluates perplexity on validation data
@@ -235,8 +237,6 @@ def evaluate(model, data, start_epoch, args, writer):
         start_epoch
     )  # set epoch in process safe manner via sampler or shared_epoch
     dataloader = data["val"].dataloader
-    num_batches_per_epoch = dataloader.num_batches
-    sample_digits = math.ceil(math.log(dataloader.num_samples + 1, 10))
 
     losses_m = AverageMeter()
     batch_time_m = AverageMeter()

@@ -1,24 +1,21 @@
 import argparse
-import json
-import time
-import sys
-from typing import List
 import builtins as __builtin__
-from open_lm.model import create_params
+import time
+from typing import List
 
 import torch
 from composer.loggers import InMemoryLogger, LoggerDestination
 from composer.trainer import Trainer
 from composer.utils import dist, get_device, reproducibility
-from omegaconf import OmegaConf as om
-from open_lm.params import add_model_args
-from open_lm.utils.transformers.hf_model import OpenLMforCausalLM
-from open_lm.utils.transformers.hf_config import OpenLMConfig
-from open_lm.utils.llm_foundry_wrapper import SimpleComposerOpenLMCausalLM
-from transformers import GPTNeoXTokenizerFast
-
 from llmfoundry.utils.builders import build_icl_evaluators, build_logger
+from omegaconf import OmegaConf as om
+from transformers import GPTNeoXTokenizerFast, LlamaTokenizerFast
 
+from open_lm.model import create_params
+from open_lm.params import add_model_args
+from open_lm.utils.llm_foundry_wrapper import SimpleComposerOpenLMCausalLM
+from open_lm.utils.transformers.hf_config import OpenLMConfig
+from open_lm.utils.transformers.hf_model import OpenLMforCausalLM
 
 builtin_print = __builtin__.print
 
@@ -31,7 +28,7 @@ def setup_for_distributed(is_master):
 
     __builtin__.print = print
 
-
+@torch.no_grad()
 def evaluate(model, tokenizer, cfg):
     cfg.dist_timeout = cfg.get('dist_timeout', 600.0)
 
@@ -87,12 +84,23 @@ def evaluate(model, tokenizer, cfg):
 
 
 def main():
+    """
+    Usage:
+    python eval_openlm_ckpt.py --checkpoint <path_to_openlm_checkpoint>  --model <name_of_model_config> --eval-yaml <path_to_eval_yaml> --tokenizer <tokenizer_name_or_path>
+    example:
+    cd eval
+    python eval_openlm_ckpt.py --checkpoint ../checkpoints/llama2_7b.pt --model llama2_7b.json --eval-yaml in_memory_hf_eval.yaml --tokenizer <path_to_tokenizer>
+    multi-gpu example:
+    cd eval
+    torchrun --nproc_per_node 3 python eval_openlm_ckpt.py --checkpoint ../checkpoints/llama2_7b.pt --model llama2_7b.json --eval-yaml in_memory_hf_eval.yaml --tokenizer <path_to_tokenizer>
+    """
     parser = argparse.ArgumentParser()
     parser.add_argument("--checkpoint")
     parser.add_argument(
         "--model", type=str, default="m1b_neox", help="Name of the model to use."
     )
     parser.add_argument("--eval-yaml")
+    parser.add_argument("--tokenizer", type=str, default="EleutherAI/gpt-neox-20b")
     add_model_args(parser)
     args = parser.parse_args()
 
@@ -104,7 +112,10 @@ def main():
 
     print("Loading model into the right classes")
     open_lm = OpenLMforCausalLM(OpenLMConfig(create_params(args)))
-    tokenizer = GPTNeoXTokenizerFast.from_pretrained("EleutherAI/gpt-neox-20b")
+    if "gpt-neox-20b" in args.tokenizer:
+        tokenizer = GPTNeoXTokenizerFast.from_pretrained("EleutherAI/gpt-neox-20b")
+    elif "llama" in args.tokenizer:
+        tokenizer = LlamaTokenizerFast.from_pretrained(args.tokenizer)
 
     state_dict = checkpoint["state_dict"]
     state_dict = {x.replace("module.", ""): y for x, y in state_dict.items()}

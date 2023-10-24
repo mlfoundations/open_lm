@@ -114,9 +114,10 @@ python eval_openlm_ckpt.py \
 --eval-yaml in_memory_hf_eval.yaml \
 --model open_lm_1b  \
 --checkpoint /path/to/openlm_checkpoint.pt
---rotary-old
+--positional_embedding_type head_rotary
+
 ```
-Note that `--rotary-old` is only necessary if using the pretrained `open_lm_1b` model hosted below. See discussion in the next section about this.
+Note that `--positional_embedding_type head_rotary` is only necessary if using the pretrained `open_lm_1b` model hosted below. See discussion in the next section about this.
 
 ## Generate Text
 One can also use a trained model to generate text. This is accessible via the script located at [scripts/generate.py](scripts/generate.py). The parameters are similar to those used in evaluation:
@@ -126,10 +127,11 @@ cd scripts
 python generate.py \
 --model open_lm_1b \
 --checkpoint /path/to/openlm_checkpoint.pt \
---rotary-old \
+--positional_embedding_type head_rotary \
 --input-text "Please give me a recipe for chocolate chip cookies"
 ```
-Again, note that `--rotary-old` is only necessary for the pretrained `open_lm_1b` model hosted below.
+
+Again, note that `--positional_embedding_type head_rotary` is only necessary for the pretrained `open_lm_1b` model hosted below. 
 
 # Pretrained Models
 
@@ -137,7 +139,7 @@ Again, note that `--rotary-old` is only necessary for the pretrained `open_lm_1b
 OpenLM 1B is a ~1Billion parameter model trained on a 1.6T token dataset which consists of a mix of RedPajama, Pile, S2ORC, The Pile of Law, Deepmind Math, and RealNews (the full mixture of training data is described in [more detail here](https://docs.google.com/spreadsheets/d/1YW-_1vGsSPmVtEt2oeeJOecH6dYX2SuEuhOwZyGwy4k/edit?usp=sharing)).
 The model checkpoint can be downloaded from [HuggingFace here](https://huggingface.co/mlfoundations/open_lm_1B/tree/main).
 The script used to train this model (for config-copying purposes) is [located here](https://github.com/mlfoundations/open_lm/blob/main/scripts/train_example.sh).
-Once this checkpoint has been downloaded, you can evaluate it by following the directions in the [Evaluate Model](#evaluate-model) section above and passing `--rotary-old` (see note below).
+Once this checkpoint has been downloaded, you can evaluate it by following the directions in the [Evaluate Model](#evaluate-model) section above and passing `--positional_embedding_type head_rotary` or setting `"positional_embedding_type": "head_rotary"` in the model config (see note below).
 
 Note: We trained this model with rotary embeddings applied to the _head_
 dimension, which is the default in xformers as of 09/01/2023. Since these models
@@ -145,7 +147,7 @@ were trained, we have updated openlm to correctly apply the rotary embeddings to
 the sequence dimension (see
 [this issue](https://github.com/mlfoundations/open_lm/issues/4) and [this
 issue](https://github.com/facebookresearch/xformers/issues/841) for details).
-To evaluate these models, ensure you pass `--rotary-old` to the eval command.
+To evaluate these models, ensure you use the `"positional_embedding_type": "head_rotary"` in the model config.
 
 | **OpenLM-1B** | **250B Tokens** | **500B tokens** | **750B tokens** | **1T Tokens** | **1.25T Tokens** | **1.5T Tokens** | **1.6T Tokens** |
 |----------------|-----------------|-----------------|-----------------|---------------|------------------|-----------------|-----------------|
