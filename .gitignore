@@ -136,3 +136,4 @@ logs*
 eval/*.jsonl
 weights*
 out*
+tests/assets/*
