@@ -12,12 +12,13 @@ from enum import Enum
 from io import BytesIO
 from typing import List
 from loguru import logger
+import pandas as pd
 
 import boto3
 import fsspec
 import numpy as np
 import psutil
-import simdjson
+import json
 import webdataset as wds
 from braceexpand import braceexpand
 from transformers import GPTNeoXTokenizerFast
@@ -28,8 +29,12 @@ from ray.data._internal.util import _check_pyarrow_version
 from ray.data.block import Block, BlockMetadata
 from ray.data.context import DataContext
 from ray.data.datasource import Datasource, ReadTask
+from ray.runtime_context import RuntimeContext
 import pyarrow.fs as fs
 import pyarrow.json
+
+from tqdm import tqdm
+from io import BytesIO
 
 
 class SpecialTokens(Enum):
@@ -41,20 +46,88 @@ class SpecialTokens(Enum):
 class PadType(Enum):
     CIRCULAR = 0
     PAD_TOKEN = 1
+    
+
+def download_to_memory_with_progress(bucket_name, key):
+    s3 = boto3.client('s3')
+
+    # Use the head_object call to get the total size of the object
+    meta_data = s3.head_object(Bucket=bucket_name, Key=key)
+    total_size = int(meta_data.get('ContentLength', 0))
+
+    # Create a progress bar with tqdm
+    progress = tqdm(total=total_size, unit='B', unit_scale=True)
+
+    # Callback to update the progress bar
+    def progress_callback(bytes_transferred):
+        progress.update(bytes_transferred)
+
+    # Use BytesIO to store the downloaded bytes in memory
+    buffer = BytesIO()
+    s3.download_fileobj(bucket_name, key, buffer, Callback=progress_callback)
+    
+    progress.close()
+
+    # Reset the buffer's position to the beginning
+    buffer.seek(0)
+
+    # Return the in-memory buffer
+    return buffer.read()
 
 
-def jsonl_to_tokens(jsonl, tokenizer, content_key='text', keep_text=False, discard_meta=False):
-    all_rows = {"tokens": []}
-    jsonl_text = jsonl[content_key]
-    tokens = tokenizer(jsonl_text) + [SpecialTokens.END_OF_TEXT.value]
-    out_dict = {}
-    if not discard_meta:
-        out_dict["metadata"] = jsonl.copy()
-        del out_dict["metadata"][content_key]
-    if keep_text:
-        out_dict["text"] = jsonl[content_key]
-    out_dict["tokens"] = tokens
-    return out_dict
+
+def parse_s3_path(s3_path):
+    """
+    Extract the bucket and key from an S3 path.
+    
+    Args:
+    - s3_path (str): The S3 path in the format "s3://bucket/key"
+
+    Returns:
+    - tuple: A tuple containing the bucket and key
+    """
+    if not s3_path.startswith("s3://"):
+        raise ValueError("Invalid S3 path format. Must start with 's3://'")
+
+    s3_parts = s3_path[5:].split('/', 1)
+    bucket = s3_parts[0]
+    
+    if len(s3_parts) > 1:
+        key = s3_parts[1]
+    else:
+        key = ""
+    return bucket, key
+    
+    
+def dl_parse_s3(data, creds=None):
+    worker_id = ray.get_runtime_context().get_worker_id()
+    if creds is not None:
+        client = boto3.client("s3",
+            aws_access_key_id=creds["AWS_ACCESS_KEY_ID"],
+            aws_secret_access_key=creds["AWS_SECRET_ACCESS_KEY"],
+            aws_session_token=creds["AWS_SESSION_TOKEN"])
+    else:
+        client = boto3.client('s3')
+    out_dicts = []
+    for path in data["path"]:
+        bucket, key = parse_s3_path(path)
+        json_lines = download_to_memory_with_progress(bucket, key).decode().splitlines()
+        jsons = [json.loads(x) for x in json_lines]
+        out_dicts += jsons
+    return pd.DataFrame(out_dicts)
+        
+        
+        
+        
+        
+def dist_tokenize(data, tokenizer, content_key):
+    out_dicts = []
+    for tokens in data[content_key]:
+        tokens = tokenizer(tokens) + [SpecialTokens.END_OF_TEXT.value]
+        out_dict = {}
+        out_dict["tokens"] = tokens
+        out_dicts.append(out_dict)
+    return pd.DataFrame(out_dicts)
 
 def cut_to_context(jsonl_batch, seqlen=1024, pad_type=PadType.CIRCULAR):
     tokens_list = jsonl_batch["tokens"]
@@ -74,29 +147,25 @@ def add_hash(item, column="tokens"):
     item["hash"] = hash(str(item[column]))
     return item
 
-def map_write_wds(batch, batch_size, folder, total_count=None):
+def map_write_wds(batch, batch_size, folder, counter):
     # Calculate tar index based on the first id
-    first_id = batch["id"][0]
-    start_idx = first_id // batch_size
 
     # Determine the number of leading zeros dynamically based on total_count
-    if total_count:
-        digits = len(str(total_count // batch_size))
-    else:
-        digits = 5  # default to 5 if total_count is not provided
-
+    tar_index = ray.get(counter.increment.remote())
+    
+    digits = 8  #default to 8 
     # Format tar index with the determined number of leading zeros
-    tar_index = f"{start_idx:0{digits}}"
+    tar_index_str = f"{tar_index:0{digits}}"
 
     # Create tar file name
-    tar_name = f"{tar_index}.tar"
+    tar_name = f"{tar_index_str}.tar"
 
     # Write the batch to a tarball using webdataset's TarWriter
     bio = io.BytesIO()
     with wds.TarWriter(bio) as sink:
-        for i in range(len(batch["id"])):
+        for i in range(len(batch["tokens"])):
             tokens = [int(x) for x in batch["tokens"][i]]
-            uid = hashlib.md5(simdjson.dumps(tokens).encode()).hexdigest()
+            uid = hashlib.md5(json.dumps(tokens).encode()).hexdigest()
             sample = {"__key__": uid, "json": tokens}
             sink.write(sample)
 
@@ -192,6 +261,56 @@ def get_filesystem(environment):
     return fs.S3FileSystem(access_key=access_key, secret_key=secret_key, session_token=session_token, region="us-west-2")
 
 
+@ray.remote
+class GlobalCounter:
+    def __init__(self):
+        self.value = 0
+
+    def increment(self):
+        self.value += 1
+        return self.value
+
+    def get_counter(self):
+        return self.value
+
+
+
+def human_to_bytes(s):
+    """
+    Convert human-readable byte size strings to actual number of bytes.
+    
+    Supports:
+        B: bytes
+        KB, kB, Kb, kB: kilobytes
+        MB, mB, Mb, mB: megabytes
+        GB, gB, Gb, gB: gigabytes
+        TB, tB, Tb, tB: terabytes
+        PB, pB, Pb, pB: petabytes
+
+    Example:
+        human_to_bytes('5.2 GB') -> 5.2 * 1024^3
+    """
+    
+    symbols = ('B', 'K', 'M', 'G', 'T', 'P')
+    letter = s[-2:].strip().upper() if s[-2:].strip().upper()[:-1] in symbols else s[-1:].upper()
+    number = float(s[:-len(letter)].strip())
+    
+    if letter == 'B':
+        return int(number)
+    elif 'K' in letter:
+        return int(number * 1024)
+    elif 'M' in letter:
+        return int(number * 1024**2)
+    elif 'G' in letter:
+        return int(number * 1024**3)
+    elif 'T' in letter:
+        return int(number * 1024**4)
+    elif 'P' in letter:
+        return int(number * 1024**5)
+    else:
+        raise ValueError(f"Unsupported format: {s}")
+
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -209,27 +328,27 @@ if __name__ == "__main__":
         # e.g s3://dcnlp-data/rpj_tokenized_upsampled_eleutherai_deduplicated/
     )
     parser.add_argument("--content_key", type=str, default='text')
-    parser.add_argument("--keep_text", action="store_true")
-    parser.add_argument("--discard_metadata", action="store_true")
     parser.add_argument(
         "--no_shuffle", help="do not dedup + random shuffle", action="store_true"
     )
     parser.add_argument("--seqlen", type=int, default=2048)
     parser.add_argument("--pad_type", type=str, default="circular")
     parser.add_argument("--tokenizer", type=str, default="EleutherAI/gpt-neox-20b")
-    parser.add_argument("--initial_batch_size", type=int, default=16384)
+    parser.add_argument("--initial_batch_size", type=int, default=32768)
     parser.add_argument("--wds_chunk_size", type=int, default=2048)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--per_node_parallelism", type=int, default=8)
     parser.add_argument("--subset", type=int, default=None)
     parser.add_argument("--materialize", action="store_true")
     parser.add_argument("--ray_address", type=str, default=None)
+    parser.add_argument("--block_size", type=str, default="10MB")
     parser.add_argument("--ray_spill_location", type=str, default="s3://dcnlp-hub/ray_spill")
 
     args = parser.parse_args()
     # configure remote spilling
     creds = {k:v for k,v in os.environ.items() if k.startswith("AWS")}
     runtime_env = {"env_vars": creds}
+    block_size = human_to_bytes(args.block_size)
     
     if "AWS_ACCESS_KEY_ID" in creds:
         fs = get_filesystem(creds)
@@ -245,10 +364,14 @@ if __name__ == "__main__":
     if args.subset is not None:
         input_paths = input_paths[:args.subset]
     print(f"num files ={len(input_paths)}")
+    num_files = len(input_paths)
+    num_cores = os.cpu_count()
     output_path = args.output
-    seqlen = args.seqlen
+    seqlen = args.seqlen+1
+    cores_to_use = args.per_node_parallelism
     batch_size = args.initial_batch_size
     wds_chunk_size = args.wds_chunk_size
+    content_key = args.content_key
     if args.pad_type == "circular":
         pad_type = PadType.CIRCULAR
     elif args.pad_type == "pad_token":
@@ -262,19 +385,13 @@ if __name__ == "__main__":
     ray.data.DataContext.get_current().execution_options.verbose_progress = True
     start_time = time.time()
     tokenizer = load_tokenizer(args.tokenizer)
-    read_options = pyarrow.json.ReadOptions(block_size=(25 << 20))
-    
-    ds = ray.data.read_json(input_paths, filesystem=fs, read_options=read_options, parallelism=args.per_node_parallelism*num_nodes)
-    # convert to tokens
-    ds = ds.map(
-        lambda x: jsonl_to_tokens(
-            x,
-            tokenizer=tokenizer,
-            content_key=args.content_key,
-            keep_text=args.keep_text,
-            discard_meta=args.discard_metadata,
-        )
-    )
+    logger.info(f"Total number of keys = {len(input_paths)}")
+    df = pd.DataFrame(input_paths, columns=["path"])
+    ds = ray.data.from_pandas(pd.DataFrame(input_paths, columns=["path"])).repartition(num_files)
+    number_of_keys = ds.count()
+    ds = ds.map_batches(dl_parse_s3, batch_size=1, fn_kwargs={"creds": creds}, batch_format="pandas", num_cpus=num_cores)
+    ds = ds.repartition(num_nodes*cores_to_use)
+    ds = ds.map_batches(dist_tokenize, batch_size=batch_size, fn_kwargs={"tokenizer": tokenizer, "content_key": content_key}, batch_format="pandas", num_cpus=1)
     ds = ds.map_batches(
         cut_to_context,
         batch_size=batch_size,
@@ -282,23 +399,21 @@ if __name__ == "__main__":
         zero_copy_batch=True
     )
     ds = ds.map(add_hash)
-    read_end = time.time()
+    ds.count()
+    tokenize_context_end = time.time()
     # sorting by hash is a random shuffle
     ds = ds.sort(key="hash")
     if args.materialize:
         ds = ds.materialize()
-    num_rows = ds.count()
-    ds_indices = ray.data.range(num_rows).map_batches(
-        lambda x: x, batch_format="pyarrow"
-    )
-    ds = ds_indices.zip(ds)
+    counter = GlobalCounter.remote()
+    #ds = ds_indices.zip(ds)
     ds = ds.map_batches(
         map_write_wds,
         batch_size=wds_chunk_size,
         fn_kwargs={
             "batch_size": wds_chunk_size,
             "folder": args.output.strip("/"),
-            "total_count": num_rows,
+            "counter": counter
         },
     ).count()
     end_time = time.time()
