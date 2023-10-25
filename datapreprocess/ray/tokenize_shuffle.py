@@ -38,25 +38,25 @@ from io import BytesIO
 
 
 class SpecialTokens(Enum):
-    END_OF_TEXT = -1
-    PAD = -2
-    END_OF_DOCUMENT = -3
+    END_OF_TEXT = 0
+    PAD = -1
+    END_OF_DOCUMENT = -2
 
 
 class PadType(Enum):
     CIRCULAR = 0
     PAD_TOKEN = 1
-    
+
 
 def download_to_memory_with_progress(bucket_name, key):
-    s3 = boto3.client('s3')
+    s3 = boto3.client("s3")
 
     # Use the head_object call to get the total size of the object
     meta_data = s3.head_object(Bucket=bucket_name, Key=key)
-    total_size = int(meta_data.get('ContentLength', 0))
+    total_size = int(meta_data.get("ContentLength", 0))
 
     # Create a progress bar with tqdm
-    progress = tqdm(total=total_size, unit='B', unit_scale=True)
+    progress = tqdm(total=total_size, unit="B", unit_scale=True)
 
     # Callback to update the progress bar
     def progress_callback(bytes_transferred):
@@ -65,7 +65,7 @@ def download_to_memory_with_progress(bucket_name, key):
     # Use BytesIO to store the downloaded bytes in memory
     buffer = BytesIO()
     s3.download_fileobj(bucket_name, key, buffer, Callback=progress_callback)
-    
+
     progress.close()
 
     # Reset the buffer's position to the beginning
@@ -75,11 +75,10 @@ def download_to_memory_with_progress(bucket_name, key):
     return buffer.read()
 
 
-
 def parse_s3_path(s3_path):
     """
     Extract the bucket and key from an S3 path.
-    
+
     Args:
     - s3_path (str): The S3 path in the format "s3://bucket/key"
 
@@ -89,25 +88,27 @@ def parse_s3_path(s3_path):
     if not s3_path.startswith("s3://"):
         raise ValueError("Invalid S3 path format. Must start with 's3://'")
 
-    s3_parts = s3_path[5:].split('/', 1)
+    s3_parts = s3_path[5:].split("/", 1)
     bucket = s3_parts[0]
-    
+
     if len(s3_parts) > 1:
         key = s3_parts[1]
     else:
         key = ""
     return bucket, key
-    
-    
+
+
 def dl_parse_s3(data, creds=None):
     worker_id = ray.get_runtime_context().get_worker_id()
     if creds is not None:
-        client = boto3.client("s3",
+        client = boto3.client(
+            "s3",
             aws_access_key_id=creds["AWS_ACCESS_KEY_ID"],
             aws_secret_access_key=creds["AWS_SECRET_ACCESS_KEY"],
-            aws_session_token=creds["AWS_SESSION_TOKEN"])
+            aws_session_token=creds["AWS_SESSION_TOKEN"],
+        )
     else:
-        client = boto3.client('s3')
+        client = boto3.client("s3")
     out_dicts = []
     for path in data["path"]:
         bucket, key = parse_s3_path(path)
@@ -115,11 +116,8 @@ def dl_parse_s3(data, creds=None):
         jsons = [json.loads(x) for x in json_lines]
         out_dicts += jsons
     return pd.DataFrame(out_dicts)
-        
-        
-        
-        
-        
+
+
 def dist_tokenize(data, tokenizer, content_key):
     out_dicts = []
     for tokens in data[content_key]:
@@ -129,31 +127,38 @@ def dist_tokenize(data, tokenizer, content_key):
         out_dicts.append(out_dict)
     return pd.DataFrame(out_dicts)
 
+
 def cut_to_context(jsonl_batch, seqlen=1024, pad_type=PadType.CIRCULAR):
     tokens_list = jsonl_batch["tokens"]
     flat_token_list = [item for sublist in tokens_list for item in sublist]
     repartioned_lists = [
         flat_token_list[i : i + seqlen] for i in range(0, len(flat_token_list), seqlen)
     ]
-    end_len = len(repartioned_lists[-1]) 
+    end_len = len(repartioned_lists[-1])
     if len(repartioned_lists[-1]) < seqlen:
         if pad_type == PadType.CIRCULAR:
-            repartioned_lists[-1] = repartioned_lists[-1] + repartioned_lists[0][:(seqlen - end_len)]
+            repartioned_lists[-1] = (
+                repartioned_lists[-1] + repartioned_lists[0][: (seqlen - end_len)]
+            )
         else:
-            repartioned_lists[-1] = repartioned_lists[-1] + [SpecialTokens.PAD.value]*(seqlen - end_len)
+            repartioned_lists[-1] = repartioned_lists[-1] + [
+                SpecialTokens.PAD.value
+            ] * (seqlen - end_len)
     return {"tokens": repartioned_lists}
+
 
 def add_hash(item, column="tokens"):
     item["hash"] = hash(str(item[column]))
     return item
+
 
 def map_write_wds(batch, batch_size, folder, counter):
     # Calculate tar index based on the first id
 
     # Determine the number of leading zeros dynamically based on total_count
     tar_index = ray.get(counter.increment.remote())
-    
-    digits = 8  #default to 8 
+
+    digits = 8  # default to 8
     # Format tar index with the determined number of leading zeros
     tar_index_str = f"{tar_index:0{digits}}"
 
@@ -209,10 +214,11 @@ def load_tokenizer(tokenizer):
         return lambda x: enc(x).input_ids
     else:
         raise ValueError(f"Unknown Tokenizer: {tokenizer}")
-    
+
+
 def glob_files(path, suffix=".jsonl"):
     """
-    Glob files based on a given path and suffix. 
+    Glob files based on a given path and suffix.
     Supports both local and S3 paths.
 
     :param path: path to glob. Can be local or S3 (e.g., s3://bucket-name/path/)
@@ -221,18 +227,22 @@ def glob_files(path, suffix=".jsonl"):
     """
     if path.startswith("s3://"):
         # Use boto3 for S3 paths
-        s3 = boto3.client('s3')
-        bucket_name, prefix = path[5:].split('/', 1)
+        s3 = boto3.client("s3")
+        bucket_name, prefix = path[5:].split("/", 1)
 
         # Ensure the prefix ends with a '/'
-        if not prefix.endswith('/'):
-            prefix += '/'
+        if not prefix.endswith("/"):
+            prefix += "/"
 
         # List the objects in the bucket with the given prefix
-        paginator = s3.get_paginator('list_objects_v2')
+        paginator = s3.get_paginator("list_objects_v2")
         pages = paginator.paginate(Bucket=bucket_name, Prefix=prefix)
-        all_files = [f"s3://{bucket_name}/{obj['Key']}" for objects in pages for obj in objects.get("Contents",[])]
-        
+        all_files = [
+            f"s3://{bucket_name}/{obj['Key']}"
+            for objects in pages
+            for obj in objects.get("Contents", [])
+        ]
+
         # Filter out the files based on the suffix
         matching_files = [f for f in all_files if f.endswith(suffix)]
 
@@ -244,7 +254,6 @@ def glob_files(path, suffix=".jsonl"):
     return matching_files
 
 
-
 def get_filesystem(environment):
     """
     Create a pyarrow.fs.FileSystem based on provided AWS credentials.
@@ -253,12 +262,19 @@ def get_filesystem(environment):
     :return: pyarrow.fs.S3FileSystem
     """
     # Extract the AWS credentials from the environment dictionary
-    access_key = environment.get('AWS_ACCESS_KEY_ID')
-    secret_key = environment.get('AWS_SECRET_ACCESS_KEY')
-    session_token = environment.get('AWS_SESSION_TOKEN', None)  # Session token might be optional
+    access_key = environment.get("AWS_ACCESS_KEY_ID")
+    secret_key = environment.get("AWS_SECRET_ACCESS_KEY")
+    session_token = environment.get(
+        "AWS_SESSION_TOKEN", None
+    )  # Session token might be optional
 
     # Create and return the S3FileSystem
-    return fs.S3FileSystem(access_key=access_key, secret_key=secret_key, session_token=session_token, region="us-west-2")
+    return fs.S3FileSystem(
+        access_key=access_key,
+        secret_key=secret_key,
+        session_token=session_token,
+        region="us-west-2",
+    )
 
 
 @ray.remote
@@ -274,11 +290,10 @@ class GlobalCounter:
         return self.value
 
 
-
 def human_to_bytes(s):
     """
     Convert human-readable byte size strings to actual number of bytes.
-    
+
     Supports:
         B: bytes
         KB, kB, Kb, kB: kilobytes
@@ -290,36 +305,34 @@ def human_to_bytes(s):
     Example:
         human_to_bytes('5.2 GB') -> 5.2 * 1024^3
     """
-    
-    symbols = ('B', 'K', 'M', 'G', 'T', 'P')
-    letter = s[-2:].strip().upper() if s[-2:].strip().upper()[:-1] in symbols else s[-1:].upper()
-    number = float(s[:-len(letter)].strip())
-    
-    if letter == 'B':
+
+    symbols = ("B", "K", "M", "G", "T", "P")
+    letter = (
+        s[-2:].strip().upper()
+        if s[-2:].strip().upper()[:-1] in symbols
+        else s[-1:].upper()
+    )
+    number = float(s[: -len(letter)].strip())
+
+    if letter == "B":
         return int(number)
-    elif 'K' in letter:
+    elif "K" in letter:
         return int(number * 1024)
-    elif 'M' in letter:
+    elif "M" in letter:
         return int(number * 1024**2)
-    elif 'G' in letter:
+    elif "G" in letter:
         return int(number * 1024**3)
-    elif 'T' in letter:
+    elif "T" in letter:
         return int(number * 1024**4)
-    elif 'P' in letter:
+    elif "P" in letter:
         return int(number * 1024**5)
     else:
         raise ValueError(f"Unsupported format: {s}")
 
 
-
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--input",
-        help="input path",
-        type=str,
-        required=True
-    )
+    parser.add_argument("--input", help="input path", type=str, required=True)
     parser.add_argument(
         "--output",
         help="output path",
@@ -327,14 +340,14 @@ if __name__ == "__main__":
         required=True
         # e.g s3://dcnlp-data/rpj_tokenized_upsampled_eleutherai_deduplicated/
     )
-    parser.add_argument("--content_key", type=str, default='text')
+    parser.add_argument("--content_key", type=str, default="text")
     parser.add_argument(
         "--no_shuffle", help="do not dedup + random shuffle", action="store_true"
     )
     parser.add_argument("--seqlen", type=int, default=2048)
     parser.add_argument("--pad_type", type=str, default="circular")
     parser.add_argument("--tokenizer", type=str, default="EleutherAI/gpt-neox-20b")
-    parser.add_argument("--initial_batch_size", type=int, default=32768)
+    parser.add_argument("--initial_batch_size", type=int, default=2048)
     parser.add_argument("--wds_chunk_size", type=int, default=2048)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--per_node_parallelism", type=int, default=8)
@@ -342,14 +355,16 @@ if __name__ == "__main__":
     parser.add_argument("--materialize", action="store_true")
     parser.add_argument("--ray_address", type=str, default=None)
     parser.add_argument("--block_size", type=str, default="10MB")
-    parser.add_argument("--ray_spill_location", type=str, default="s3://dcnlp-hub/ray_spill")
+    parser.add_argument(
+        "--ray_spill_location", type=str, default="s3://dcnlp-hub/ray_spill"
+    )
 
     args = parser.parse_args()
     # configure remote spilling
-    creds = {k:v for k,v in os.environ.items() if k.startswith("AWS")}
+    creds = {k: v for k, v in os.environ.items() if k.startswith("AWS")}
     runtime_env = {"env_vars": creds}
     block_size = human_to_bytes(args.block_size)
-    
+
     if "AWS_ACCESS_KEY_ID" in creds:
         fs = get_filesystem(creds)
     else:
@@ -362,12 +377,12 @@ if __name__ == "__main__":
     # TODO  support multiple inputs
     input_paths = glob_files(args.input, suffix=".jsonl")
     if args.subset is not None:
-        input_paths = input_paths[:args.subset]
+        input_paths = input_paths[: args.subset]
     print(f"num files ={len(input_paths)}")
     num_files = len(input_paths)
     num_cores = os.cpu_count()
     output_path = args.output
-    seqlen = args.seqlen+1
+    seqlen = args.seqlen + 1
     cores_to_use = args.per_node_parallelism
     batch_size = args.initial_batch_size
     wds_chunk_size = args.wds_chunk_size
@@ -387,33 +402,48 @@ if __name__ == "__main__":
     tokenizer = load_tokenizer(args.tokenizer)
     logger.info(f"Total number of keys = {len(input_paths)}")
     df = pd.DataFrame(input_paths, columns=["path"])
-    ds = ray.data.from_pandas(pd.DataFrame(input_paths, columns=["path"])).repartition(num_files)
-    number_of_keys = ds.count()
-    ds = ds.map_batches(dl_parse_s3, batch_size=1, fn_kwargs={"creds": creds}, batch_format="pandas", num_cpus=num_cores)
-    ds = ds.repartition(num_nodes*cores_to_use)
-    ds = ds.map_batches(dist_tokenize, batch_size=batch_size, fn_kwargs={"tokenizer": tokenizer, "content_key": content_key}, batch_format="pandas", num_cpus=1)
+    ds = ray.data.from_pandas(pd.DataFrame(input_paths, columns=["path"])).repartition(
+        num_files
+    )
+    ds = ds.map_batches(
+        dl_parse_s3,
+        batch_size=1,
+        fn_kwargs={"creds": creds},
+        batch_format="pandas",
+        num_cpus=num_cores,
+    )
+    ds = ds.repartition(num_nodes * cores_to_use)
+    ds = ds.map_batches(
+        dist_tokenize,
+        batch_size=batch_size,
+        fn_kwargs={"tokenizer": tokenizer, "content_key": content_key},
+        batch_format="pandas",
+        num_cpus=1,
+    )
+    ds.count()
+    end_time = time.time()
+    duration = end_time - start_time
     ds = ds.map_batches(
         cut_to_context,
         batch_size=batch_size,
         fn_kwargs={"pad_type": pad_type, "seqlen": seqlen},
-        zero_copy_batch=True
+        batch_format="pandas",
     )
     ds = ds.map(add_hash)
-    ds.count()
     tokenize_context_end = time.time()
     # sorting by hash is a random shuffle
     ds = ds.sort(key="hash")
     if args.materialize:
         ds = ds.materialize()
     counter = GlobalCounter.remote()
-    #ds = ds_indices.zip(ds)
+    # ds = ds_indices.zip(ds)
     ds = ds.map_batches(
         map_write_wds,
         batch_size=wds_chunk_size,
         fn_kwargs={
             "batch_size": wds_chunk_size,
             "folder": args.output.strip("/"),
-            "counter": counter
+            "counter": counter,
         },
     ).count()
     end_time = time.time()
