@@ -8,12 +8,12 @@ from open_lm.main import random_seed
 from open_lm.model import create_model
 from open_lm.data import get_data
 from open_lm.scheduler import cosine_lr
-from tests.shared import MockArgs
+from tests.shared import MockTrainArgs
 
 
 def create_grad_acc_fixtures():
     # Setup data, optimizer, and other basic settings
-    args = MockArgs("open_lm_11m")
+    args = MockTrainArgs("open_lm_11m")
 
     # only want to look at one batch
     args.train_num_samples = args.batch_size

@@ -133,7 +133,9 @@ def load_optimizer(args, model, optimizer, scaler):
         if optimizer is not None:
             osd = checkpoint["optimizer"]
             if args.fsdp:
-                osd = FSDP.optim_state_dict_to_load(model=model, optim=optimizer, optim_state_dict=osd)
+                osd = FSDP.optim_state_dict_to_load(
+                    model=model, optim=optimizer, optim_state_dict=osd
+                )
             optimizer.load_state_dict(osd)
             logging.info(f"=> resuming optimizer")
         if scaler is not None and "scaler" in checkpoint:
@@ -601,7 +603,7 @@ def main(args):
                 del data["train"]
             args.train_data = train_data_string
             data["train"] = get_wds_dataset(
-                args, True, epoch, force_num_samples=num_samples
+                args, True, epoch=epoch, force_num_samples=num_samples
             )
         if args.distributed:
             dist.barrier()
