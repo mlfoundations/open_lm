@@ -3,7 +3,7 @@ import torch
 from tests.testing_utils import download_val_data
 
 
-class MockArgs:
+class MockTrainArgs:
     def __init__(self, model):
         data_path = download_val_data("shard_00000000.tar", "./tests/assets/")
 
@@ -52,3 +52,24 @@ class MockArgs:
         self.wandb = False
         self.fsdp = False
         self.fsdp_amp = False
+
+
+class MockDataArgs(object):
+    def __init__(self):
+        data_path = download_val_data("shard_00000000.tar", "./tests/assets/")
+
+        self.train_data = [
+            data_path,
+        ]
+        self.dataset_resampled = True
+        self.train_data_mix_weights = None
+        self.val_num_samples = 0
+        self.train_data_upsampling_factors = None
+        self.train_num_samples = 512
+        self.disable_buffer = True
+        self.seq_len = 2048
+        self.vocab_size = 50432
+        self.batch_size = 64
+        self.world_size = 1
+        self.workers = 2
+        self.dataset_metadata = None

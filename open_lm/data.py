@@ -36,34 +36,23 @@ from webdataset.tariterators import (
 from webdataset.mix import RandomMix
 
 
-def proc_token(x):
-    if x == "<|endoftext|>":
-        return 50256  # 50281
-    elif x == "<|pad|>":
-        return 50282
-    else:
-        return x
-
-
-def proc_token_neox(x):
+def proc_token(x, vocab_size):
     if type(x) is int:
-        return x
+        return x % vocab_size
+
+    # FIXME: currently assuming that if not an int 0 is an appropriate token.
+    # probably want to throw an error here instead. leaving as 0 for now for
+    # backward compatibility with make_2048.py tokenization script.
     return 0
 
 
-def preprocess_text(text):
-    return [proc_token(x) for x in ast.literal_eval(text.decode())]
+def preprocess_txt(text, vocab_size):
+    return [proc_token(x, vocab_size) for x in ast.literal_eval(text.decode())]
 
 
-def preprocess_json_text_neox(text):
+def preprocess_json(text, vocab_size):
     text = json.loads(text.decode())
-    text = [proc_token_neox(x) for x in text]
-    return text
-
-
-def preprocess_json_text_tiktoken(text):
-    text = json.loads(text.decode())
-    text = [proc_token(x) for x in text]
+    text = [proc_token(x, vocab_size) for x in text]
     return text
 
 
@@ -413,14 +402,11 @@ def get_wds_dataset(
             )
 
         if data_key == "json":
-            preprocess_json_text = (
-                preprocess_json_text_neox
-                if args.vocab_size == 50432
-                else preprocess_json_text_tiktoken
-            )
             pipeline.extend(
                 [
-                    wds.map_dict(json=preprocess_json_text),
+                    wds.map_dict(
+                        json=partial(preprocess_json, vocab_size=args.vocab_size)
+                    ),
                     wds.to_tuple("json"),
                     wds.select(partial(filter_lt_seqlen, args.seq_len)),
                     wds.batched(args.batch_size, partial=not is_train),
@@ -429,8 +415,11 @@ def get_wds_dataset(
         else:
             pipeline.extend(
                 [
-                    wds.map_dict(txt=preprocess_text),
+                    wds.map_dict(
+                        txt=partial(preprocess_txt, vocab_size=args.vocab_size)
+                    ),
                     wds.to_tuple("txt"),
+                    wds.select(partial(filter_lt_seqlen, args.seq_len)),
                     wds.batched(args.batch_size, partial=not is_train),
                 ]
             )
