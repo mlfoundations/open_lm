@@ -642,10 +642,6 @@ def main(args):
                 chosen_num_samples = None
                 samples_seen = samples_seen + args.train_num_samples
 
-            chosen_num_samples = num_samples_per_source if args.no_skip_tokens else None
-
-            samples_seen = samples_seen + sum(num_samples_per_source)
-
             data["train"] = get_wds_dataset(
                 args, True, epoch, force_num_samples = chosen_num_samples
             )
