@@ -145,14 +145,14 @@ def load_optimizer(args, model, optimizer, scaler):
 
 def load_data_chunks(args):
     checkpoint = pt_load(args.resume, map_location="cpu")
-    if "next_chunk" in checkpoint and "prev_chunk" in checkpoint and "samples_seen" in checkpoint:
-        return checkpoint["next_chunk"], checkpoint["prev_chunk"], checkpoint["samples_seen"]
+    if "next_chunk" in checkpoint and "samples_seen" in checkpoint:
+        return checkpoint["next_chunk"], checkpoint["samples_seen"]
     else:
         logging.info(f"=> WARNING: tried to resume a checkpoint without data chunk info. Assuming next_chunk = 0.")
-        return 0, -1, 0
+        return 0, 0
 
 
-def save_checkpoint(args, model, optimizer, scaler, completed_epoch, evaluation_loss, next_chunk=None, prev_chunk=None, samples_seen=None):
+def save_checkpoint(args, model, optimizer, scaler, completed_epoch, evaluation_loss, next_chunk=None, samples_seen=None):
     cpu_state, optim_state = None, None
     if args.logs and args.logs.lower() != "none" and args.fsdp:
         save_policy = FullStateDictConfig(offload_to_cpu=True, rank0_only=True)
@@ -169,9 +169,6 @@ def save_checkpoint(args, model, optimizer, scaler, completed_epoch, evaluation_
         }
         if next_chunk is not None:
             checkpoint_dict_model["next_chunk"] = next_chunk
-
-        if prev_chunk is not None:
-            checkpoint_dict_model["prev_chunk"] = prev_chunk
 
         if samples_seen is not None:
             checkpoint_dict_model["samples_seen"] = samples_seen
@@ -419,17 +416,13 @@ def main(args):
     # Add data chunk when resuming (only for dataset without resampling)
     if args.dataset_manifest is not None:
         next_chunk = 0
-        prev_chunk = -1
         samples_seen = 0
         if args.resume is not None and args.dataset_manifest is not None:
-            next_chunk, prev_chunk, samples_seen = load_data_chunks(args)
-            if (next_chunk <= prev_chunk) and args.end_when_exhausted:
-                raise RuntimeError("Loaded a checkpoint which has already exhausted the available shards. To resume training, disable --end-when-exhausted.")
+            next_chunk, samples_seen = load_data_chunks(args)
             if samples_seen >= args.train_num_samples * args.epochs and args.accurate_total_tokens:
                 raise RuntimeError("Loaded a checkpoint which has already seen the desired number of tokens.")
     else:
         next_chunk = None
-        prev_chunk = None
         samples_seen = None
 
     if args.distributed:
@@ -615,7 +608,6 @@ def main(args):
             assert (
                 not args.dataset_resampled
             ), "dataset_manifest and dataset_resampled are mutually exclusive"
-            prev_chunk = next_chunk
             train_data_string_per_source, num_samples_per_source, next_chunk = get_string_for_epoch(
                 args.train_num_samples, next_chunk, args.dataset_manifest, args.train_data_mix_weights, args.workers * args.world_size
             )
@@ -650,13 +642,6 @@ def main(args):
                 logging.warning("Model has seen the desired number of tokens. Running one final epoch.")
                 final_epoch = True
 
-            if next_chunk <= prev_chunk:
-                if args.end_when_exhausted:
-                    logging.warning("Shards have been exhausted. Running one final epoch.")
-                    final_epoch = True
-                else:
-                    logging.warning("Shards have been exhausted. Restarting from the beginning.")
-
         if args.distributed:
             dist.barrier()
 
@@ -689,7 +674,7 @@ def main(args):
         # 613 - 610 at halfway
         # Saving checkpoints.
         save_checkpoint(
-            args, model, optimizer, scaler, completed_epoch, evaluation_loss, next_chunk=next_chunk, prev_chunk=prev_chunk, samples_seen=samples_seen
+            args, model, optimizer, scaler, completed_epoch, evaluation_loss, next_chunk=next_chunk, samples_seen=samples_seen
         )
 
         if final_epoch:

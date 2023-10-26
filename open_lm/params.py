@@ -445,13 +445,7 @@ def parse_args(args):
         "--no-skip-tokens",
         action="store_true",
         default=False,
-        help="Use as many tokens from the data as possible. Requires --dataset-manifest and takes precedence over --train-num-samples."
-    )
-    parser.add_argument(
-        "--end-when-exhausted",
-        action="store_true",
-        default=False,
-        help="If true, then when the data is exhausted one final checkpoint will be performed, and training will end."
+        help="Use as many tokens from the data as possible. Requires --dataset-manifest and takes precedence over --train-num-samples. Using --accurate-total-tokens is recommended."
     )
     parser.add_argument(
         "--accurate-total-tokens",
