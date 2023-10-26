@@ -441,6 +441,24 @@ def parse_args(args):
         default=False,
         help="Use incorrect rotary embedding that is applied to the head dimension, which is default in xformers as of 09/01/23."
     )
+    parser.add_argument(
+        "--no-skip-tokens",
+        action="store_true",
+        default=False,
+        help="Use as many tokens from the data as possible. Requires --dataset-manifest and takes precedence over --train-num-samples."
+    )
+    parser.add_argument(
+        "--end-when-exhausted",
+        action="store_true",
+        default=False,
+        help="If true, then when the data is exhausted one final checkpoint will be performed, and training will end."
+    )
+    parser.add_argument(
+        "--accurate-total-tokens",
+        action="store_true",
+        default=False,
+        help="If true, will end training early if the desired token count is reached. Requires --no-skip-tokens."
+    )
     args = parser.parse_args(args)
 
     # If some params are not passed, we use the default values based on model name.

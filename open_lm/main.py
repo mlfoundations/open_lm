@@ -143,15 +143,16 @@ def load_optimizer(args, model, optimizer, scaler):
         logging.info(f"=> WARNING: not resuming optimizer.")
 
 
-def load_data_chunk(args):
+def load_data_chunks(args):
     checkpoint = pt_load(args.resume, map_location="cpu")
-    if "data_chunk" in checkpoint:
-        return checkpoint["data_chunk"]
+    if "next_chunk" in checkpoint and "prev_chunk" in checkpoint and "samples_seen" in checkpoint:
+        return checkpoint["next_chunk"], checkpoint["prev_chunk"], checkpoint["samples_seen"]
     else:
         logging.info(f"=> WARNING: tried to resume a checkpoint without data chunk info. Assuming next_chunk = 0.")
+        return 0, -1, 0
 
 
-def save_checkpoint(args, model, optimizer, scaler, completed_epoch, evaluation_loss, next_chunk=None):
+def save_checkpoint(args, model, optimizer, scaler, completed_epoch, evaluation_loss, next_chunk=None, prev_chunk=None, samples_seen=None):
     cpu_state, optim_state = None, None
     if args.logs and args.logs.lower() != "none" and args.fsdp:
         save_policy = FullStateDictConfig(offload_to_cpu=True, rank0_only=True)
@@ -167,7 +168,13 @@ def save_checkpoint(args, model, optimizer, scaler, completed_epoch, evaluation_
             "evaluation_loss": evaluation_loss,
         }
         if next_chunk is not None:
-            checkpoint_dict_model["data_chunk"] = next_chunk
+            checkpoint_dict_model["next_chunk"] = next_chunk
+
+        if prev_chunk is not None:
+            checkpoint_dict_model["prev_chunk"] = prev_chunk
+
+        if samples_seen is not None:
+            checkpoint_dict_model["samples_seen"] = samples_seen
 
         checkpoint_dict_opt = {
             "epoch": completed_epoch,
@@ -412,10 +419,18 @@ def main(args):
     # Add data chunk when resuming (only for dataset without resampling)
     if args.dataset_manifest is not None:
         next_chunk = 0
+        prev_chunk = -1
+        samples_seen = 0
         if args.resume is not None and args.dataset_manifest is not None:
-            next_chunk = load_data_chunk(args)
+            next_chunk, prev_chunk, samples_seen = load_data_chunks(args)
+            if (next_chunk <= prev_chunk) and args.end_when_exhausted:
+                raise RuntimeError("Loaded a checkpoint which has already exhausted the available shards. To resume training, disable --end-when-exhausted.")
+            if samples_seen >= args.train_num_samples * args.epochs and args.accurate_total_tokens:
+                raise RuntimeError("Loaded a checkpoint which has already seen the desired number of tokens.")
     else:
         next_chunk = None
+        prev_chunk = None
+        samples_seen = None
 
     if args.distributed:
         if args.fsdp:
@@ -595,10 +610,12 @@ def main(args):
         if is_master(args):
             logging.info(f"Start epoch {epoch}")
 
+        final_epoch = False
         if args.dataset_manifest is not None:
             assert (
                 not args.dataset_resampled
             ), "dataset_manifest and dataset_resampled are mutually exclusive"
+            prev_chunk = next_chunk
             train_data_string_per_source, num_samples_per_source, next_chunk = get_string_for_epoch(
                 args.train_num_samples, next_chunk, args.dataset_manifest, args.train_data_mix_weights, args.workers * args.world_size
             )
@@ -606,9 +623,44 @@ def main(args):
             if data["train"] is not None:
                 del data["train"]
             args.train_data = train_data_string_per_source
+
+
+            total_samples = args.epochs * args.train_num_samples
+            remaining_samples = total_samples - samples_seen
+            if args.no_skip_tokens:
+                if remaining_samples < sum(num_samples_per_source) and args.accurate_total_tokens:
+                    remaining_samples_per_source = [
+                        int(np.ceil(args.train_data_mix_weights[i] * remaining_samples / sum(args.train_data_mix_weights)))
+                        for i in range(len(args.train_data_mix_weights))
+                    ]
+                    chosen_num_samples = remaining_samples_per_source
+                    samples_seen = samples_seen + sum(chosen_num_samples)
+                else:
+                    chosen_num_samples = num_samples_per_source
+                    samples_seen = samples_seen + sum(chosen_num_samples)
+            else:
+                chosen_num_samples = None
+                samples_seen = samples_seen + args.train_num_samples
+
+            chosen_num_samples = num_samples_per_source if args.no_skip_tokens else None
+
+            samples_seen = samples_seen + sum(num_samples_per_source)
+
             data["train"] = get_wds_dataset(
-                args, True, epoch, force_num_samples=None
+                args, True, epoch, force_num_samples = chosen_num_samples
             )
+
+            if args.accurate_total_tokens and samples_seen >= args.epochs * args.train_num_samples:
+                logging.warning("Model has seen the desired number of tokens. Running one final epoch.")
+                final_epoch = True
+
+            if next_chunk <= prev_chunk:
+                if args.end_when_exhausted:
+                    logging.warning("Shards have been exhausted. Running one final epoch.")
+                    final_epoch = True
+                else:
+                    logging.warning("Shards have been exhausted. Restarting from the beginning.")
+
         if args.distributed:
             dist.barrier()
 
@@ -641,8 +693,12 @@ def main(args):
         # 613 - 610 at halfway
         # Saving checkpoints.
         save_checkpoint(
-            args, model, optimizer, scaler, completed_epoch, evaluation_loss, next_chunk=next_chunk
+            args, model, optimizer, scaler, completed_epoch, evaluation_loss, next_chunk=next_chunk, prev_chunk=prev_chunk, samples_seen=samples_seen
         )
+
+        if final_epoch:
+            logging.info("Ending training due to data exhaustion.")
+            break
 
     if args.wandb and is_master(args):
         wandb.finish()

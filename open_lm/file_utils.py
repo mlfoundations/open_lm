@@ -146,6 +146,8 @@ def source_exhausted(paths, shard_list_per_source):
 
 
 def get_string_for_epoch(num_samples, starting_chunk, paths, weights, min_shards_needed):
+    if weights is None:
+        weights = [1.0 / len(paths) for _ in range(len(paths))]
     needed_samples_per_source = [int(np.ceil(weights[i] * num_samples / sum(weights))) for i in range(len(weights))]
     shard_strings_per_source = []
     next_chunk = starting_chunk
