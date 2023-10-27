@@ -125,7 +125,7 @@ def train_one_epoch(
             for ii in range(args.accum_freq):
                 maybe_no_sync = nullcontext
                 # Don't sync gradients until the final batch for FSDP.
-                if isinstance(model, FSDP) and ii != args.accum_freq:
+                if isinstance(model, FSDP) and ii != args.accum_freq - 1:
                     maybe_no_sync = model.no_sync
                 with maybe_no_sync():
                     with autocast():

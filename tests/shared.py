@@ -53,6 +53,8 @@ class MockTrainArgs:
         self.fsdp = False
         self.fsdp_amp = False
         self.positional_embedding_type = "rotary"
+        self.dist_backend = "nccl"
+        self.dist_url = "env://"
 
 class MockDataArgs(object):
     def __init__(self):
