@@ -4,6 +4,7 @@ import logging
 import math
 import os
 import time
+from contextlib import nullcontext
 
 import numpy as np
 import torch
@@ -16,8 +17,8 @@ try:
 except ImportError:
     wandb = None
 
-from .distributed import is_master
-from .precision import get_autocast
+from open_lm.distributed import is_master
+from open_lm.precision import get_autocast
 
 
 class AverageMeter(object):
@@ -122,21 +123,26 @@ def train_one_epoch(
             inputs, targets = sample_chunk(texts, args.seq_len)
 
             for ii in range(args.accum_freq):
-                with autocast():
-                    inputs_ii = inputs[ii * per_batch : (ii + 1) * per_batch]
-                    if inputs_ii.shape[0] == 0:
-                        break
-                    targets_ii = targets[ii * per_batch : (ii + 1) * per_batch]
-                    out, _ = model(inputs_ii)
+                maybe_no_sync = nullcontext
+                # Don't sync gradients until the final batch for FSDP.
+                if isinstance(model, FSDP) and ii != args.accum_freq:
+                    maybe_no_sync = model.no_sync
+                with maybe_no_sync():
+                    with autocast():
+                        inputs_ii = inputs[ii * per_batch : (ii + 1) * per_batch]
+                        if inputs_ii.shape[0] == 0:
+                            break
+                        targets_ii = targets[ii * per_batch : (ii + 1) * per_batch]
+                        out, _ = model(inputs_ii)
 
-                    if args.log_logit_mean:
-                        logit_m.update(torch.mean(out).item())
+                        if args.log_logit_mean:
+                            logit_m.update(torch.mean(out).item())
 
-                    local_loss = (
-                        loss(out.reshape(-1, args.vocab_size), targets_ii.reshape(-1))
-                        * inputs_ii.shape[0] / inputs.shape[0]
-                    )
-                backward(local_loss, scaler)
+                        local_loss = (
+                            loss(out.reshape(-1, args.vocab_size), targets_ii.reshape(-1))
+                            * inputs_ii.shape[0] / inputs.shape[0]
+                        )
+                    backward(local_loss, scaler)
                 if ii == 0:
                     total_loss = local_loss
                 else:

@@ -52,7 +52,7 @@ class MockTrainArgs:
         self.wandb = False
         self.fsdp = False
         self.fsdp_amp = False
-
+        self.positional_embedding_type = "rotary"
 
 class MockDataArgs(object):
     def __init__(self):
