@@ -29,6 +29,7 @@ from torch.distributed.fsdp import (
 )
 from torch.distributed.fsdp.wrap import transformer_auto_wrap_policy
 
+from .data import proc_token
 from .model import Block
 from .losses import CrossEntropyLossWithZLoss
 
@@ -512,6 +513,10 @@ def main(args):
         tokenizer=None,
         skip_train=args.dataset_metadata is not None,
     )
+
+    if args.target_mask_left is not None:
+        # tokens handled with same modulo in dataloading
+        args.target_mask_left = proc_token(args.target_mask_left, args.vocab_size)
 
     if args.torchcompile:
         logging.info("Compiling model...")

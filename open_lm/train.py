@@ -54,16 +54,46 @@ def backward(total_loss, scaler):
         total_loss.backward()
 
 
-def sample_chunk(chunk, seq_len):
+def replace_before_tok(tensor, tok, excusive=False):
+    # NOTE: this implementation supports 0 or 1 instance of tok in a sequence.
+    #       if more than one instance appears, the last instace of tok is used.
+    #       if exclusive=True every instance of tok will be present in the output
+
+    tok_positions = tensor == tok
+
+    # construct cumulative mask for positions before (last) tok (if it appears)
+    cumsum_mask = tok_positions.flip(dims=[-1]).cumsum(dim=-1).flip(dims=[-1])
+
+    # create mask for positions before (last) tok in each row (batch)
+    tok_mask = cumsum_mask > 0
+
+    if excusive:
+        # retain tok in the output
+        tok_mask &= ~tok_positions
+
+    # replace elements to be masked with with -100 (pytorch default xent ignore value)
+    out = torch.clone(tensor)
+    out[tok_mask] = -100
+
+    return out
+
+
+def sample_chunk(chunk, seq_len, target_mask_left_tok):
     if chunk.shape[1] == seq_len + 1:
         start_idx = 0
     elif chunk.shape[1] > seq_len + 1:
         start_idx = torch.randint(0, chunk.shape[1] - seq_len + 1, (1,)).item()
     else:
-        raise Exception(f"Invalid sequence length: Sequence length {seq_len} > {chunk.shape[1]} Chunk size")
+        raise Exception(
+            f"Invalid sequence length: Sequence length {seq_len} > {chunk.shape[1]} Chunk size"
+        )
 
-    inputs = chunk[:, start_idx:start_idx+seq_len-1]
-    targets = chunk[:, start_idx+1:start_idx+seq_len]
+    inputs = chunk[:, start_idx : start_idx + seq_len - 1]
+    targets = chunk[:, start_idx + 1 : start_idx + seq_len]
+
+    if target_mask_left_tok is not None:
+        return inputs, replace_before_tok(targets, target_mask_left_tok)
+
     return inputs, targets
 
 
@@ -103,7 +133,9 @@ def train_one_epoch(
 
         if args.accum_freq == 1:
             with autocast():
-                inputs, targets = sample_chunk(texts, args.seq_len)
+                inputs, targets = sample_chunk(
+                    texts, args.seq_len, args.target_mask_left
+                )
                 out, _ = model(inputs)
 
                 if args.log_logit_mean:
@@ -120,7 +152,7 @@ def train_one_epoch(
             ), "Batch size must be divisible by accum_freq"
             per_batch = args.batch_size // args.accum_freq
 
-            inputs, targets = sample_chunk(texts, args.seq_len)
+            inputs, targets = sample_chunk(texts, args.seq_len, args.target_mask_left)
 
             for ii in range(args.accum_freq):
                 maybe_no_sync = nullcontext
@@ -139,8 +171,11 @@ def train_one_epoch(
                             logit_m.update(torch.mean(out).item())
 
                         local_loss = (
-                            loss(out.reshape(-1, args.vocab_size), targets_ii.reshape(-1))
-                            * inputs_ii.shape[0] / inputs.shape[0]
+                            loss(
+                                out.reshape(-1, args.vocab_size), targets_ii.reshape(-1)
+                            )
+                            * inputs_ii.shape[0]
+                            / inputs.shape[0]
                         )
                     backward(local_loss, scaler)
                 if ii == 0:
@@ -227,6 +262,7 @@ def train_one_epoch(
     # end for
     return True
 
+
 @torch.inference_mode()
 def evaluate(model, data, start_epoch, args, writer):
     """
@@ -258,7 +294,7 @@ def evaluate(model, data, start_epoch, args, writer):
         data_time_m.update(time.time() - end)
 
         with autocast():
-            inputs, targets = sample_chunk(texts, args.seq_len)
+            inputs, targets = sample_chunk(texts, args.seq_len, args.target_mask_left)
 
             out, _ = model(inputs)
             total_loss = loss(out.reshape(-1, args.vocab_size), targets.reshape(-1))

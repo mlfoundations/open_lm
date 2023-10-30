@@ -1,6 +1,6 @@
 import torch
 
-from tests.testing_utils import download_val_data
+from tests.utils import download_val_data
 
 
 class MockTrainArgs:
