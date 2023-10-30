@@ -54,25 +54,26 @@ def backward(total_loss, scaler):
         total_loss.backward()
 
 
-def replace_before_pad(tensor, pad_token, excusive=False):
-    # NOTE: this implementation supports 0 or 1 instance of pad_token in a sequence.
-    #       if more than one instance appears, the output will be masked until the
-    #       first instance of pad_token
+def replace_before_tok(tensor, tok, excusive=False):
+    # NOTE: this implementation supports 0 or 1 instance of tok in a sequence.
+    #       if more than one instance appears, the last instace of tok is used.
+    #       if exclusive=True every instance of tok will be present in the output
 
-    pad_positions = tensor == pad_token
+    tok_positions = tensor == tok
 
-    # construct cumulative mask for positions before pad_token if it appears
-    cumsum_mask = pad_positions.flip(dims=[-1]).cumsum(dim=-1).flip(dims=[-1])
+    # construct cumulative mask for positions before tok if it appears
+    cumsum_mask = tok_positions.flip(dims=[-1]).cumsum(dim=-1).flip(dims=[-1])
 
-    # create mask for positions before first pad_token in each row
-    pad_mask = cumsum_mask > 0
+    # create mask for positions before first tok in each row
+    tok_mask = cumsum_mask > 0
 
+    # inclusive or exclusive of the tok position
     if excusive:
-        pad_mask &= ~pad_positions
+        tok_mask &= ~tok_positions
 
     # replace elements at True positions with -100
     out = torch.clone(tensor)
-    out[pad_mask] = -100
+    out[tok_mask] = -100
 
     return out
 
@@ -91,7 +92,7 @@ def sample_chunk(chunk, seq_len, target_mask_left_tok):
     targets = chunk[:, start_idx + 1 : start_idx + seq_len]
 
     if target_mask_left_tok is not None:
-        return inputs, replace_before_pad(targets, target_mask_left_tok)
+        return inputs, replace_before_tok(targets, target_mask_left_tok)
 
     return inputs, targets
 
