@@ -47,7 +47,7 @@ def add_model_args(parser):
         "--ffn-type",
         choices=["swiglu", "gelu"],
         default="swiglu",
-        help="Type of feedforward layer to use. This might be overridden by the model config."
+        help="Type of feedforward layer to use. This might be overridden by the model config.",
     )
     parser.add_argument(
         "--qk-norm",
@@ -477,6 +477,13 @@ def parse_args(args):
         help="Replace the network linear layers from the bitsandbytes library. "
         "Allows int8 training/inference, etc.",
     )
+    parser.add_argument(
+        "--target-mask-left",
+        type=int,
+        default=None,
+        help="Mask the loss to the left of a specified token (including the specified token).",
+    )
+
     add_model_args(parser)
     args = parser.parse_args(args)
 
