@@ -1,12 +1,16 @@
+import io
+import json
 import logging
-import os
 import multiprocessing
+import os
 import subprocess
+import sys
 import time
+
 import fsspec
 import torch
 from tqdm import tqdm
-import sys
+
 
 def remote_sync_s3(local_dir, remote_dir):
     # skip epoch_latest which can change during sync.
@@ -14,7 +18,7 @@ def remote_sync_s3(local_dir, remote_dir):
     if result.returncode != 0:
         logging.error(f"Error: Failed to sync with S3 bucket {result.stderr.decode('utf-8')}")
         return False
-        
+
     logging.info(f"Successfully synced with S3 bucket")
     return True
 
@@ -67,13 +71,25 @@ def pt_save(pt_obj, file_path):
     with of as f:
         torch.save(pt_obj, file_path)
 
+
+def _pt_load_s3_cp(file_path, map_location=None):
+    cmd = f"aws s3 cp {file_path} -"
+    proc = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    stdout, stderr = proc.communicate()
+    if proc.returncode != 0:
+        raise Exception(f"Failed to fetch model from s3. stderr: {stderr.decode()}")
+    return torch.load(io.BytesIO(stdout), map_location=map_location)
+
+
 def pt_load(file_path, map_location=None):
     if file_path.startswith('s3'):
         logging.info('Loading remote checkpoint, which may take a bit.')
+        return _pt_load_s3_cp(file_path, map_location)
     of = fsspec.open(file_path, "rb")
     with of as f:
         out = torch.load(f, map_location=map_location)
     return out
+
 
 def check_exists(file_path):
     try:
@@ -82,9 +98,6 @@ def check_exists(file_path):
     except FileNotFoundError:
         return False
     return True
-
-import json
-import fsspec
 
 def get_metadata_file(path):
     of = fsspec.open(path, 'rb')
