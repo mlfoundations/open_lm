@@ -60,17 +60,17 @@ def replace_before_tok(tensor, tok, excusive=False):
 
     tok_positions = tensor == tok
 
-    # construct cumulative mask for positions before tok if it appears
+    # construct cumulative mask for positions before (last) tok (if it appears)
     cumsum_mask = tok_positions.flip(dims=[-1]).cumsum(dim=-1).flip(dims=[-1])
 
-    # create mask for positions before first tok in each row
+    # create mask for positions before (last) tok in each row (batch)
     tok_mask = cumsum_mask > 0
 
-    # inclusive or exclusive of the tok position
     if excusive:
+        # retain tok in the output
         tok_mask &= ~tok_positions
 
-    # replace elements at True positions with -100
+    # replace elements to be masked with with -100 (pytorch default xent ignore value)
     out = torch.clone(tensor)
     out[tok_mask] = -100
 
