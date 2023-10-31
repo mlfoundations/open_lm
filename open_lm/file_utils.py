@@ -169,7 +169,7 @@ def get_string_for_epoch(num_samples, starting_chunk, paths, weights, min_shards
     for i, source_path in enumerate(paths):
         shard_list_source = shard_list_per_source[i]
         num_samples_source = num_samples_per_source[i]
-        shard_root_source = '/'.join(source_path.split('/')[:-1]) + '/shard_'
+        shard_root_source = '/'.join(source_path.split('/')[:-1]) + '/'
         shard_string_source = shard_root_source + '{' + ",".join(shard_list_source) + '}.tar'
         if source_path.startswith('s3'):
             shard_string_source = f'pipe:aws s3 cp {shard_string_source} -'
