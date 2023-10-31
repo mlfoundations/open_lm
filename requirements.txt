@@ -13,3 +13,6 @@ zstandard
 llm-foundry
 pysimdjson
 cloudpathlib
+apache_beam
+datasets
+huggingface_hub

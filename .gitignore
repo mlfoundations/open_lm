@@ -134,5 +134,8 @@ wandb
 logs*
 *.out
 eval/*.jsonl
+eval/*.jsonl_tmp
 weights*
 out*
+tests/assets/*
+.vscode/
