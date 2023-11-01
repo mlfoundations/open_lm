@@ -11,14 +11,10 @@ from composer.metrics.nlp import (InContextLearningLMAccuracy,
                                   InContextLearningMultipleChoiceAccuracy,
                                   InContextLearningQAAccuracy,
                                   LanguageCrossEntropy, LanguagePerplexity)
-from omegaconf import DictConfig
-from open_lm.utils.transformers.config import OpenLMConfig
-from open_lm.utils.transformers.model import OpenLMforCausalLM
-from transformers import (PreTrainedTokenizer,
-                          PreTrainedTokenizerFast)
+from transformers import PreTrainedTokenizer, PreTrainedTokenizerFast
 
 from llmfoundry.models.hf.model_wrapper import HuggingFaceModelWithZLoss
-from llmfoundry.models.utils import init_empty_weights
+
 
 __all__ = ['ComposerOpenLMCausalLM', 'SimpleComposerOpenLMCausalLM']
 

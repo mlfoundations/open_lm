@@ -18,40 +18,47 @@ import pandas as pd
 import torch
 import webdataset as wds
 from PIL import Image
-from torch.utils.data import Dataset, DataLoader, SubsetRandomSampler, IterableDataset, get_worker_info
+from torch.utils.data import (
+    Dataset,
+    DataLoader,
+    SubsetRandomSampler,
+    IterableDataset,
+    get_worker_info,
+)
 from torch.utils.data.distributed import DistributedSampler
 from webdataset.filters import _shuffle
-from webdataset.tariterators import base_plus_ext, url_opener, tar_file_expander, valid_sample
+from webdataset.tariterators import (
+    base_plus_ext,
+    url_opener,
+    tar_file_expander,
+    valid_sample,
+)
 from webdataset.mix import RandomMix
-def proc_token(x):
-    if x == '<|endoftext|>':
-        return 50256 #50281
-    elif x == '<|pad|>':
-        return 50282
-    else:
-        return x
 
-def proc_token_neox(x):
+
+def proc_token(x, vocab_size):
     if type(x) is int:
-        return x
+        return x % vocab_size
+
+    # FIXME: currently assuming that if not an int 0 is an appropriate token.
+    # probably want to throw an error here instead. leaving as 0 for now for
+    # backward compatibility with make_2048.py tokenization script.
     return 0
-    
-def preprocess_text(text):
-    return [proc_token(x) for x in ast.literal_eval(text.decode())]
-    
-def preprocess_json_text_neox(text):
+
+
+def preprocess_txt(text, vocab_size):
+    return [proc_token(x, vocab_size) for x in ast.literal_eval(text.decode())]
+
+
+def preprocess_json(text, vocab_size):
     text = json.loads(text.decode())
-    text = [proc_token_neox(x) for x in text]
+    text = [proc_token(x, vocab_size) for x in text]
     return text
 
-def preprocess_json_text_tiktoken(text):
-    text = json.loads(text.decode())
-    text = [proc_token(x) for x in text]
-    return text
 
 class SharedEpoch:
     def __init__(self, epoch: int = 0):
-        self.shared_epoch = Value('i', epoch)
+        self.shared_epoch = Value("i", epoch)
 
     def set_value(self, epoch):
         self.shared_epoch.value = epoch
@@ -72,6 +79,7 @@ class DataInfo:
         if self.sampler is not None and isinstance(self.sampler, DistributedSampler):
             self.sampler.set_epoch(epoch)
 
+
 # class RandomMix_(RandomMix):
 #     def __init__(self, datasets, probs=None, longest=False):
 #         super().__init__(datasets, probs=probs, longest=longest)
@@ -91,9 +99,10 @@ def expand_urls(urls, weights=None):
         return expanded_urls, None
     if isinstance(urls, str):
         urllist = urls.split("::")
-        weights = weights.split('::')
-        assert len(weights) == len(urllist),\
-            f"Expected the number of data components ({len(urllist)}) and weights({len(weights)}) to match."
+        weights = weights.split("::")
+        assert len(weights) == len(
+            urllist
+        ), f"Expected the number of data components ({len(urllist)}) and weights({len(weights)}) to match."
         weights = [float(weight) for weight in weights]
         all_urls, all_weights = [], []
         for url, weight in zip(urllist, weights):
@@ -110,14 +119,14 @@ def expand_urls(urls, weights=None):
 def get_dataset_size(shards):
     shards_list, _ = expand_urls(shards)
     dir_path = os.path.dirname(shards_list[0])
-    sizes_filename = os.path.join(dir_path, 'sizes.json')
-    len_filename = os.path.join(dir_path, '__len__')
+    sizes_filename = os.path.join(dir_path, "sizes.json")
+    len_filename = os.path.join(dir_path, "__len__")
     if os.path.exists(sizes_filename):
-        sizes = json.load(open(sizes_filename, 'r'))
+        sizes = json.load(open(sizes_filename, "r"))
         total_size = sum([int(sizes[os.path.basename(shard)]) for shard in shards_list])
     elif os.path.exists(len_filename):
         # FIXME this used to be eval(open(...)) but that seemed rather unsafe
-        total_size = ast.literal_eval(open(len_filename, 'r').read())
+        total_size = ast.literal_eval(open(len_filename, "r").read())
     else:
         total_size = None  # num samples undefined
         # some common dataset sizes (at time of authors last download)
@@ -128,13 +137,16 @@ def get_dataset_size(shards):
     num_shards = len(shards_list)
     return total_size, num_shards
 
+
 def log_and_continue(exn):
     """Call in an exception handler to ignore any exception, issue a warning, and continue."""
-    logging.warning(f'Handling webdataset error ({repr(exn)}). Ignoring.')
+    logging.warning(f"Handling webdataset error ({repr(exn)}). Ignoring.")
     return True
 
 
-def group_by_keys_nothrow(data, keys=base_plus_ext, lcase=True, suffixes=None, handler=None):
+def group_by_keys_nothrow(
+    data, keys=base_plus_ext, lcase=True, suffixes=None, handler=None
+):
     """Return function over iterator that groups key, value pairs into samples.
 
     :param keys: function that splits the key into key and extension (base_plus_ext)
@@ -152,7 +164,11 @@ def group_by_keys_nothrow(data, keys=base_plus_ext, lcase=True, suffixes=None, h
         # FIXME webdataset version throws if suffix in current_sample, but we have a potential for
         #  this happening in the current LAION400m dataset if a tar ends with same prefix as the next
         #  begins, rare, but can happen since prefix aren't unique across tar files in that dataset
-        if current_sample is None or prefix != current_sample["__key__"] or suffix in current_sample:
+        if (
+            current_sample is None
+            or prefix != current_sample["__key__"]
+            or suffix in current_sample
+        ):
             if valid_sample(current_sample):
                 yield current_sample
             current_sample = dict(__key__=prefix, __url__=filesample["__url__"])
@@ -192,11 +208,11 @@ _SAMPLE_SHUFFLE_INITIAL = 4000
 
 class detshuffle2(wds.PipelineStage):
     def __init__(
-            self,
-            bufsize=1000,
-            initial=100,
-            seed=0,
-            epoch=-1,
+        self,
+        bufsize=1000,
+        initial=100,
+        seed=0,
+        epoch=-1,
     ):
         self.bufsize = bufsize
         self.initial = initial
@@ -243,8 +259,9 @@ class ResampledShards2(IterableDataset):
         self.urls = urls
         self.weights = weights
         if self.weights is not None:
-            assert len(self.urls) == len(self.weights),\
-                f"Number of urls {len(self.urls)} and weights {len(self.weights)} should match."
+            assert len(self.urls) == len(
+                self.weights
+            ), f"Number of urls {len(self.urls)} and weights {len(self.weights)} should match."
         assert isinstance(self.urls[0], str)
         self.nshards = nshards
         self.rng = random.Random()
@@ -273,99 +290,142 @@ class ResampledShards2(IterableDataset):
             if self.weights is None:
                 yield dict(url=self.rng.choice(self.urls))
             else:
-                yield dict(url=self.rng.choices(self.urls, weights=self.weights, k=1)[0])
+                yield dict(
+                    url=self.rng.choices(self.urls, weights=self.weights, k=1)[0]
+                )
 
 
 def filter_lt_seqlen(seq_len, x):
-    return len(x[0]) > seq_len
-    
+    valid_sample = len(x[0]) > seq_len
+    if not valid_sample:
+        logging.warning(
+            f"Sample sequence length: {len(x[0])} not larger than seq_len: {seq_len}. Skipping sample. NOTE: sample sequence length should be one greater than seq_len."
+        )
 
-def get_wds_dataset(args, is_train, epoch=0, floor=False, tokenizer=None, data_key="json", force_num_samples=-1):
+    return valid_sample
+
+
+def get_wds_dataset(
+    args,
+    is_train,
+    epoch=0,
+    floor=False,
+    tokenizer=None,
+    data_key="json",
+    force_num_samples=None,
+):
     input_shards_ = args.train_data if is_train else args.val_data
-    
+
     assert input_shards_ is not None
 
     datasets = []
     all_num_samples = []
     for ii, input_shards in enumerate(input_shards_):
-        resampled = getattr(args, 'dataset_resampled', False) and is_train
+        resampled = getattr(args, "dataset_resampled", False) and is_train
 
         num_shards = None
         if is_train:
             if args.train_num_samples is not None:
-                if force_num_samples > 0:
-                    num_samples = force_num_samples
+                if force_num_samples is not None and force_num_samples[ii] > 0:
+                    num_samples = force_num_samples[ii]
                 else:
                     if args.train_data_mix_weights is not None:
-                        num_samples = int(args.train_num_samples * args.train_data_mix_weights[ii])
+                        num_samples = int(
+                            args.train_num_samples * args.train_data_mix_weights[ii]
+                        )
                     else:
                         num_samples = args.train_num_samples // len(input_shards_)
             else:
                 num_samples, num_shards = get_dataset_size(input_shards)
                 if not num_samples:
                     raise RuntimeError(
-                        'Currently, the number of dataset samples must be specified for the training dataset. '
-                        'Please specify it via `--train-num-samples` if no dataset length info is present.')
+                        "Currently, the number of dataset samples must be specified for the training dataset. "
+                        "Please specify it via `--train-num-samples` if no dataset length info is present."
+                    )
         else:
             # Eval will just exhaust the iterator if the size is not specified.
-            num_samples = args.val_num_samples or 0 
+            num_samples = args.val_num_samples or 0
 
-        shared_epoch = SharedEpoch(epoch=epoch)  # create a shared epoch store to sync epoch to dataloader worker proc
-        
+        shared_epoch = SharedEpoch(
+            epoch=epoch
+        )  # create a shared epoch store to sync epoch to dataloader worker proc
+
         if resampled:
-            pipeline = [ResampledShards2(
-                input_shards,
-                weights=None,
-                deterministic=True,
-                epoch=shared_epoch,
-            )]
+            pipeline = [
+                ResampledShards2(
+                    input_shards,
+                    weights=None,
+                    deterministic=True,
+                    epoch=shared_epoch,
+                )
+            ]
         else:
-            assert args.train_data_upsampling_factors is None,\
-                "--train_data_upsampling_factors is only supported when sampling with replacement (with --dataset-resampled)."
+            assert (
+                args.train_data_upsampling_factors is None
+            ), "--train_data_upsampling_factors is only supported when sampling with replacement (with --dataset-resampled)."
             pipeline = [wds.SimpleShardList(input_shards)]
 
         # at this point we have an iterator over all the shards
         if is_train:
             if not resampled:
-                pipeline.extend([
-                    detshuffle2(
-                        bufsize=0 if args.disable_buffer else _SHARD_SHUFFLE_SIZE,
+                pipeline.extend(
+                    [
+                        detshuffle2(
+                            bufsize=0 if args.disable_buffer else _SHARD_SHUFFLE_SIZE,
+                            initial=0
+                            if args.disable_buffer
+                            else _SHARD_SHUFFLE_INITIAL,
+                            seed=args.seed,
+                            epoch=shared_epoch,
+                        ),
+                        wds.split_by_node,
+                        wds.split_by_worker,
+                    ]
+                )
+            pipeline.extend(
+                [
+                    # at this point, we have an iterator over the shards assigned to each worker at each node
+                    tarfile_to_samples_nothrow,  # wds.tarfile_to_samples(handler=log_and_continue),
+                    wds.shuffle(
+                        bufsize=0 if args.disable_buffer else _SAMPLE_SHUFFLE_SIZE,
                         initial=0 if args.disable_buffer else _SHARD_SHUFFLE_INITIAL,
-                        seed=args.seed,
-                        epoch=shared_epoch,
+                        rng=random.Random(args.seed + shared_epoch.get_value())
+                        if args.seed is not None
+                        else None,
                     ),
-                    wds.split_by_node,
+                ]
+            )
+        else:
+            pipeline.extend(
+                [
                     wds.split_by_worker,
-                ])
-            pipeline.extend([
-                # at this point, we have an iterator over the shards assigned to each worker at each node
-                tarfile_to_samples_nothrow,  # wds.tarfile_to_samples(handler=log_and_continue),
-                wds.shuffle(
-                    bufsize=0 if args.disable_buffer else _SAMPLE_SHUFFLE_SIZE,
-                    initial=0 if args.disable_buffer else _SHARD_SHUFFLE_INITIAL,
-                ),
-            ])
-        else:
-            pipeline.extend([
-                wds.split_by_worker,
-                # at this point, we have an iterator over the shards assigned to each worker
-                wds.tarfile_to_samples(handler=log_and_continue),
-            ])
-        
+                    # at this point, we have an iterator over the shards assigned to each worker
+                    wds.tarfile_to_samples(handler=log_and_continue),
+                ]
+            )
+
         if data_key == "json":
-            preprocess_json_text = preprocess_json_text_neox if args.vocab_size == 50432 else preprocess_json_text_tiktoken
-            pipeline.extend([
-                wds.map_dict(json=preprocess_json_text),
-                wds.to_tuple("json"),
-                wds.select(partial(filter_lt_seqlen, args.seq_len)),
-                wds.batched(args.batch_size, partial=not is_train)
-            ])
+            pipeline.extend(
+                [
+                    wds.map_dict(
+                        json=partial(preprocess_json, vocab_size=args.vocab_size)
+                    ),
+                    wds.to_tuple("json"),
+                    wds.select(partial(filter_lt_seqlen, args.seq_len)),
+                    wds.batched(args.batch_size, partial=not is_train),
+                ]
+            )
         else:
-            pipeline.extend([
-                wds.map_dict(txt=preprocess_text),
-                wds.to_tuple("txt"),
-                wds.batched(args.batch_size, partial=not is_train)
-            ])
+            pipeline.extend(
+                [
+                    wds.map_dict(
+                        txt=partial(preprocess_txt, vocab_size=args.vocab_size)
+                    ),
+                    wds.to_tuple("txt"),
+                    wds.select(partial(filter_lt_seqlen, args.seq_len)),
+                    wds.batched(args.batch_size, partial=not is_train),
+                ]
+            )
 
         dataset = wds.DataPipeline(*pipeline)
         datasets.append(dataset)
@@ -376,14 +436,20 @@ def get_wds_dataset(args, is_train, epoch=0, floor=False, tokenizer=None, data_k
         dataset = RandomMix(datasets, probs=args.train_data_mix_weights, longest=True)
     else:
         pass
-        #dataset = datasets[0]
+        # dataset = datasets[0]
     if is_train:
         if not resampled:
             num_shards = num_shards or len(expand_urls(input_shards)[0])
             if num_shards < args.workers * args.world_size:
-                print('Please increase --train-num-samples or decrease workers or world size')
-                print(f'num_shards: {num_shards}, workers: {args.workers}, world_size: {args.world_size}')
-            assert num_shards >= args.workers * args.world_size, 'number of shards must be >= total workers'
+                print(
+                    "Please increase --train-num-samples or decrease workers or world size"
+                )
+                print(
+                    f"num_shards: {num_shards}, workers: {args.workers}, world_size: {args.world_size}"
+                )
+            assert (
+                num_shards >= args.workers * args.world_size
+            ), "number of shards must be >= total workers"
         # roll over and repeat a few samples to get same number of full batches on each node
         round_fn = math.floor if floor else math.ceil
         global_batch_size = args.batch_size * args.world_size
@@ -392,11 +458,15 @@ def get_wds_dataset(args, is_train, epoch=0, floor=False, tokenizer=None, data_k
         for ii in range(len(datasets)):
             num_batches = round_fn(all_num_samples[ii] / global_batch_size)
             num_workers = max(1, args.workers)
-            num_worker_batches = round_fn(num_batches / num_workers)  # per dataloader worker
+            num_worker_batches = round_fn(
+                num_batches / num_workers
+            )  # per dataloader worker
             num_batches = num_worker_batches * num_workers
             num_samples = num_batches * global_batch_size
             # TODO: what is the effect of setting this?
-            datasets[ii] = datasets[ii].with_epoch(num_worker_batches)  # each worker is iterating over this
+            datasets[ii] = datasets[ii].with_epoch(
+                num_worker_batches
+            )  # each worker is iterating over this
 
             total_num_batches += num_batches
             total_num_samples += num_samples
@@ -406,13 +476,13 @@ def get_wds_dataset(args, is_train, epoch=0, floor=False, tokenizer=None, data_k
         total_num_batches = num_batches
         total_num_samples = num_samples
 
-    print('persistent workers:', args.dataset_metadata is None)
+    print("persistent workers:", args.dataset_manifest is None)
     dataloader = wds.WebLoader(
         dataset,
         batch_size=None,
         shuffle=False,
         num_workers=args.workers,
-        persistent_workers=args.dataset_metadata is None,
+        persistent_workers=args.dataset_manifest is None,
     )
 
     # FIXME not clear which approach is better, with_epoch before vs after dataloader?
@@ -435,8 +505,10 @@ def get_wds_dataset(args, is_train, epoch=0, floor=False, tokenizer=None, data_k
 
     return DataInfo(dataloader=dataloader, shared_epoch=shared_epoch)
 
+
 def get_dataset_fn(data_path, dataset_type):
     return get_wds_dataset
+
 
 def get_data(args, epoch=0, tokenizer=None, skip_train=False):
     data = {}
@@ -446,10 +518,16 @@ def get_data(args, epoch=0, tokenizer=None, skip_train=False):
     else:
         if args.train_data or args.dataset_type == "synthetic":
             data["train"] = get_dataset_fn(args.train_data, args.dataset_type)(
-                args, is_train=True, epoch=epoch, tokenizer=tokenizer, data_key=args.data_key)
-            
+                args,
+                is_train=True,
+                epoch=epoch,
+                tokenizer=tokenizer,
+                data_key=args.data_key,
+            )
+
     if args.val_data:
         data["val"] = get_dataset_fn(args.val_data, args.dataset_type)(
-            args, is_train=False, tokenizer=tokenizer, data_key=args.data_key)
+            args, is_train=False, tokenizer=tokenizer, data_key=args.data_key
+        )
 
     return data
