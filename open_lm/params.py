@@ -272,6 +272,24 @@ def parse_args(args):
         help="Name of the model_config to use. Can also pass a custom json config.",
     )
     parser.add_argument(
+        "--hf-model",
+        type=str,
+        default=None,
+        help="Huggingface model/tokenizer name for AutoModelForCausalLM.",
+    )
+    parser.add_argument(
+        "--hf-seq-len",
+        type=int,
+        default=None,
+        help="Sequence length for use with a --hf-model.",
+    )
+    parser.add_argument(
+        "--hf-fsdp-block",
+        type=str,
+        default=None,
+        help="transformer_layer_cls name in a --hf-model used for fsdp's transformer_auto_wrap_policy.",
+    )
+    parser.add_argument(
         "--pretrained",
         default=None,
         type=str,

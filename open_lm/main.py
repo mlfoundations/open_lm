@@ -44,6 +44,7 @@ except ImportError:
     tensorboard = None
 
 from open_lm.model import create_model
+from open_lm.utils.transformers.hf_wrapper import create_wrapped_hf_model
 from .data import get_data, get_wds_dataset
 from .distributed import is_master, init_distributed_device, broadcast_object
 from .logger import setup_logging
@@ -234,14 +235,27 @@ def main(args):
     # fully initialize distributed device environment
     device = init_distributed_device(args)
 
+    if args.hf_model is not None and args.hf_seq_len is None:
+        print(
+            "If passing --hf-model, must also pass --hf-seq-len to be used for training/fine-tuning."
+        )
+        return -1
+
+    if args.hf_model is not None and args.fsdp and args.hf_fsdp_block is None:
+        print("If passing --hf-model and --fsdp, must also pass --hf-fspd-block.")
+        return -1
+
     # get the name of the experiments
     if args.name is None:
         # sanitize model name for filesystem / uri use, easier if we don't use / in name as a rule?
         model_name_safe = None
-        if Path(args.model).is_file():
-            model_name_safe = Path(args.model).stem.replace("/", "-")
+        if args.hf_model is not None:
+            model_name_safe = args.hf_model.replace("/", "-")
         else:
-            model_name_safe = args.model.replace("/", "-")
+            if Path(args.model).is_file():
+                model_name_safe = Path(args.model).stem.replace("/", "-")
+            else:
+                model_name_safe = args.model.replace("/", "-")
 
         date_str = datetime.now().strftime("%Y_%m_%d-%H_%M_%S")
         if args.distributed:
@@ -366,7 +380,13 @@ def main(args):
         logging.info(f"Running with a single process. Device {args.device}.")
 
     random_seed(args.seed, 0)
-    model = create_model(args)
+
+    model = None
+    if args.hf_model is not None:
+        model = create_wrapped_hf_model(args)
+    else:
+        model = create_model(args)
+
     args.vocab_size = model.vocab_size
     args.seq_len = model.seq_len
     if args.train_num_samples is not None:
@@ -450,12 +470,31 @@ def main(args):
 
     if args.distributed:
         if args.fsdp:
+            transformer_layer_cls = None
+
+            if args.hf_model is not None:
+                # retrive the user specified block class for fsdp
+                for _, target_cls in model.named_modules():
+                    if args.hf_fsdp_block in type(target_cls).__name__:
+                        transformer_layer_cls = {
+                            type(target_cls),
+                        }
+                        break
+
+                if transformer_layer_cls is None:
+                    print(
+                        f"--hf-fsdp-block {args.hf_fsdp_block} not found in --hf-model {args.hf_model}"
+                    )
+                    return -1
+
+            else:
+                transformer_layer_cls = {
+                    Block,
+                }
             # from https://pytorch.org/blog/efficient-large-scale-training-with-pytorch/
             transformer_auto_wrapper_policy = functools.partial(
                 transformer_auto_wrap_policy,
-                transformer_layer_cls={
-                    Block,
-                },
+                transformer_layer_cls=transformer_layer_cls,
             )
             # tries to follow gopher...
             mp_policy = None
@@ -620,7 +659,7 @@ def main(args):
         metrics = evaluate(model, data, start_epoch, args, writer)
         metrics["checkpoint_path"] = args.resume
         metrics["val_data"] = args.val_data
-        metrics["model"] = args.model
+        metrics["model"] = args.hf_model if args.hf_model else args.model
 
         if is_master(args):
             with open(os.path.join(checkpoint_root, "results.jsonl"), "a+") as f:
