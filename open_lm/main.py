@@ -687,7 +687,7 @@ def main(args):
                 samples_seen = samples_seen + args.train_num_samples
 
             data["train"] = get_wds_dataset(
-                args, True, epoch, force_num_samples=chosen_num_samples
+                args, True, epoch, force_num_samples=chosen_num_samples, data_key=args.data_key,
             )
 
             if (
