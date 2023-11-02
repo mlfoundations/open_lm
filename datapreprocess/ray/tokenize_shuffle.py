@@ -8,6 +8,7 @@ import resource
 import tarfile
 import time
 import traceback
+import simdjson
 from enum import Enum
 from io import BytesIO
 from typing import List
@@ -35,6 +36,8 @@ import pyarrow.json
 
 from tqdm import tqdm
 from io import BytesIO
+
+from Path
 
 
 class SpecialTokens(Enum):
@@ -176,7 +179,13 @@ def map_write_wds(batch, batch_size, folder, counter):
 
     bio.seek(0)
     write_to_location(folder, tar_name, bio)
-    return batch
+
+    return_dict = {
+        "shard": tar_name.split(".")[0],
+        "num_chunks": len(batch["tokens"])
+    }
+
+    return return_dict
 
 
 def write_to_location(folder, tar_name, bio):
@@ -341,6 +350,7 @@ if __name__ == "__main__":
         # e.g s3://dcnlp-data/rpj_tokenized_upsampled_eleutherai_deduplicated/
     )
     parser.add_argument("--content_key", type=str, default="text")
+    parser.add_argument("--input_file_suffix", type=str, default=".jsonl")
     parser.add_argument(
         "--no_shuffle", help="do not dedup + random shuffle", action="store_true"
     )
@@ -375,7 +385,7 @@ if __name__ == "__main__":
         ray.init(args.ray_address, runtime_env=runtime_env)
     num_nodes = len(ray.nodes())
     # TODO  support multiple inputs
-    input_paths = glob_files(args.input, suffix=".jsonl")
+    input_paths = glob_files(args.input, suffix=args.input_file_suffix)
     if args.subset is not None:
         input_paths = input_paths[: args.subset]
     print(f"num files ={len(input_paths)}")
@@ -445,7 +455,17 @@ if __name__ == "__main__":
             "folder": args.output.strip("/"),
             "counter": counter,
         },
-    ).count()
+    )
+    
+    # Sort by shard name
+    ds = ds.repartition(1)
+    ds = ds.sort(key="shard")
+    ds.write_json(
+        args.output.strip("/"),
+        filesystem = fs,
+        block_path_provider = lambda *args, **kw: "manifest.jsonl"
+    )
+
     end_time = time.time()
     duration = end_time - start_time
     print("Tokenize + Shuffle script Finished in", duration)
