@@ -126,6 +126,9 @@ def dl_parse_s3(data, dataset_type='jsonl', content_key="text", creds=None):
                             if fileobj:  # Ensure fileobj is not None
                                 if content_key == "txt":
                                     content = fileobj.read().decode("utf-8")
+                                elif "json" in content_key:
+                                    json_dict, json_key = json.load(fileobj), content_key.split(":")[1]
+                                    content = json_dict[json_key]
                                 elif content_key == "npy":
                                     content = np.load(io.BytesIO(fileobj.read()), allow_pickle=True)
                                 else:
@@ -366,13 +369,13 @@ if __name__ == "__main__":
         required=True
         # e.g s3://dcnlp-data/rpj_tokenized_upsampled_eleutherai_deduplicated/
     )
-    parser.add_argument("--content_key", type=str, default="text")
     parser.add_argument(
         "--no_shuffle", help="do not dedup + random shuffle", action="store_true"
     )
     parser.add_argument("--seqlen", type=int, default=2048)
     parser.add_argument("--pad_type", type=str, default="circular")
-    parser.add_argument("--dataset_type", type=str, default="jsonl")
+    parser.add_argument("--dataset_type", help="jsonl or tar", type=str, default="jsonl")
+    parser.add_argument("--content_key", type=str, default="text")
     parser.add_argument("--tokenizer", type=str, default="EleutherAI/gpt-neox-20b")
     parser.add_argument("--initial_batch_size", type=int, default=2048)
     parser.add_argument("--wds_chunk_size", type=int, default=2048)
