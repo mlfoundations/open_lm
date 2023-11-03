@@ -118,18 +118,19 @@ def dl_parse_s3(data, dataset_type='jsonl', content_key="text", creds=None):
         if dataset_type == "jsonl":
             samples = [json.loads(x) for x in buff.decode().splitlines()]
         elif dataset_type == "tar":
+            content_ext = content_key.split(":")[0]  # in case of json
             with tarfile.open(fileobj=BytesIO(buff), mode='r') as tar:
                 samples = []
                 for member in tar.getmembers():
-                    if member.isfile() and member.name.endswith(f".{content_key}"):
+                    if member.isfile() and member.name.endswith(f".{content_ext}"):
                         with tar.extractfile(member) as fileobj:
                             if fileobj:  # Ensure fileobj is not None
-                                if content_key == "txt":
+                                if content_ext == "txt":
                                     content = fileobj.read().decode("utf-8")
-                                elif "json" in content_key:
+                                elif content_ext == "json":
                                     json_dict, json_key = json.load(fileobj), content_key.split(":")[1]
                                     content = json_dict[json_key]
-                                elif content_key == "npy":
+                                elif content_ext == "npy":
                                     content = np.load(io.BytesIO(fileobj.read()), allow_pickle=True)
                                 else:
                                     raise ValueError(f"Unsupported content key extension: {content_key}")
