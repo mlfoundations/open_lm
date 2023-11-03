@@ -129,7 +129,7 @@ def dl_parse_s3(data, dataset_type='jsonl', content_key="text", creds=None):
                             if fileobj:  # Ensure fileobj is not None
                                 if content_key == "txt":
                                     content = fileobj.read().decode("utf-8")
-                                elif content_key == "json":
+                                elif content_key == "json": # TODO: not sure this makes sense
                                     content = json.load(fileobj)
                                 elif content_key == "npy":
                                     content = np.load(io.BytesIO(fileobj.read()), allow_pickle=True)
@@ -147,15 +147,19 @@ def dl_parse_s3(data, dataset_type='jsonl', content_key="text", creds=None):
 def dist_tokenize(data, tokenizer, content_key):
     out_dicts = []
     for tokens in data[content_key]:
-        tokens = tokenizer(tokens) + [SpecialTokens.END_OF_TEXT.value]
+        if isinstance(tokens, str):
+            tokens = tokenizer(tokens) + [SpecialTokens.END_OF_TEXT.value]
+        elif isinstance(tokens, np.ndarray):
+            # NOTE: if you need to do some specific special token ops, here is the place
+            tokens = tokens.reshape(-1).tolist() + [SpecialTokens.END_OF_TEXT.value]
         out_dict = {}
         out_dict["tokens"] = tokens
         out_dicts.append(out_dict)
     return pd.DataFrame(out_dicts)
 
 
-def cut_to_context(jsonl_batch, seqlen=1024, pad_type=PadType.CIRCULAR):
-    tokens_list = jsonl_batch["tokens"]
+def cut_to_context(batch, seqlen=1024, pad_type=PadType.CIRCULAR):
+    tokens_list = batch["tokens"]
     flat_token_list = [item for sublist in tokens_list for item in sublist]
     repartioned_lists = [
         flat_token_list[i : i + seqlen] for i in range(0, len(flat_token_list), seqlen)
