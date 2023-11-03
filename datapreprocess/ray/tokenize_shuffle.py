@@ -129,8 +129,6 @@ def dl_parse_s3(data, dataset_type='jsonl', content_key="text", creds=None):
                             if fileobj:  # Ensure fileobj is not None
                                 if content_key == "txt":
                                     content = fileobj.read().decode("utf-8")
-                                elif content_key == "json": # TODO: not sure this makes sense
-                                    content = json.load(fileobj)
                                 elif content_key == "npy":
                                     content = np.load(io.BytesIO(fileobj.read()), allow_pickle=True)
                                 else:
