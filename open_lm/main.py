@@ -678,6 +678,10 @@ def main(args):
                         for i in range(len(args.train_data_mix_weights))
                     ]
                     chosen_num_samples = remaining_samples_per_source
+                    logging.info(
+                        "Model has seen the desired number of tokens. Running one final epoch."
+                    )
+                    final_epoch = True
                 else:
                     chosen_num_samples = num_samples_per_source
             else:
@@ -685,16 +689,7 @@ def main(args):
 
             data["train"] = get_wds_dataset(
                 args, True, epoch, force_num_samples=chosen_num_samples, data_key=args.data_key,
-            )
-
-            if (
-                args.accurate_total_tokens
-                and samples_seen >= args.epochs * args.train_num_samples
-            ):
-                logging.warning(
-                    "Model has seen the desired number of tokens. Running one final epoch."
-                )
-                final_epoch = True
+            )                
 
         try:
             prev_step = int(optimizer.state_dict()["state"][0]["step"].item())
