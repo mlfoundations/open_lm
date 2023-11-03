@@ -47,7 +47,7 @@ def add_model_args(parser):
         "--ffn-type",
         choices=["swiglu", "gelu"],
         default="swiglu",
-        help="Type of feedforward layer to use. This might be overridden by the model config."
+        help="Type of feedforward layer to use. This might be overridden by the model config.",
     )
     parser.add_argument(
         "--qk-norm",
@@ -130,9 +130,11 @@ def parse_args(args):
         help="Whether to use sampling with replacement for webdataset shard selection.",
     )
     parser.add_argument(
-        "--dataset-metadata",
+        "--dataset-manifest",
+        type=str,
+        nargs="+",
         default=None,
-        help="Uses metadata to construct a train set.",
+        help="Uses manifest to construct a train set.",
     )
     parser.add_argument(
         "--disable-buffer",
@@ -477,7 +479,27 @@ def parse_args(args):
         help="Replace the network linear layers from the bitsandbytes library. "
         "Allows int8 training/inference, etc.",
     )
+    parser.add_argument(
+        "--target-mask-left",
+        type=int,
+        default=None,
+        help="Mask the loss to the left of a specified token (including the specified token).",
+    )
+    parser.add_argument(
+        "--no-skip-tokens",
+        action="store_true",
+        default=False,
+        help="Use as many tokens from the data as possible. Requires --dataset-manifest and takes precedence over --train-num-samples. Using --accurate-total-tokens is recommended.",
+    )
+    parser.add_argument(
+        "--accurate-total-tokens",
+        action="store_true",
+        default=False,
+        help="If true, will end training early if the desired token count is reached. Requires --no-skip-tokens.",
+    )
+
     add_model_args(parser)
+
     args = parser.parse_args(args)
 
     # If some params are not passed, we use the default values based on model name.

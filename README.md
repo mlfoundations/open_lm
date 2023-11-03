@@ -2,7 +2,7 @@
 
 ![](/plots/logo.png)
 
-OpenLM is a minimal but performative language modeling (LM) repository, aimed to facilitate research on medium sized LMs. We have verified the performance of OpenLM up to 7B parameters and 256 GPUs, with larger scales planned.
+OpenLM is a minimal but performative language modeling (LM) repository, aimed to facilitate research on medium sized LMs. We have verified the performance of OpenLM up to 7B parameters and 256 GPUs.
 In contrast with other repositories such as Megatron, we depend only on PyTorch and Triton (via xformers) for our core modeling code.
 
 # Contents
@@ -104,6 +104,37 @@ An example training run can be called as follows:
  --logs path/to/logging/dir/
 ```
 Checkpoints and final model weights will be saved to the specified logs directory.
+
+During training, the above command will pick shards to train on via sampling with replacement. Training can also be done by picking shards via sampling without replacement. To do this, the input dataset(s) must first be preprocessed using the following command:
+```
+python -m open_lm.utils.make_wds_manifest --data-dir /preproc_data/
+```
+This will create a file called ```manifest.jsonl``` under ```/preproc_data```. Training can then be done by sampling wihout replacement via the following example commands:
+```
+>>> export CUDA_VISIBLE_DEVICES=0,1,2,3
+>>> torchrun --nproc-per-node 4 -m open_lm.main   \
+ --model open_lm_3b \
+ --dataset-manifest /preproc_data/manifest.jsonl \
+ --train-num-samples 1000000000 \
+ --workers 8 \
+ --precision amp_bfloat16 \
+ --batch-size 8 \
+ --grad-checkpointing \
+ --log-every-n-steps 100 \
+ --grad-clip-norm 1 \
+ --data-key txt \
+ --lr 3e-4 \
+ --fsdp --fsdp-amp \
+ --warmup 2000 \
+ --wd 0.1 \
+ --beta2 0.95 \
+ --epochs 100 \
+ --report-to wandb \
+ --wandb-project-name open_lm_example \
+ --name open_lm_ex_$RANDOM \
+ --resume latest \
+ --logs path/to/logging/dir/
+```
 
 ## Evaluate Model
 Once trained, we can evaluate the model. This requires [LLM Foundry](https://github.com/mosaicml/llm-foundry), which can be installed via `pip install llm-foundry`. Next some configurations are required to pass to the evaluator: a skeleton of these parameters is located at [eval/in_memory_hf_eval.yaml](eval/in_memory_hf_eval.yaml). Then just run the following script, making sure to point it at the checkpoint of your trained model (and it's correspending config .json file):
@@ -228,7 +259,7 @@ pytest tests/
 
 # Team and acknowledgements
 
-Team (so-far, * = equal contrib): Suchin Gururangan*, Mitchell Wortsman*, Samir Yitzhak Gadre, Achal Dave, Maciej Kilian, Weijia Shi, Jean Mercat, Georgios Smyrnis, Gabriel Ilharco, Matt Jordan, Reinhard Heckel, Alex Dimakis, Ali Farhadi, Vaishaal Shankar, Ludwig Schmidt.
+Team (so-far, * = equal contrib): Suchin Gururangan*, Mitchell Wortsman*, Samir Yitzhak Gadre*, Achal Dave*, Maciej Kilian, Weijia Shi, Jean Mercat, Georgios Smyrnis, Gabriel Ilharco, Matt Jordan, Reinhard Heckel, Alex Dimakis, Ali Farhadi, Vaishaal Shankar*, Ludwig Schmidt.
 
 Code is based heavily on [open-clip](https://github.com/mlfoundations/open_clip) developed by a team including Ross Wightman, Romain Beaumont, Cade Gordon, Mehdi Cherti, Jenia Jitsev, and [open-flamingo](https://github.com/mlfoundations/open_flamingo), developed by a team including Anas Awadalla and Irena Gao. Additional inspiration is from [lit-llama](https://github.com/Lightning-AI/lit-llama).
 We are greatful to stability.ai for resource support.

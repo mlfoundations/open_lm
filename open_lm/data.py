@@ -312,7 +312,7 @@ def get_wds_dataset(
     floor=False,
     tokenizer=None,
     data_key="json",
-    force_num_samples=-1,
+    force_num_samples=None,
 ):
     input_shards_ = args.train_data if is_train else args.val_data
 
@@ -326,8 +326,8 @@ def get_wds_dataset(
         num_shards = None
         if is_train:
             if args.train_num_samples is not None:
-                if force_num_samples > 0:
-                    num_samples = force_num_samples
+                if force_num_samples is not None and force_num_samples[ii] > 0:
+                    num_samples = force_num_samples[ii]
                 else:
                     if args.train_data_mix_weights is not None:
                         num_samples = int(
@@ -389,6 +389,9 @@ def get_wds_dataset(
                     wds.shuffle(
                         bufsize=0 if args.disable_buffer else _SAMPLE_SHUFFLE_SIZE,
                         initial=0 if args.disable_buffer else _SHARD_SHUFFLE_INITIAL,
+                        rng=random.Random(args.seed + shared_epoch.get_value())
+                        if args.seed is not None
+                        else None,
                     ),
                 ]
             )
@@ -473,13 +476,13 @@ def get_wds_dataset(
         total_num_batches = num_batches
         total_num_samples = num_samples
 
-    print("persistent workers:", args.dataset_metadata is None)
+    print("persistent workers:", args.dataset_manifest is None)
     dataloader = wds.WebLoader(
         dataset,
         batch_size=None,
         shuffle=False,
         num_workers=args.workers,
-        persistent_workers=args.dataset_metadata is None,
+        persistent_workers=args.dataset_manifest is None,
     )
 
     # FIXME not clear which approach is better, with_epoch before vs after dataloader?

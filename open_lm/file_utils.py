@@ -8,6 +8,7 @@ import sys
 import time
 
 import fsspec
+import numpy as np
 import torch
 from tqdm import tqdm
 
@@ -106,33 +107,88 @@ def get_metadata_file(path):
     out = [json.loads(o) for o in out.decode('utf-8').split('\n')[:-1]]
     return out
 
-def get_shards_for_epoch(num_samples, epoch, path):
+def get_shards_for_chunk(num_samples, chunk, path):
+    """ Function to get a chunk of shards to train on.
+
+    Chunks are groups of shards with samples roughly equal to the number of samples
+    that will be seen during training. This function uses the dataset manifest
+    to split the shards into chunks, and assign shards to each chunk.
+    """
     metadata = get_metadata_file(path)
     shard_list = []
     curr_shard_list = []
     chunk_count_list = []
     curr_chunk_count = 0
-    real_chunk_count = 0
     for m in metadata:
         curr_chunk_count += m['num_chunks']
-        real_chunk_count += m['num_chunks']
         curr_shard_list.append(m['shard'])
         if curr_chunk_count >= num_samples:
             shard_list.append(curr_shard_list)
-            curr_chunk_count = curr_chunk_count - num_samples
+            chunk_count_list.append(curr_chunk_count)
             curr_shard_list = []
-            chunk_count_list.append(real_chunk_count)
-            real_chunk_count = 0
+            curr_chunk_count = 0
     
-    return shard_list[epoch % len(shard_list)], chunk_count_list[epoch % len(chunk_count_list)]
+    # Append remaining shards
+    if len(curr_shard_list) > 0:
+        shard_list.append(curr_shard_list)
+        chunk_count_list.append(curr_chunk_count)
 
-def get_string_for_epoch(num_samples, epoch, path):
-    shard_list, num_samples = get_shards_for_epoch(num_samples, epoch, path)
-    shard_root = '/'.join(path.split('/')[:-1]) + '/shard_'
-    shard_string = shard_root + '{' + shard_list[0] + '..' + shard_list[-1] + '}.tar'
-    if path.startswith('s3'):
-        shard_string = f'pipe:aws s3 cp {shard_string} -'
-    return shard_string, num_samples
+    return shard_list[chunk % len(shard_list)], chunk_count_list[chunk % len(chunk_count_list)]
+
+
+def enough_shards(shard_lists, min_shards_needed):
+    for sl in shard_lists:
+        if len(sl) < min_shards_needed:
+            return False
+    return True
+
+
+def enough_samples(num_samples_per_source, needed_samples_per_source):
+    for i, number in enumerate(num_samples_per_source):
+        if number < needed_samples_per_source[i]:
+            return False
+    return True
+
+
+def source_exhausted(paths, shard_list_per_source):
+    for i, source in enumerate(paths):
+        data = get_metadata_file(source)
+        if len(data) < len(shard_list_per_source[i]):
+            return True
+    return False
+
+
+def get_string_for_epoch(num_samples, starting_chunk, paths, weights, min_shards_needed):
+    if weights is None:
+        weights = [1.0 / len(paths) for _ in range(len(paths))]
+    needed_samples_per_source = [int(np.ceil(weights[i] * num_samples / sum(weights))) for i in range(len(weights))]
+    shard_strings_per_source = []
+    next_chunk = starting_chunk
+    shard_list_per_source = [[] for _ in range(len(paths))]
+    num_samples_per_source = [0 for _ in range(len(paths))]
+    while not enough_shards(shard_list_per_source, min_shards_needed) or not enough_samples(num_samples_per_source, needed_samples_per_source):
+        for i, source_path in enumerate(paths):
+            shard_list_source, num_samples_source = get_shards_for_chunk(needed_samples_per_source[i], next_chunk, source_path)
+            shard_list_per_source[i].extend(shard_list_source)
+            num_samples_per_source[i] += num_samples_source 
+        next_chunk += 1
+        if source_exhausted(paths, shard_list_per_source):
+            print(shard_list_per_source)
+            raise ValueError(
+                "Number of shards requested is more than the number of shards available."
+                "Consider lowering the number of workers and / or the number of GPUs."
+            )
+
+    for i, source_path in enumerate(paths):
+        shard_list_source = shard_list_per_source[i]
+        num_samples_source = num_samples_per_source[i]
+        shard_root_source = '/'.join(source_path.split('/')[:-1]) + '/'
+        shard_string_source = shard_root_source + '{' + ",".join(shard_list_source) + '}.tar'
+        if source_path.startswith('s3'):
+            shard_string_source = f'pipe:aws s3 cp {shard_string_source} -'
+        shard_strings_per_source.append(shard_string_source)
+
+    return shard_strings_per_source, num_samples_per_source, next_chunk
 
 
 if __name__ == '__main__':
