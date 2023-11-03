@@ -1,11 +1,13 @@
 import argparse
 import collections
+import glob
 import hashlib
 import io
 import json
 import os
 import resource
 import tarfile
+import tempfile
 import time
 import traceback
 from enum import Enum
@@ -98,23 +100,47 @@ def parse_s3_path(s3_path):
     return bucket, key
 
 
-def dl_parse_s3(data, creds=None):
+def dl_parse_s3(data, dataset_type='jsonl', content_key="text", creds=None):
     worker_id = ray.get_runtime_context().get_worker_id()
     if creds is not None:
         client = boto3.client(
             "s3",
-            aws_access_key_id=creds["AWS_ACCESS_KEY_ID"],
-            aws_secret_access_key=creds["AWS_SECRET_ACCESS_KEY"],
-            aws_session_token=creds["AWS_SESSION_TOKEN"],
+            aws_access_key_id=creds["AWS_ACCESS_KEY_ID"] if "AWS_ACCESS_KEY_ID" in creds else None,
+            aws_secret_access_key=creds["AWS_SECRET_ACCESS_KEY"] if "AWS_SECRET_ACCESS_KEY" in creds else None,
+            aws_session_token=creds["AWS_SESSION_TOKEN"] if "AWS_SESSION_TOKEN" in creds else None,
         )
     else:
         client = boto3.client("s3")
     out_dicts = []
     for path in data["path"]:
         bucket, key = parse_s3_path(path)
-        json_lines = download_to_memory_with_progress(bucket, key).decode().splitlines()
-        jsons = [json.loads(x) for x in json_lines]
-        out_dicts += jsons
+        buff = download_to_memory_with_progress(bucket, key)
+        if dataset_type == "jsonl":
+            samples = [json.loads(x) for x in buff.decode().splitlines()]
+        elif dataset_type == "tar":
+            if content_key == "text":
+                raise ValueError("Make sure to specify the correct extension for your samples")
+
+            with tarfile.open(fileobj=BytesIO(buff), mode='r') as tar:
+                samples = []
+                for member in tar.getmembers():
+                    if member.isfile() and member.name.endswith(f".{content_key}"):
+                        with tar.extractfile(member) as fileobj:
+                            if fileobj:  # Ensure fileobj is not None
+                                if content_key == "txt":
+                                    content = fileobj.read().decode("utf-8")
+                                elif content_key == "json":
+                                    content = json.load(fileobj)
+                                elif content_key == "npy":
+                                    content = np.load(io.BytesIO(fileobj.read()), allow_pickle=True)
+                                else:
+                                    raise ValueError(f"Unsupported content key extension: {content_key}")
+
+                                samples.append({content_key: content})
+        else:
+            raise ValueError(f"Unsupported dataset type: {dataset_type}")
+
+        out_dicts += samples
     return pd.DataFrame(out_dicts)
 
 
@@ -247,6 +273,7 @@ def glob_files(path, suffix=".jsonl"):
         matching_files = [f for f in all_files if f.endswith(suffix)]
 
     else:
+        # TODO: didn't work for me
         # Use glob for local paths
         search_pattern = f"{path.rstrip('/')}/*{suffix}"
         matching_files = glob.glob(search_pattern)
@@ -346,6 +373,7 @@ if __name__ == "__main__":
     )
     parser.add_argument("--seqlen", type=int, default=2048)
     parser.add_argument("--pad_type", type=str, default="circular")
+    parser.add_argument("--dataset_type", type=str, default="jsonl")
     parser.add_argument("--tokenizer", type=str, default="EleutherAI/gpt-neox-20b")
     parser.add_argument("--initial_batch_size", type=int, default=2048)
     parser.add_argument("--wds_chunk_size", type=int, default=2048)
@@ -375,7 +403,7 @@ if __name__ == "__main__":
         ray.init(args.ray_address, runtime_env=runtime_env)
     num_nodes = len(ray.nodes())
     # TODO  support multiple inputs
-    input_paths = glob_files(args.input, suffix=".jsonl")
+    input_paths = glob_files(args.input, suffix=f".{args.dataset_type}")
     if args.subset is not None:
         input_paths = input_paths[: args.subset]
     print(f"num files ={len(input_paths)}")
@@ -408,7 +436,7 @@ if __name__ == "__main__":
     ds = ds.map_batches(
         dl_parse_s3,
         batch_size=1,
-        fn_kwargs={"creds": creds},
+        fn_kwargs={"dataset_type": args.dataset_type, "content_key": args.content_key, "creds": creds},
         batch_format="pandas",
         num_cpus=num_cores,
     )
