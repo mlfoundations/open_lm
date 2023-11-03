@@ -58,3 +58,8 @@
 > **Heads up**: This is version 0 of this script. The user interface will be improved in future versions. Currently, objects are being spilled to `dcnlp-hub`.
 
 --- 
+
+## Slurm Workflow
+
+- Docs: https://docs.ray.io/en/latest/cluster/vms/user-guides/community/slurm.html
+- Examples: https://docs.ray.io/en/latest/cluster/vms/user-guides/community/slurm.html#examples-and-templates
