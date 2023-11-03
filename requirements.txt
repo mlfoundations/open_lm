@@ -16,3 +16,5 @@ cloudpathlib
 apache_beam
 datasets
 huggingface_hub
+loguru
+ray[default]

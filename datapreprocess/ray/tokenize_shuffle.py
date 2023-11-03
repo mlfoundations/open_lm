@@ -4,6 +4,7 @@ import hashlib
 import io
 import json
 import os
+import glob
 import resource
 import tarfile
 import time
@@ -36,8 +37,6 @@ import pyarrow.json
 
 from tqdm import tqdm
 from io import BytesIO
-
-from Path
 
 
 class SpecialTokens(Enum):
@@ -103,7 +102,7 @@ def parse_s3_path(s3_path):
 
 def dl_parse_s3(data, creds=None):
     worker_id = ray.get_runtime_context().get_worker_id()
-    if creds is not None:
+    if creds is not None and len(creds) > 0:
         client = boto3.client(
             "s3",
             aws_access_key_id=creds["AWS_ACCESS_KEY_ID"],
@@ -114,10 +113,16 @@ def dl_parse_s3(data, creds=None):
         client = boto3.client("s3")
     out_dicts = []
     for path in data["path"]:
-        bucket, key = parse_s3_path(path)
-        json_lines = download_to_memory_with_progress(bucket, key).decode().splitlines()
-        jsons = [json.loads(x) for x in json_lines]
-        out_dicts += jsons
+        # Download from s3 if s3 path
+        if path.startswith("s3://"):
+            bucket, key = parse_s3_path(path)
+            json_lines = download_to_memory_with_progress(bucket, key).decode().splitlines()
+            jsons = [json.loads(x) for x in json_lines]
+            out_dicts += jsons
+        else:
+            with open(path, "r") as f:
+                jsons = [json.loads(line) for line in f]
+            out_dicts += jsons
     return pd.DataFrame(out_dicts)
 
 
@@ -181,8 +186,8 @@ def map_write_wds(batch, batch_size, folder, counter):
     write_to_location(folder, tar_name, bio)
 
     return_dict = {
-        "shard": tar_name.split(".")[0],
-        "num_chunks": len(batch["tokens"])
+        "shard": [tar_name.split(".")[0]],
+        "num_chunks": [len(batch["tokens"])]
     }
 
     return return_dict
@@ -257,8 +262,8 @@ def glob_files(path, suffix=".jsonl"):
 
     else:
         # Use glob for local paths
-        search_pattern = f"{path.rstrip('/')}/*{suffix}"
-        matching_files = glob.glob(search_pattern)
+        search_pattern = f"{path.rstrip('/')}/**/*{suffix}"
+        matching_files = glob.glob(search_pattern, recursive=True)
 
     return matching_files
 
