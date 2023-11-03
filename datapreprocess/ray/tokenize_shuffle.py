@@ -457,7 +457,7 @@ if __name__ == "__main__":
         batch_size=wds_chunk_size,
         fn_kwargs={
             "batch_size": wds_chunk_size,
-            "folder": args.output.strip("/"),
+            "folder": args.output.rstrip("/"),
             "counter": counter,
         },
     )
@@ -468,7 +468,7 @@ if __name__ == "__main__":
     ds.write_json(
         args.output.strip("/"),
         filesystem = fs,
-        block_path_provider = lambda *args, **kw: "manifest.jsonl"
+        block_path_provider = lambda *a, **kw: os.path.join(args.output.rstrip("/"), "manifest.jsonl")
     )
 
     end_time = time.time()
