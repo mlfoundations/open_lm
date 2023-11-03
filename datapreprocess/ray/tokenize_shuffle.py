@@ -118,9 +118,6 @@ def dl_parse_s3(data, dataset_type='jsonl', content_key="text", creds=None):
         if dataset_type == "jsonl":
             samples = [json.loads(x) for x in buff.decode().splitlines()]
         elif dataset_type == "tar":
-            if content_key == "text":
-                raise ValueError("Make sure to specify the correct extension for your samples")
-
             with tarfile.open(fileobj=BytesIO(buff), mode='r') as tar:
                 samples = []
                 for member in tar.getmembers():
