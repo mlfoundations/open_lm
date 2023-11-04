@@ -678,26 +678,23 @@ def main(args):
                         for i in range(len(args.train_data_mix_weights))
                     ]
                     chosen_num_samples = remaining_samples_per_source
-                    samples_seen = samples_seen + sum(chosen_num_samples)
+                    logging.info(
+                        "Model has seen the desired number of tokens. Running one final epoch."
+                    )
+                    final_epoch = True
                 else:
                     chosen_num_samples = num_samples_per_source
-                    samples_seen = samples_seen + sum(chosen_num_samples)
             else:
                 chosen_num_samples = None
-                samples_seen = samples_seen + args.train_num_samples
 
             data["train"] = get_wds_dataset(
                 args, True, epoch, force_num_samples=chosen_num_samples, data_key=args.data_key,
-            )
+            )                
 
-            if (
-                args.accurate_total_tokens
-                and samples_seen >= args.epochs * args.train_num_samples
-            ):
-                logging.warning(
-                    "Model has seen the desired number of tokens. Running one final epoch."
-                )
-                final_epoch = True
+        try:
+            prev_step = int(optimizer.state_dict()["state"][0]["step"].item())
+        except KeyError:
+            prev_step = 0
 
         if args.distributed:
             dist.barrier()
@@ -716,6 +713,9 @@ def main(args):
 
         if args.distributed:
             dist.barrier()
+
+        steps_done_epoch = int(optimizer.state_dict()["state"][0]["step"].item()) - prev_step
+        samples_seen = samples_seen + steps_done_epoch * args.batch_size * args.world_size
 
         if not success:
             logging.info(f"Training exiting due to NaN value")
