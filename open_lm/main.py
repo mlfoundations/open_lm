@@ -432,21 +432,17 @@ def main(args):
         model.load_state_dict(state_dict)
 
     # Add data chunk when resuming (only for dataset without resampling)
-    if args.dataset_manifest is not None:
-        next_chunk = 0
-        samples_seen = 0
-        if args.resume is not None and args.dataset_manifest is not None:
-            next_chunk, samples_seen = load_data_chunks(args)
-            if (
-                samples_seen >= args.train_num_samples * args.epochs
-                and args.accurate_total_tokens
-            ):
-                raise RuntimeError(
-                    "Loaded a checkpoint which has already seen the desired number of tokens."
-                )
-    else:
-        next_chunk = None
-        samples_seen = None
+    next_chunk = 0
+    samples_seen = 0
+    if args.resume is not None and args.dataset_manifest is not None:
+        next_chunk, samples_seen = load_data_chunks(args)
+        if (
+            samples_seen >= args.train_num_samples * args.epochs
+            and args.accurate_total_tokens
+        ):
+            raise RuntimeError(
+                "Loaded a checkpoint which has already seen the desired number of tokens."
+            )
 
     if args.distributed:
         if args.fsdp:
@@ -737,8 +733,8 @@ def main(args):
             scaler,
             completed_epoch,
             evaluation_loss,
-            next_chunk=next_chunk,
-            samples_seen=samples_seen,
+            next_chunk=next_chunk if args.dataset_manifest is not None else None,
+            samples_seen=samples_seen if args.dataset_manifest is not None else None,
         )
 
         if final_epoch:
