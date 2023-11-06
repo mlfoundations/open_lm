@@ -402,27 +402,21 @@ if __name__ == "__main__":
     tokenizer = load_tokenizer(args.tokenizer)
     logger.info(f"Total number of keys = {len(input_paths)}")
     df = pd.DataFrame(input_paths, columns=["path"])
-    ds = ray.data.from_pandas(pd.DataFrame(input_paths, columns=["path"])).repartition(
-        num_files
-    )
+    #TODO fix hack for now.
     ds = ds.map_batches(
         dl_parse_s3,
         batch_size=1,
         fn_kwargs={"creds": creds},
         batch_format="pandas",
-        num_cpus=num_cores,
+        num_cpus=16,
     )
-    ds = ds.repartition(num_nodes * cores_to_use)
     ds = ds.map_batches(
         dist_tokenize,
         batch_size=batch_size,
         fn_kwargs={"tokenizer": tokenizer, "content_key": content_key},
         batch_format="pandas",
-        num_cpus=1,
+        num_cpus=16,
     )
-    ds.count()
-    end_time = time.time()
-    duration = end_time - start_time
     ds = ds.map_batches(
         cut_to_context,
         batch_size=batch_size,
@@ -436,7 +430,6 @@ if __name__ == "__main__":
     if args.materialize:
         ds = ds.materialize()
     counter = GlobalCounter.remote()
-    # ds = ds_indices.zip(ds)
     ds = ds.map_batches(
         map_write_wds,
         batch_size=wds_chunk_size,
