@@ -122,7 +122,12 @@ def train_one_epoch(
     end = time.time()
 
     for i, batch in enumerate(dataloader):
-        step = num_batches_per_epoch * epoch + i
+        try:
+            step = int(optimizer.state_dict()["state"][0]["step"].item())
+        except KeyError:
+            # Throws keyerror if it is the first step
+            step = 0
+
         if not args.skip_scheduler:
             scheduler(step)
 
