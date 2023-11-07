@@ -213,8 +213,9 @@ class Block(nn.Module):
             )
 
     def forward(self, x):
-        h = x + self.attention(self.attention_norm(x), is_causal=True)
-        out = h + self.feed_forward(self.ffn_norm(h))
+        ALPHA = 0.95
+        h = ALPHA*x + (1-ALPHA)* self.attention_norm(self.attention(x, is_causal=True))
+        out = ALPHA*h + (1-ALPHA)*self.ffn_norm(self.feed_forward(h))
         return out
 
 
