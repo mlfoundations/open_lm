@@ -18,12 +18,15 @@ def do_wrap(
 
     os.makedirs(out_dir, exist_ok=True)
 
+    checkpoint_file = os.path.realpath(checkpoint)
+
     config = OpenLMConfig(params)
     output_config_dict = config.to_diff_dict()
     output_config_dict["auto_map"] = {
         "AutoConfig": "imports.OpenLMConfig",
         "AutoModelForCausalLM": "imports.OpenLMforCausalLM",
     }
+    output_config_dict["checkpoint_file"] = checkpoint_file
     json.dump(
         output_config_dict, open(os.path.join(out_dir, "config.json"), "w"), indent=2
     )
@@ -32,16 +35,6 @@ def do_wrap(
     imports_file = "from open_lm.utils.transformers.hf_model import OpenLMforCausalLM\nfrom open_lm.utils.transformers.hf_config import OpenLMConfig"
     with open(os.path.join(out_dir, "imports.py"), "w") as f:
         f.write(imports_file)
-
-    # Checkpoint file
-    checkpoint_file = os.path.join(out_dir, "checkpoint.pt")
-    if soft_link:
-        os.symlink(os.path.realpath(checkpoint), checkpoint_file)
-    else:
-        import shutil
-
-        shutil.copyfile(checkpoint, checkpoint_file)
-    
 
     # Tokenizer files
     if "gpt-neox-20b" in args.tokenizer:
@@ -66,7 +59,7 @@ if __name__ == "__main__":
 
     checkpoint = args.checkpoint
     out_dir = args.out_dir
-    
+
     if not os.path.exists(checkpoint):
         raise ValueError(f"Checkpoint {checkpoint} does not exist.")
 

@@ -128,9 +128,7 @@ class OpenLMforCausalLM(OpenLMModel):
     ):
         if os.path.isdir(pretrained_model_name_or_path):
             print("Loading model from directory")
-            checkpoint_path = os.path.join(
-                pretrained_model_name_or_path, "checkpoint.pt"
-            )
+            checkpoint_path = kwargs["config"].checkpoint_file
             checkpoint = torch.load(checkpoint_path)
 
             state_dict = checkpoint["state_dict"]
