@@ -6,5 +6,5 @@
     "vocab_size": 50432,
     "post_embed_norm": true,
     "weight_tying": false,
-    "hybrid_alpha": 0.95
+    "hybrid_alpha": 0.92
 }
