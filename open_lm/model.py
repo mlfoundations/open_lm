@@ -76,6 +76,8 @@ class Params:
     apply_qk_norm: bool = False
     positional_embedding_type: str = "rotary"
     ffn_type: str = "swiglu"
+    hybrid_alpha: float = 0.95
+    
 
 
 def xformers_attn(queries, keys, values, is_causal):
@@ -160,6 +162,7 @@ class CustomAttn(nn.Module):
 class Block(nn.Module):
     def __init__(self, layer_id, args: Params):
         super().__init__()
+        self.hybrid_alpha = args.hybrid_alpha
         self.n_heads = args.n_heads
         self.dim = args.dim
         self.head_dim = args.dim // args.n_heads
@@ -213,7 +216,7 @@ class Block(nn.Module):
             )
 
     def forward(self, x):
-        ALPHA = 0.95
+        ALPHA = self.hybrid_alpha
         h = ALPHA*x + (1-ALPHA)* self.attention_norm(self.attention(x, is_causal=True))
         out = ALPHA*h + (1-ALPHA)*self.ffn_norm(self.feed_forward(h))
         return out
@@ -317,6 +320,7 @@ def create_params(args):
         apply_qk_norm=cfg.get("qk_norm", args.qk_norm),
         positional_embedding_type=cfg.get("positional_embedding_type", args.positional_embedding_type),
         ffn_type=cfg.get("ffn_type", args.ffn_type),
+        hybrid_alpha=cfg.get("hybrid_alpha", 0.95)
     )
 
 
