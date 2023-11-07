@@ -11,7 +11,6 @@ def do_wrap(
     checkpoint: Union[str, os.PathLike],
     params,
     out_dir: Union[str, os.PathLike],
-    soft_link: bool,
 ):
     from open_lm.utils.transformers.hf_config import OpenLMConfig
     from transformers import GPTNeoXTokenizerFast, LlamaTokenizerFast
@@ -49,7 +48,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--checkpoint")
     parser.add_argument("--out-dir")
-    parser.add_argument("--soft-link", default=True, action="store_true")
 
     parser.add_argument(
         "--model", type=str, default="m1b_neox", help="Name of the model to use."
@@ -69,4 +67,4 @@ if __name__ == "__main__":
 
     from open_lm.model import create_params
 
-    do_wrap(args.checkpoint, create_params(args), args.out_dir, args.soft_link)
+    do_wrap(args.checkpoint, create_params(args), args.out_dir)
