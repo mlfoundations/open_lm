@@ -27,6 +27,7 @@ def do_wrap(
         "AutoModelForCausalLM": "imports.OpenLMforCausalLM",
     }
     output_config_dict["checkpoint_file"] = checkpoint_file
+    output_config_dict["torch_dtype"] = "bfloat16"  # Defaults to bfloat16
     json.dump(
         output_config_dict, open(os.path.join(out_dir, "config.json"), "w"), indent=2
     )

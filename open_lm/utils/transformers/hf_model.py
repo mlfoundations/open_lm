@@ -127,6 +127,13 @@ class OpenLMforCausalLM(OpenLMModel):
         cls, pretrained_model_name_or_path: Optional[Union[str, os.PathLike]], **kwargs
     ):
         if os.path.isdir(pretrained_model_name_or_path):
+            # Setting torch default dtype
+            torch_dtype = getattr(kwargs["config"], "torch_dtype", None)
+            if isinstance(torch_dtype, str):
+                torch_dtype = getattr(torch, torch_dtype)
+            if torch_dtype is not None:
+                torch.set_default_dtype(torch_dtype)
+
             print("Loading model from directory")
             checkpoint_path = kwargs["config"].checkpoint_file
             checkpoint = torch.load(checkpoint_path)
@@ -134,6 +141,7 @@ class OpenLMforCausalLM(OpenLMModel):
             state_dict = checkpoint["state_dict"]
             state_dict = {x.replace("module.", ""): y for x, y in state_dict.items()}
             state_dict = {f"model.{x}": y for x, y in state_dict.items()}
+
             return super().from_pretrained(None, state_dict=state_dict, **kwargs)
         else:
             return super().from_pretrained(pretrained_model_name_or_path, **kwargs)
