@@ -38,7 +38,7 @@ from webdataset.mix import RandomMix
 
 def proc_token(x, vocab_size):
     if type(x) is int:
-        return x % vocab_size
+        return x % vocab_size if x < 0 else x
 
     # FIXME: currently assuming that if not an int 0 is an appropriate token.
     # probably want to throw an error here instead. leaving as 0 for now for
