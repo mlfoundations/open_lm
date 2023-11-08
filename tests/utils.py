@@ -33,15 +33,10 @@ def download_val_data(name: str, root: str = None):
         raise RuntimeError(f"{download_target} exists and is not a regular file")
 
     if os.path.isfile(download_target):
-        if (
-            hashlib.sha256(open(download_target, "rb").read()).hexdigest()
-            == expected_sha256
-        ):
+        if hashlib.sha256(open(download_target, "rb").read()).hexdigest() == expected_sha256:
             return download_target
         else:
-            warnings.warn(
-                f"{download_target} exists, but the SHA256 checksum does not match; re-downloading the file"
-            )
+            warnings.warn(f"{download_target} exists, but the SHA256 checksum does not match; re-downloading the file")
 
     with urllib.request.urlopen(url) as source, open(download_target, "wb") as output:
         with tqdm(
@@ -59,12 +54,7 @@ def download_val_data(name: str, root: str = None):
                 output.write(buffer)
                 loop.update(len(buffer))
 
-    if (
-        hashlib.sha256(open(download_target, "rb").read()).hexdigest()
-        != expected_sha256
-    ):
-        raise RuntimeError(
-            "Model has been downloaded but the SHA256 checksum does not not match"
-        )
+    if hashlib.sha256(open(download_target, "rb").read()).hexdigest() != expected_sha256:
+        raise RuntimeError("Model has been downloaded but the SHA256 checksum does not not match")
 
     return download_target

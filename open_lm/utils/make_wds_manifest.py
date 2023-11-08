@@ -29,9 +29,7 @@ def parse_args(args):
         default="manifest.jsonl",
         help="Filename for the manifest that will be stored in the webdataset directory.",
     )
-    parser.add_argument(
-        "--tmp-dir", type=str, default=None, help="Temporary directory."
-    )
+    parser.add_argument("--tmp-dir", type=str, default=None, help="Temporary directory.")
     parser.add_argument("--num-workers", type=int, default=2, help="Number of workers.")
     args = parser.parse_args(args)
     return args
@@ -44,9 +42,7 @@ def count_samples(shard_path, tmp_dir):
     else:
         temp_shard_path = shard_path
 
-    count = int(
-        subprocess.check_output(f"tar tf {temp_shard_path} | wc -l", shell=True)
-    )
+    count = int(subprocess.check_output(f"tar tf {temp_shard_path} | wc -l", shell=True))
 
     if isinstance(shard_path, CloudPath):
         temp_shard_path.unlink()
