@@ -553,9 +553,24 @@ def main(args):
         skip_train=args.dataset_manifest is not None,
     )
 
+    if (
+        args.target_mask_left is not None
+        and args.target_mask_individual == args.target_mask_left
+    ):
+        logging.error(
+            f"--target-mask-left and --target-mask-individual set to same value of {args.target_mask_left}."
+        )
+        exit(1)
+
     if args.target_mask_left is not None:
         # tokens handled with same modulo in dataloading
         args.target_mask_left = proc_token(args.target_mask_left, args.vocab_size)
+
+    if args.target_mask_individual is not None:
+        # tokens handled with same modulo in dataloading
+        args.target_mask_individual = proc_token(
+            args.target_mask_individual, args.vocab_size
+        )
 
     if args.torchcompile:
         logging.info("Compiling model...")

@@ -54,7 +54,7 @@ def backward(total_loss, scaler):
         total_loss.backward()
 
 
-def replace_before_tok(tensor, tok, excusive=False):
+def replace_before_tok(tensor, tok, replaced, excusive=False):
     # NOTE: this implementation supports 0 or 1 instance of tok in a sequence.
     #       if more than one instance appears, the last instace of tok is used.
     #       if exclusive=True every instance of tok will be present in the output
@@ -71,28 +71,37 @@ def replace_before_tok(tensor, tok, excusive=False):
         # retain tok in the output
         tok_mask &= ~tok_positions
 
-    # replace elements to be masked with with -100 (pytorch default xent ignore value)
     out = torch.clone(tensor)
-    out[tok_mask] = -100
+    out[tok_mask] = replaced
 
     return out
 
 
-def sample_chunk(chunk, seq_len, target_mask_left_tok):
-    if chunk.shape[1] == seq_len + 1:
+def replace_tok(tensor, tok, replaced):
+    out = torch.clone(tensor)
+    out[out == tok] = replaced
+
+    return out
+
+
+def sample_chunk(chunk, args):
+    if chunk.shape[1] == args.seq_len + 1:
         start_idx = 0
-    elif chunk.shape[1] > seq_len + 1:
-        start_idx = torch.randint(0, chunk.shape[1] - seq_len + 1, (1,)).item()
+    elif chunk.shape[1] > args.seq_len + 1:
+        start_idx = torch.randint(0, chunk.shape[1] - args.seq_len + 1, (1,)).item()
     else:
         raise Exception(
-            f"Invalid sequence length: Sequence length {seq_len} > {chunk.shape[1]} Chunk size"
+            f"Invalid sequence length: Sequence length {args.seq_len} > {chunk.shape[1]} Chunk size"
         )
 
-    inputs = chunk[:, start_idx : start_idx + seq_len - 1]
-    targets = chunk[:, start_idx + 1 : start_idx + seq_len]
+    inputs = chunk[:, start_idx : start_idx + args.seq_len - 1]
+    targets = chunk[:, start_idx + 1 : start_idx + args.seq_len]
 
-    if target_mask_left_tok is not None:
-        return inputs, replace_before_tok(targets, target_mask_left_tok)
+    # replace elements to be masked with with -100 (pytorch default xent ignore value)
+    if args.target_mask_left_tok is not None:
+        targets = replace_before_tok(targets, args.target_mask_left_tok, -100)
+    if args.target_mask_individual_tok is not None:
+        targets = replace_tok(targets, args.target_mask_individual_tok, -100)
 
     return inputs, targets
 
@@ -138,9 +147,7 @@ def train_one_epoch(
 
         if args.accum_freq == 1:
             with autocast():
-                inputs, targets = sample_chunk(
-                    texts, args.seq_len, args.target_mask_left
-                )
+                inputs, targets = sample_chunk(texts, args)
                 out, _ = model(inputs)
 
                 if args.log_logit_mean:
@@ -157,7 +164,7 @@ def train_one_epoch(
             ), "Batch size must be divisible by accum_freq"
             per_batch = args.batch_size // args.accum_freq
 
-            inputs, targets = sample_chunk(texts, args.seq_len, args.target_mask_left)
+            inputs, targets = sample_chunk(texts, args)
 
             for ii in range(args.accum_freq):
                 maybe_no_sync = nullcontext
@@ -299,7 +306,7 @@ def evaluate(model, data, start_epoch, args, writer):
         data_time_m.update(time.time() - end)
 
         with autocast():
-            inputs, targets = sample_chunk(texts, args.seq_len, args.target_mask_left)
+            inputs, targets = sample_chunk(texts, args)
 
             out, _ = model(inputs)
             total_loss = loss(out.reshape(-1, args.vocab_size), targets.reshape(-1))
