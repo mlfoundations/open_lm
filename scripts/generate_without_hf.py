@@ -125,7 +125,9 @@ def main():
             args.checkpoint = latest_file
     else:
         assert args.params != "", "Must provide params file or a wandb directory."
-        assert args.checkpoint != "", "Must provide checkpoint file or a wandb directory."
+        assert (
+            args.checkpoint != ""
+        ), "Must provide checkpoint file or a wandb directory."
 
     checkpoint = torch.load(args.checkpoint)
     open_lm = create_model(ModelArgs(args.params)).half()

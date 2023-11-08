@@ -23,8 +23,8 @@ def precompute_freqs_cis(dim: int, end: int, theta: float = 10000.0):
     Returns:
         torch.Tensor: Precomputed frequency tensor with complex exponentials.
 
-    
-        
+
+
 
     """
     freqs = 1.0 / (theta ** (torch.arange(0, dim, 2)[: (dim // 2)].float() / dim))
@@ -85,10 +85,10 @@ def apply_llama_rotary_pos_emb(
 
     """
     xq_even = xq[..., ::2]
-    xq_odd  = xq[..., 1::2]
+    xq_odd = xq[..., 1::2]
 
     xk_even = xk[..., ::2]
-    xk_odd  = xk[..., 1::2]
+    xk_odd = xk[..., 1::2]
 
     # Stack them along the last dimension to make it [N, ..., D, 2]
     xq_ = torch.stack([xq_even, xq_odd], dim=-1)
@@ -124,21 +124,21 @@ class LLaMARotaryEmbedding(torch.nn.Module):
         super().__init__()
         # Generate and save the inverse frequency buffer (non trainable)
         self.freqs_cis = precompute_freqs_cis(
-            # Note that self.params.max_seq_len is multiplied by 2 because the token limit for the Llama 2 generation of models is 4096. 
+            # Note that self.params.max_seq_len is multiplied by 2 because the token limit for the Llama 2 generation of models is 4096.
             # Adding this multiplier instead of using 4096 directly allows for dynamism of token lengths while training or fine-tuning.
-            head_dim, seq_len * 2
+            head_dim,
+            seq_len * 2,
         )
 
     def forward(
         self, q: torch.Tensor, k: torch.Tensor, start_pos: int = 0
     ) -> Tuple[torch.Tensor, torch.Tensor]:
-
         seq_len = q.shape[1]
         self.freqs_cis = self.freqs_cis.to(q.device)
-        freqs_cis = self.freqs_cis[start_pos: start_pos+seq_len]
+        freqs_cis = self.freqs_cis[start_pos : start_pos + seq_len]
 
         return apply_llama_rotary_pos_emb(q, k, freqs_cis)
-           
+
 
 class LLaMARotaryWithCast(LLaMARotaryEmbedding):
     def forward(self, q, k, v):

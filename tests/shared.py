@@ -56,6 +56,7 @@ class MockTrainArgs:
         self.dist_backend = "nccl"
         self.dist_url = "env://"
 
+
 class MockDataArgs(object):
     def __init__(self):
         data_path = download_val_data("shard_00000000.tar", "./tests/assets/")
