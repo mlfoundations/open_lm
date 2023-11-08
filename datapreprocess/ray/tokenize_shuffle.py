@@ -1,40 +1,245 @@
 import argparse
 import collections
+import enum
+import gzip
 import hashlib
 import io
 import json
 import os
+import random
 import resource
 import tarfile
 import time
 import traceback
 from enum import Enum
 from io import BytesIO
-from typing import List
-from loguru import logger
-import pandas as pd
+from typing import BinaryIO, List
 
 import boto3
 import fsspec
+import jsonlines
 import numpy as np
+import pandas as pd
 import psutil
-import json
-import webdataset as wds
-from braceexpand import braceexpand
-from transformers import GPTNeoXTokenizerFast
-
+import pyarrow.fs as fs
+import pyarrow.json
 import ray
+import webdataset as wds
+import zstandard as zstd
+from botocore.exceptions import (
+    IncompleteReadError,
+    ReadTimeoutError,
+    ResponseStreamingError,
+)
+from braceexpand import braceexpand
+from loguru import logger
 from ray._private.internal_api import memory_summary
 from ray.data._internal.util import _check_pyarrow_version
 from ray.data.block import Block, BlockMetadata
 from ray.data.context import DataContext
 from ray.data.datasource import Datasource, ReadTask
 from ray.runtime_context import RuntimeContext
-import pyarrow.fs as fs
-import pyarrow.json
-
 from tqdm import tqdm
-from io import BytesIO
+from transformers import GPTNeoXTokenizerFast
+
+
+class RawFileType(enum.Enum):
+    JSONL = 1
+    ZSTD_JSONL_COMPRESSED = 2
+    GZIP_JSONL_COMPRESSED = 3
+    UNKNOWN = -1
+
+
+class Sources(enum.Enum):
+    COMMON_CRAWL = 0
+    C4 = 1
+    GITHUB = 2
+    WIKIPEDIA = 3
+    BOOKS = 4
+    ARXIV = 5
+    STACKEXCHANGE = 6
+    UNKNOWN = 7
+
+    @classmethod
+    def get_source(cls, key):
+        if (
+            "common_crawl" in key
+            or "webtext" in key
+            or "realnews" in key
+            or "pile-cc" in key
+        ):
+            return cls.COMMON_CRAWL
+        elif "c4" in key:
+            return cls.C4
+        elif "github" in key or "dedup" in key:
+            return cls.GITHUB
+        elif "wikipedia" in key:
+            return cls.WIKIPEDIA
+        elif "book" in key:
+            return cls.BOOKS
+        elif "arxiv" in key or "s2orc" in key or "pubmed" or "phil" or "nih" or "math":
+            return cls.ARXIV
+        elif (
+            "stackexchange" in key
+            or "youtube"
+            or "ubuntu"
+            or "hn"
+            or "law" in key
+            or "europarl" in key
+            or "enron" in key
+        ):
+            return cls.STACKEXCHANGE
+        else:
+            return cls.UNKNOWN
+
+    @classmethod
+    def get_sampling_frequency(cls, key):
+        return SAMPLING_FREQUENCIES[cls.get_source(key)]
+
+
+# hard coded from Mitchell
+# These are sampling frequencies for each source used to match
+# the Mosaic training run on RPJ
+# SAMPLING_FREQUENCIES = {}
+# SAMPLING_FREQUENCIES[Sources.COMMON_CRAWL] = 1.0
+# SAMPLING_FREQUENCIES[Sources.C4] = 1.0
+# SAMPLING_FREQUENCIES[Sources.GITHUB] = 1.0
+# SAMPLING_FREQUENCIES[Sources.WIKIPEDIA] = 1.0
+# SAMPLING_FREQUENCIES[Sources.BOOKS] = 1.0
+# SAMPLING_FREQUENCIES[Sources.ARXIV] = 1.0
+# SAMPLING_FREQUENCIES[Sources.STACKEXCHANGE] = 1.0
+# SAMPLING_FREQUENCIES[Sources.UNKNOWN] = 1.0
+
+SAMPLING_FREQUENCIES = {}
+SAMPLING_FREQUENCIES[Sources.COMMON_CRAWL] = 0.9233485194
+SAMPLING_FREQUENCIES[Sources.C4] = 1.037142857
+SAMPLING_FREQUENCIES[Sources.GITHUB] = 0.9228813559
+SAMPLING_FREQUENCIES[Sources.WIKIPEDIA] = 2.26875
+SAMPLING_FREQUENCIES[Sources.BOOKS] = 2.094230769
+SAMPLING_FREQUENCIES[Sources.ARXIV] = 1.080357143
+SAMPLING_FREQUENCIES[Sources.STACKEXCHANGE] = 1.21
+SAMPLING_FREQUENCIES[Sources.UNKNOWN] = 0
+
+
+def jsonl_file_reader(fh: BinaryIO, content_key: str):
+    with io.TextIOWrapper(fh, encoding="utf-8") as text_reader:
+        with jsonlines.Reader(text_reader) as jsonl_reader:
+            for item in jsonl_reader:
+                yield item[content_key]
+
+
+def zstd_compressed_reader(fh: BinaryIO, content_key: str):
+    dctx = zstd.ZstdDecompressor()
+    with dctx.stream_reader(fh) as reader:
+        for item in jsonl_file_reader(reader):
+            yield item
+
+
+def gzip_compressed_reader(fh: BinaryIO, content_key: str):
+    with gzip.open(fh, "rb") as f_in:
+        with jsonlines.Reader(f_in) as jsonl_reader:
+            for item in jsonl_reader:
+                yield item[content_key]
+
+
+def get_reader(file_type, content_key: str):
+    if file_type == RawFileType.JSONL:
+        return lambda x: jsonl_file_reader(x, content_key=content_key)
+    if file_type == RawFileType.ZSTD_JSONL_COMPRESSED:
+        return lambda x: zstd_compressed_reader(x, content_key=content_key)
+    if file_type == RawFileType.GZIP_JSONL_COMPRESSED:
+        return lambda x: gzip_compressed_reader(x, content_key=content_key)
+    else:
+        raise Exception("Unsupported filetype")
+
+
+def tokenize_tiktoken(tokenizer, string):
+    eot_token = "<|endoftext|>"
+    pad_token = "<|pad|>"
+    return tokenizer.encode(string, allowed_special={eot_token, pad_token})
+
+
+def tokenize_eleutherai(tokenizer, string):
+    return tokenizer(string).input_ids
+
+
+def get_raw_filetype(key: str):
+    if key.endswith(".jsonl") or key.endswith(".json"):
+        return RawFileType.JSONL
+    elif key.endswith(".jsonl.zst") or key.endswith(".json.zst"):
+        return RawFileType.ZSTD_JSONL_COMPRESSED
+    elif key.endswith(".jsonl.gz") or key.endswith(".json.gz"):
+        return RawFileType.GZIP_JSONL_COMPRESSED
+    else:
+        logger.warning(f"Unknown filetype: {key}")
+        return RawFileType.UNKNOWN
+
+
+def preprocess(
+    key: str,
+    fh: BinaryIO,
+    seed: int,
+    content_key: str,
+    seqlen: int = 8192,
+    tokenizer=None,
+    do_sample: bool = False,
+):
+    rng = random.Random(hash(key) + seed)
+    if do_sample:
+        sample_freq = Sources.get_sampling_frequency(key)
+    buffer = []
+    tokenizer_fn, vocab_size = tokenizer
+    try:
+        file_type = get_raw_filetype(key)
+        if file_type == RawFileType.UNKNOWN:
+            return []
+        file_reader = get_reader(file_type, content_key)
+        pbar = tqdm(file_reader(fh))
+        pbar.set_description(key)
+        for string in pbar:
+            tokens = tokenizer_fn(string)
+            EOT = SpecialTokens.END_OF_TEXT.value % (vocab_size + len(SpecialTokens))
+            tokens.append(EOT)
+            buffer += tokens
+            while len(buffer) >= seqlen:
+                if do_sample:
+                    local_sample_freq = sample_freq
+                    # This code does the following
+                    # yield a int(sample_freq) copies of buffer[:seqlen]
+                    # then yield 1 more sample with Pr[sample_freq - int(sample_freq)]
+                    # in expectation we will yield sample_freq copies of buffer[:seqlen]
+                    while local_sample_freq > 1:
+                        yield buffer[:seqlen]
+                        local_sample_freq -= 1
+                    if rng.random() < local_sample_freq:
+                        yield buffer[:seqlen]
+                    buffer = buffer[seqlen:]
+                else:
+                    yield buffer[:seqlen]
+                    buffer = buffer[seqlen:]
+
+    except (IncompleteReadError, ReadTimeoutError, ResponseStreamingError) as e:
+        logger.error(f"There was an incomplete read error: {e} for key {key}")
+        return
+
+
+def process_keys(data, tokenizer, seqlen, seed, content_key):
+    s3_client = boto3.client("s3")
+    path = data["path"]
+    bucket, key = parse_s3_path(path)
+    response = s3_client.get_object(Bucket=bucket, Key=key)
+    fh = response["Body"]
+    token_buffers = preprocess(
+        key,
+        fh,
+        seqlen=seqlen,
+        seed=seed,
+        tokenizer=tokenizer,
+        content_key=content_key,
+        do_sample=False,
+    )
+    for token_buffer in token_buffers:
+        yield {"tokens": token_buffer}
 
 
 class SpecialTokens(Enum):
@@ -110,18 +315,34 @@ def dl_parse_s3(data, creds=None):
     else:
         client = boto3.client("s3")
     out_dicts = []
+    # TODO make this more streaming friendly to use less mem
     for path in data["path"]:
         bucket, key = parse_s3_path(path)
-        json_lines = download_to_memory_with_progress(bucket, key).decode().splitlines()
-        jsons = [json.loads(x) for x in json_lines]
+        data_bytes = download_to_memory_with_progress(bucket, key)
+        if path.endswith("jsonl"):
+            json_lines = data_bytes.decode().splitlines()
+            jsons = [json.loads(x) for x in json_lines]
+        elif path.endswith("zst"):
+            bio = io.BytesIO(data_bytes)
+            dctx = zstd.ZstdDecompressor()
+            with dctx.stream_reader(bio) as reader:
+                with io.TextIOWrapper(reader, encoding="utf-8") as text_reader:
+                    with jsonlines.Reader(text_reader) as jsonl_reader:
+                        jsons = [x for x in jsonl_reader]
+        else:
+            raise ValueError(f"Unknown suffix: {path.split('.')[-1]}")
         out_dicts += jsons
     return pd.DataFrame(out_dicts)
 
 
 def dist_tokenize(data, tokenizer, content_key):
     out_dicts = []
+    tokenizer_fn, vocab_size = tokenizer
     for tokens in data[content_key]:
-        tokens = tokenizer(tokens) + [SpecialTokens.END_OF_TEXT.value]
+        # handle special tokens by adding slack tokens
+        tokens = tokenizer_fn(tokens) + [
+            SpecialTokens.END_OF_TEXT.value % (vocab_size + len(SpecialTokens))
+        ]
         out_dict = {}
         out_dict["tokens"] = tokens
         out_dicts.append(out_dict)
@@ -131,13 +352,19 @@ def dist_tokenize(data, tokenizer, content_key):
 def cut_to_context(jsonl_batch, seqlen=1024, pad_type=PadType.CIRCULAR):
     tokens_list = jsonl_batch["tokens"]
     flat_token_list = [item for sublist in tokens_list for item in sublist]
-    repartioned_lists = [flat_token_list[i : i + seqlen] for i in range(0, len(flat_token_list), seqlen)]
+    repartioned_lists = [
+        flat_token_list[i : i + seqlen] for i in range(0, len(flat_token_list), seqlen)
+    ]
     end_len = len(repartioned_lists[-1])
     if len(repartioned_lists[-1]) < seqlen:
         if pad_type == PadType.CIRCULAR:
-            repartioned_lists[-1] = repartioned_lists[-1] + repartioned_lists[0][: (seqlen - end_len)]
+            repartioned_lists[-1] = (
+                repartioned_lists[-1] + repartioned_lists[0][: (seqlen - end_len)]
+            )
         else:
-            repartioned_lists[-1] = repartioned_lists[-1] + [SpecialTokens.PAD.value] * (seqlen - end_len)
+            repartioned_lists[-1] = repartioned_lists[-1] + [
+                SpecialTokens.PAD.value
+            ] * (seqlen - end_len)
     return {"tokens": repartioned_lists}
 
 
@@ -164,8 +391,11 @@ def map_write_wds(batch, batch_size, folder, counter):
     with wds.TarWriter(bio) as sink:
         for i in range(len(batch["tokens"])):
             tokens = [int(x) for x in batch["tokens"][i]]
-            uid = hashlib.md5(json.dumps(tokens).encode()).hexdigest()
-            sample = {"__key__": uid, "json": tokens}
+            token_count = ray.get(counter.increment_token_count.remote(len(tokens)))
+            json_string = json.dumps(tokens)
+            gzipped_json = gzip.compress(json_string.encode())
+            uid = hashlib.md5(json_string.encode()).hexdigest()
+            sample = {"__key__": uid, "json.gz": gzipped_json}
             sink.write(sample)
 
     bio.seek(0)
@@ -205,7 +435,7 @@ def write_to_location(folder, tar_name, bio):
 def load_tokenizer(tokenizer):
     if tokenizer == "EleutherAI/gpt-neox-20b":
         enc = GPTNeoXTokenizerFast.from_pretrained("EleutherAI/gpt-neox-20b")
-        return lambda x: enc(x).input_ids
+        return (lambda x: enc(x).input_ids, enc.vocab_size)
     else:
         raise ValueError(f"Unknown Tokenizer: {tokenizer}")
 
@@ -231,7 +461,11 @@ def glob_files(path, suffix=".jsonl"):
         # List the objects in the bucket with the given prefix
         paginator = s3.get_paginator("list_objects_v2")
         pages = paginator.paginate(Bucket=bucket_name, Prefix=prefix)
-        all_files = [f"s3://{bucket_name}/{obj['Key']}" for objects in pages for obj in objects.get("Contents", [])]
+        all_files = [
+            f"s3://{bucket_name}/{obj['Key']}"
+            for objects in pages
+            for obj in objects.get("Contents", [])
+        ]
 
         # Filter out the files based on the suffix
         matching_files = [f for f in all_files if f.endswith(suffix)]
@@ -254,7 +488,9 @@ def get_filesystem(environment):
     # Extract the AWS credentials from the environment dictionary
     access_key = environment.get("AWS_ACCESS_KEY_ID")
     secret_key = environment.get("AWS_SECRET_ACCESS_KEY")
-    session_token = environment.get("AWS_SESSION_TOKEN", None)  # Session token might be optional
+    session_token = environment.get(
+        "AWS_SESSION_TOKEN", None
+    )  # Session token might be optional
 
     # Create and return the S3FileSystem
     return fs.S3FileSystem(
@@ -269,13 +505,21 @@ def get_filesystem(environment):
 class GlobalCounter:
     def __init__(self):
         self.value = 0
+        self.token_count = 0
 
     def increment(self):
         self.value += 1
         return self.value
 
+    def increment_token_count(self, num_tokens):
+        self.token_count += num_tokens
+        return self.token_count
+
     def get_counter(self):
         return self.value
+
+    def get_token_counter(self):
+        return self.token_count
 
 
 def human_to_bytes(s):
@@ -295,7 +539,11 @@ def human_to_bytes(s):
     """
 
     symbols = ("B", "K", "M", "G", "T", "P")
-    letter = s[-2:].strip().upper() if s[-2:].strip().upper()[:-1] in symbols else s[-1:].upper()
+    letter = (
+        s[-2:].strip().upper()
+        if s[-2:].strip().upper()[:-1] in symbols
+        else s[-1:].upper()
+    )
     number = float(s[: -len(letter)].strip())
 
     if letter == "B":
@@ -325,19 +573,21 @@ if __name__ == "__main__":
         # e.g s3://dcnlp-data/rpj_tokenized_upsampled_eleutherai_deduplicated/
     )
     parser.add_argument("--content_key", type=str, default="text")
-    parser.add_argument("--no_shuffle", help="do not dedup + random shuffle", action="store_true")
     parser.add_argument("--seqlen", type=int, default=2048)
     parser.add_argument("--pad_type", type=str, default="circular")
     parser.add_argument("--tokenizer", type=str, default="EleutherAI/gpt-neox-20b")
     parser.add_argument("--initial_batch_size", type=int, default=2048)
-    parser.add_argument("--wds_chunk_size", type=int, default=2048)
+    parser.add_argument("--wds_chunk_size", type=int, default=16384)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--per_node_parallelism", type=int, default=8)
     parser.add_argument("--subset", type=int, default=None)
     parser.add_argument("--materialize", action="store_true")
     parser.add_argument("--ray_address", type=str, default=None)
     parser.add_argument("--block_size", type=str, default="10MB")
-    parser.add_argument("--ray_spill_location", type=str, default="s3://dcnlp-hub/ray_spill")
+    parser.add_argument("--no_shuffle", action="store_true")
+    parser.add_argument(
+        "--ray_spill_location", type=str, default="s3://dcnlp-hub/ray_spill"
+    )
 
     args = parser.parse_args()
     # configure remote spilling
@@ -350,14 +600,20 @@ if __name__ == "__main__":
     else:
         fs = None
     if args.ray_address is None:
-        ray.init(runtime_env=runtime_env)
+        ray.init(runtime_env=runtime_env, _temp_dir="/mnt/ray_tmp/")
     else:
-        ray.init(args.ray_address, runtime_env=runtime_env)
+        ray.init(args.ray_address, runtime_env=runtime_env, _temp_dir="/mnt/ray_tmp/")
     num_nodes = len(ray.nodes())
     # TODO  support multiple inputs
-    input_paths = glob_files(args.input, suffix=".jsonl")
+    input_folders = args.input.split(",")
+    input_paths = []
+    for inp_folder in input_folders:
+        input_paths += glob_files(inp_folder, suffix=".jsonl")
+        input_paths += glob_files(inp_folder, suffix=".zst")
     if args.subset is not None:
         input_paths = input_paths[: args.subset]
+    rng = random.Random(args.seed)
+    rng.shuffle(input_paths)
     print(f"num files ={len(input_paths)}")
     num_files = len(input_paths)
     num_cores = os.cpu_count()
@@ -376,39 +632,31 @@ if __name__ == "__main__":
 
     ctx = DataContext.get_current()
     ctx.use_push_based_shuffle = True
-    ctx.execution_options.resource_limits.object_store_memory = float("inf")
+    # ctx.execution_options.resource_limits.object_store_memory = float("inf")
     ray.data.DataContext.get_current().execution_options.verbose_progress = True
     start_time = time.time()
     tokenizer = load_tokenizer(args.tokenizer)
     logger.info(f"Total number of keys = {len(input_paths)}")
     df = pd.DataFrame(input_paths, columns=["path"])
-    # TODO fix hack for now.
-    ds = ds.map_batches(
-        dl_parse_s3,
-        batch_size=1,
-        fn_kwargs={"creds": creds},
-        batch_format="pandas",
-        num_cpus=16,
+    ds = ray.data.from_pandas(pd.DataFrame(input_paths, columns=["path"])).repartition(
+        num_files
     )
-    ds = ds.map_batches(
-        dist_tokenize,
-        batch_size=batch_size,
-        fn_kwargs={"tokenizer": tokenizer, "content_key": content_key},
-        batch_format="pandas",
-        num_cpus=16,
-    )
-    ds = ds.map_batches(
-        cut_to_context,
-        batch_size=batch_size,
-        fn_kwargs={"pad_type": pad_type, "seqlen": seqlen},
-        batch_format="pandas",
+    ds = ds.flat_map(
+        lambda x: process_keys(
+            x,
+            tokenizer=tokenizer,
+            seqlen=seqlen,
+            seed=args.seed,
+            content_key=content_key,
+        )
     )
     ds = ds.map(add_hash)
     tokenize_context_end = time.time()
     # sorting by hash is a random shuffle
-    ds = ds.sort(key="hash")
-    if args.materialize:
-        ds = ds.materialize()
+    if not args.no_shuffle:
+        ds = ds.sort(key="hash")
+    else:
+        ds = ds.repartition(num_cores * num_nodes, shuffle=False)
     counter = GlobalCounter.remote()
     ds = ds.map_batches(
         map_write_wds,
@@ -421,7 +669,9 @@ if __name__ == "__main__":
     ).count()
     end_time = time.time()
     duration = end_time - start_time
-    print("Tokenize + Shuffle script Finished in", duration)
+    final_token_count = ray.get(counter.increment_token_count.remote(0))
+    print(f"Tokenize + Shuffle script Finished in: {duration}")
+    print(f"Final Token Count: {final_token_count}")
     print("==== Driver memory summary ====")
     maxrss = int(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss * 1e3)
     print(f"max: {maxrss / 1e9}/GB")
