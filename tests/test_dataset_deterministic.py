@@ -68,7 +68,7 @@ def retrieve_dataset_once_resampled(epoch, weights, seed, min_shards_needed=2):
 
 
 @pytest.mark.parametrize("epoch", [0, 2])
-@pytest.mark.parametrize("weights", [[0.5, 0.5], [0.9, 0.1]])
+@pytest.mark.parametrize("weights", [[0.5, 0.5], [0.6, 0.4]])
 @pytest.mark.parametrize("seed", [0, 17])
 def test_deterministic_no_buffer(epoch, weights, seed):
     disable_buffer = True
@@ -78,7 +78,7 @@ def test_deterministic_no_buffer(epoch, weights, seed):
 
 
 @pytest.mark.parametrize("epoch", [0, 2])
-@pytest.mark.parametrize("weights", [[0.5, 0.5], [0.9, 0.1]])
+@pytest.mark.parametrize("weights", [[0.5, 0.5], [0.6, 0.4]])
 @pytest.mark.parametrize("seed", [0, 17])
 def test_deterministic_with_buffer(epoch, weights, seed):
     disable_buffer = False
@@ -88,7 +88,7 @@ def test_deterministic_with_buffer(epoch, weights, seed):
 
 
 @pytest.mark.parametrize("epoch", [0, 2])
-@pytest.mark.parametrize("weights", [[0.5, 0.5], [0.9, 0.1]])
+@pytest.mark.parametrize("weights", [[0.5, 0.5], [0.6, 0.4]])
 @pytest.mark.parametrize("seed", [0, 17])
 def test_deterministic_resampled(epoch, weights, seed):
     output1 = retrieve_dataset_once_resampled(epoch, weights, seed)
@@ -111,7 +111,7 @@ def test_count_manifest():
     idx = random.randint(0, len(metadata))
     item = metadata[idx]
     shard_path = os.path.join(
-        str(Path(INPUT_PATHS[0]).parent), "shard_" + item["shard"] + ".tar"
+        str(Path(INPUT_PATHS[0]).parent), item["shard"] + ".tar"
     )
     shard_ds = wds.WebDataset(str(shard_path))
     count = 0
