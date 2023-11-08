@@ -95,6 +95,7 @@ class HeadRotaryEmbedding(torch.nn.Module):
             apply_rotary_pos_emb(k, self._cos_cached, self._sin_cached),
         )
 
+
 class HeadRotaryWithCast(HeadRotaryEmbedding):
     # NOTE: this version has the bug, but we trained the 7B model with it so it's default
     def forward(self, q, k, v):

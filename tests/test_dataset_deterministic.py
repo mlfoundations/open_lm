@@ -7,7 +7,11 @@ import glob
 from open_lm.model import _MODEL_CONFIGS
 from open_lm.main import random_seed
 from open_lm.data import get_wds_dataset
-from open_lm.file_utils import get_string_for_epoch, get_metadata_file, get_shards_for_chunk
+from open_lm.file_utils import (
+    get_string_for_epoch,
+    get_metadata_file,
+    get_shards_for_chunk,
+)
 from open_lm.params import parse_args
 from pathlib import Path
 
@@ -95,11 +99,14 @@ def test_deterministic_resampled(epoch, weights, seed):
     output2 = retrieve_dataset_once_resampled(epoch, weights, seed)
     assert output1 == output2
 
+
 @pytest.mark.parametrize("epoch", [0, 2])
 @pytest.mark.parametrize("weights", [[0.5, 0.5], [0.6, 0.4]])
 @pytest.mark.parametrize("min_shards_needed", [2, 4])
 def test_min_shards(epoch, weights, min_shards_needed):
-    shard_strings, _, _ = get_string_for_epoch(NUM_SAMPLES, epoch, INPUT_PATHS, weights, min_shards_needed)
+    shard_strings, _, _ = get_string_for_epoch(
+        NUM_SAMPLES, epoch, INPUT_PATHS, weights, min_shards_needed
+    )
     for item in shard_strings:
         num_shards = len(item.split(","))
         assert num_shards >= min_shards_needed

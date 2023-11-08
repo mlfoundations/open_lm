@@ -402,7 +402,7 @@ if __name__ == "__main__":
     tokenizer = load_tokenizer(args.tokenizer)
     logger.info(f"Total number of keys = {len(input_paths)}")
     df = pd.DataFrame(input_paths, columns=["path"])
-    #TODO fix hack for now.
+    # TODO fix hack for now.
     ds = ds.map_batches(
         dl_parse_s3,
         batch_size=1,

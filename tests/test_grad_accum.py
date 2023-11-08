@@ -69,7 +69,12 @@ def create_grad_acc_fixtures():
 def _grad_acc_helper(test_fsdp, accs=[2, 1], threshold=1e-7):
     if test_fsdp:
         world_size = 1
-        mp.spawn(_grad_acc_helper_fsdp, args=(world_size, accs, threshold), nprocs=world_size, join=True)
+        mp.spawn(
+            _grad_acc_helper_fsdp,
+            args=(world_size, accs, threshold),
+            nprocs=world_size,
+            join=True,
+        )
     else:
         _grad_acc_helper_single(test_fsdp=False, accs=accs, threshold=threshold)
 

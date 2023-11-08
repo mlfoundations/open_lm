@@ -684,8 +684,12 @@ def main(args):
                 chosen_num_samples = None
 
             data["train"] = get_wds_dataset(
-                args, True, epoch, force_num_samples=chosen_num_samples, data_key=args.data_key,
-            )                
+                args,
+                True,
+                epoch,
+                force_num_samples=chosen_num_samples,
+                data_key=args.data_key,
+            )
 
         try:
             prev_step = int(optimizer.state_dict()["state"][0]["step"].item())
@@ -710,8 +714,12 @@ def main(args):
         if args.distributed:
             dist.barrier()
 
-        steps_done_epoch = int(optimizer.state_dict()["state"][0]["step"].item()) - prev_step
-        samples_seen = samples_seen + steps_done_epoch * args.batch_size * args.world_size
+        steps_done_epoch = (
+            int(optimizer.state_dict()["state"][0]["step"].item()) - prev_step
+        )
+        samples_seen = (
+            samples_seen + steps_done_epoch * args.batch_size * args.world_size
+        )
 
         if not success:
             logging.info(f"Training exiting due to NaN value")
