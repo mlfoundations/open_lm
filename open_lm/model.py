@@ -99,6 +99,7 @@ def get_pos_embed(args: Params):
             f"Unknown positional embedding type {args.positional_embedding_type}"
         )
 
+
 class CustomAttn(nn.Module):
     def __init__(self, layer_id, args: Params):
         super().__init__()
@@ -299,7 +300,7 @@ def create_params(args):
     else:
         raise ValueError("Pass a pre-defined open_lm model name or a json config")
 
-    # Note: here all the parameters should come from the config file 
+    # Note: here all the parameters should come from the config file
     # but for retro-compatibility, we add new model parameters to the args (with a default value that matches the old version)
     # These args are managed separately by the argparser
     # If a parameter is in the model config, regardless of the args, we use the config parameters
@@ -314,7 +315,9 @@ def create_params(args):
         weight_tying=cfg["weight_tying"],
         norm_type=get_norm_class(cfg.get("model_norm", args.model_norm)),
         apply_qk_norm=cfg.get("qk_norm", args.qk_norm),
-        positional_embedding_type=cfg.get("positional_embedding_type", args.positional_embedding_type),
+        positional_embedding_type=cfg.get(
+            "positional_embedding_type", args.positional_embedding_type
+        ),
         ffn_type=cfg.get("ffn_type", args.ffn_type),
     )
 

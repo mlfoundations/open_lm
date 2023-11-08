@@ -22,6 +22,7 @@ def apply_rotary_pos_emb(x, cos, sin):
 
     return (x * cos) + (rotate_half(x) * sin)
 
+
 class RotaryEmbedding(torch.nn.Module):
     """
     The rotary position embeddings from RoFormer_ (Su et. al).
@@ -75,9 +76,7 @@ class RotaryEmbedding(torch.nn.Module):
     def forward(
         self, q: torch.Tensor, k: torch.Tensor
     ) -> Tuple[torch.Tensor, torch.Tensor]:
-        self._cos_cached, self._sin_cached = self._update_cos_sin_tables(
-            k
-        )
+        self._cos_cached, self._sin_cached = self._update_cos_sin_tables(k)
 
         return (
             apply_rotary_pos_emb(q, self._cos_cached, self._sin_cached),

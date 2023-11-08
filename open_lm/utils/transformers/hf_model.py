@@ -23,7 +23,7 @@ class OpenLMforCausalLM(OpenLMModel):
     def __init__(self, config):
         super().__init__(config)
         self.model = Transformer(config)
-        self.lm_head = None        
+        self.lm_head = None
         # Initialize weights and apply final processing
         self.post_init()
 
@@ -78,13 +78,16 @@ class OpenLMforCausalLM(OpenLMModel):
         ```"""
         # decoder outputs consists of (dec_features, layer_state, dec_hidden, dec_attn)
         logits, _ = self.model(input_ids)
-        output = CausalLMOutputWithPast(
-            logits=logits
-        )
+        output = CausalLMOutputWithPast(logits=logits)
         return output
 
     def prepare_inputs_for_generation(
-        self, input_ids, past_key_values=None, attention_mask=None, inputs_embeds=None, **kwargs
+        self,
+        input_ids,
+        past_key_values=None,
+        attention_mask=None,
+        inputs_embeds=None,
+        **kwargs
     ):
         if past_key_values:
             input_ids = input_ids[:, -1:]
@@ -108,10 +111,14 @@ class OpenLMforCausalLM(OpenLMModel):
     def _reorder_cache(past_key_values, beam_idx):
         reordered_past = ()
         for layer_past in past_key_values:
-            reordered_past += (tuple(past_state.index_select(0, beam_idx) for past_state in layer_past),)
+            reordered_past += (
+                tuple(
+                    past_state.index_select(0, beam_idx) for past_state in layer_past
+                ),
+            )
         return reordered_past
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     openlm_config = OpenLMConfig.from_pretrained("utils/transformers/open_lm_config")
     print(OpenLMModel(openlm_config))

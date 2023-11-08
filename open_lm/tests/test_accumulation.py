@@ -33,7 +33,11 @@ class DummyDataset(Dataset):
 
     def __getitem__(self, idx):
         generator = torch.Generator().manual_seed(idx)
-        return ((torch.rand(self.seq_len + 1, generator=generator) * self.vocab_size).long(),)
+        return (
+            (
+                torch.rand(self.seq_len + 1, generator=generator) * self.vocab_size
+            ).long(),
+        )
 
 
 # Unit test
