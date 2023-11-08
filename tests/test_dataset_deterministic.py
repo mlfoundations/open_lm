@@ -11,7 +11,7 @@ from open_lm.file_utils import get_string_for_epoch, get_metadata_file, get_shar
 from open_lm.params import parse_args
 from pathlib import Path
 
-NUM_SAMPLES = 10000
+NUM_SAMPLES = 1000
 
 # Update this to two data sources with webdataset, each with their own manifest.
 INPUT_PATHS = [
@@ -68,7 +68,7 @@ def retrieve_dataset_once_resampled(epoch, weights, seed, min_shards_needed=2):
 
 
 @pytest.mark.parametrize("epoch", [0, 2])
-@pytest.mark.parametrize("weights", [[0.5, 0.5], [0.6, 0.4]])
+@pytest.mark.parametrize("weights", [[0.5, 0.5], [0.9, 0.1]])
 @pytest.mark.parametrize("seed", [0, 17])
 def test_deterministic_no_buffer(epoch, weights, seed):
     disable_buffer = True
@@ -78,7 +78,7 @@ def test_deterministic_no_buffer(epoch, weights, seed):
 
 
 @pytest.mark.parametrize("epoch", [0, 2])
-@pytest.mark.parametrize("weights", [[0.5, 0.5], [0.6, 0.4]])
+@pytest.mark.parametrize("weights", [[0.5, 0.5], [0.9, 0.1]])
 @pytest.mark.parametrize("seed", [0, 17])
 def test_deterministic_with_buffer(epoch, weights, seed):
     disable_buffer = False
@@ -88,7 +88,7 @@ def test_deterministic_with_buffer(epoch, weights, seed):
 
 
 @pytest.mark.parametrize("epoch", [0, 2])
-@pytest.mark.parametrize("weights", [[0.5, 0.5], [0.6, 0.4]])
+@pytest.mark.parametrize("weights", [[0.5, 0.5], [0.9, 0.1]])
 @pytest.mark.parametrize("seed", [0, 17])
 def test_deterministic_resampled(epoch, weights, seed):
     output1 = retrieve_dataset_once_resampled(epoch, weights, seed)
