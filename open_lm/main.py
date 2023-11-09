@@ -28,6 +28,7 @@ from torch.distributed.fsdp import (
     CPUOffload,
 )
 from torch.distributed.fsdp.wrap import transformer_auto_wrap_policy
+from transformers import AutoTokenizer
 
 from .data import proc_token
 from .model import Block
@@ -345,6 +346,15 @@ def main(args):
         logging.info(f"Running with a single process. Device {args.device}.")
 
     random_seed(args.seed, 0)
+
+    if args.fim_rate > 0:
+        tokenizer = AutoTokenizer.from_pretrained(args.tokenizer)
+        tokenizer.add_tokens(args.fim_prefix_token)
+        tokenizer.add_tokens(args.fim_suffix_token)
+        tokenizer.add_tokens(args.fim_middle_token)
+    else:
+        tokenizer = None
+
     model = create_model(args)
     args.vocab_size = model.vocab_size
     args.seq_len = model.seq_len
@@ -646,6 +656,7 @@ def main(args):
             dist.barrier()
 
         success = train_one_epoch(
+            tokenizer,
             model,
             data,
             loss,

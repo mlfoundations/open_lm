@@ -174,6 +174,13 @@ def parse_args(args):
     parser.add_argument("--eps", type=float, default=None, help="Adam epsilon.")
     parser.add_argument("--wd", type=float, default=0.2, help="Weight decay.")
     parser.add_argument("--warmup", type=int, default=10000, help="Number of steps to warmup for.")
+
+    parser.add_argument("--tokenizer", type=str, default="EleutherAI/gpt-neox-20b", help="Only used for FIM")
+    parser.add_argument("--fim-rate", type=float, default=0, help="Percentage of fill-in-middle")
+    parser.add_argument("--fim-prefix-token", type=str, default="<prefix>", help="Token to indicate prefix in FIM")
+    parser.add_argument("--fim-suffix-token", type=str, default="<suffix>", help="Token to indicate suffix in FIM")
+    parser.add_argument("--fim-middle-token", type=str, default="<middle>", help="Token to indicate middle in FIM")
+
     parser.add_argument(
         "--z-loss-coefficient",
         type=float,

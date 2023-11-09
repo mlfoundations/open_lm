@@ -95,7 +95,27 @@ def sample_chunk(chunk, seq_len, target_mask_left_tok):
     return inputs, targets
 
 
-def train_one_epoch(model, data, loss, epoch, optimizer, scaler, scheduler, args, tb_writer=None):
+def permute_segment(sample, fim_rate, prefix_tok_id, suffix_tok_id, middle_tok_id):
+    # https://github.com/bigcode-project/Megatron-LM/blob/bd0aaba3492b441d7f186bb1159fc21e1dcd7a72/megatron/data/gpt_dataset.py#L684
+    # They pass an argument to keep track of the random seed. Not using it for now in our version.
+
+    if sample.shape[0] > 3 and np.random.rand() < fim_rate:
+        # Shave off 3 tokens from the end of the input to make space for the 3 added tokens
+        boundaries = np.random.choice(sample.shape[0] - 3, 2)
+        boundaries.sort()
+
+        prefix = sample[: boundaries[0]]
+        middle = sample[boundaries[0] : boundaries[1]]
+        suffix = sample[boundaries[1] : -3]
+
+        new_sample = np.concatenate([[prefix_tok_id], prefix, [suffix_tok_id], suffix, [middle_tok_id], middle])
+    else:
+        new_sample = sample
+
+    return new_sample
+
+
+def train_one_epoch(tokenizer, model, data, loss, epoch, optimizer, scaler, scheduler, args, tb_writer=None):
     device = torch.device(args.device)
     autocast = get_autocast(args.precision)
 
@@ -115,6 +135,12 @@ def train_one_epoch(model, data, loss, epoch, optimizer, scaler, scheduler, args
 
     end = time.time()
 
+    if args.fim_rate > 0:
+        prefix_id = tokenizer.encode(args.fim_prefix_token, add_special_tokens=False)[0]
+        suffix_id = tokenizer.encode(args.fim_suffix_token, add_special_tokens=False)[0]
+        middle_id = tokenizer.encode(args.fim_middle_token, add_special_tokens=False)[0]
+        eos_id = tokenizer.eos_token_id
+
     for i, batch in enumerate(dataloader):
         try:
             step = int(optimizer.state_dict()["state"][0]["step"].item())
@@ -126,7 +152,32 @@ def train_one_epoch(model, data, loss, epoch, optimizer, scaler, scheduler, args
             scheduler(step)
 
         (texts,) = batch
-        texts = torch.LongTensor(texts).to(device)
+        if args.fim_rate > 0:
+            texts_fim_permuted = []
+            text_np = np.array(texts)
+            for t in text_np:
+                segment_breaks = np.argwhere(t == eos_id)
+                if len(segment_breaks) > 0:
+                    new_samples = []
+                    curr_start_pos = 0
+                    for pos in segment_breaks:
+                        sample = []
+                        if pos - curr_start_pos > 0:
+                            sample = permute_segment(
+                                t[curr_start_pos : pos[0]], args.fim_rate, prefix_id, suffix_id, middle_id
+                            )
+                        new_samples += [sample, np.array([eos_id])]
+                        curr_start_pos = pos[0] + 1
+                    sample = permute_segment(t[curr_start_pos:], args.fim_rate, prefix_id, suffix_id, middle_id)
+                    new_samples.append(sample)
+                    sample = np.concatenate(new_samples)
+                else:
+                    sample = permute_segment(t, args.fim_rate, prefix_id, suffix_id, middle_id)
+                texts_fim_permuted.append(list(sample))
+            texts = torch.LongTensor(texts_fim_permuted).to(device)
+        else:
+            texts = torch.LongTensor(texts).to(device)
+
         data_time_m.update(time.time() - end)
         optimizer.zero_grad()
 
