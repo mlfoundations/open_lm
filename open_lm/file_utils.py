@@ -21,9 +21,7 @@ def remote_sync_s3(local_dir, remote_dir):
         stderr=subprocess.PIPE,
     )
     if result.returncode != 0:
-        logging.error(
-            f"Error: Failed to sync with S3 bucket {result.stderr.decode('utf-8')}"
-        )
+        logging.error(f"Error: Failed to sync with S3 bucket {result.stderr.decode('utf-8')}")
         return False
 
     logging.info(f"Successfully synced with S3 bucket")
@@ -89,9 +87,7 @@ def pt_save(pt_obj, file_path):
 
 def _pt_load_s3_cp(file_path, map_location=None):
     cmd = f"aws s3 cp {file_path} -"
-    proc = subprocess.Popen(
-        cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE
-    )
+    proc = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     stdout, stderr = proc.communicate()
     if proc.returncode != 0:
         raise Exception(f"Failed to fetch model from s3. stderr: {stderr.decode()}")
@@ -179,22 +175,17 @@ def source_exhausted(paths, shard_list_per_source):
     return False
 
 
-def get_string_for_epoch(
-    num_samples, starting_chunk, paths, weights, min_shards_needed
-):
+def get_string_for_epoch(num_samples, starting_chunk, paths, weights, min_shards_needed):
     if weights is None:
         weights = [1.0 / len(paths) for _ in range(len(paths))]
-    needed_samples_per_source = [
-        int(np.ceil(weights[i] * num_samples / sum(weights)))
-        for i in range(len(weights))
-    ]
+    needed_samples_per_source = [int(np.ceil(weights[i] * num_samples / sum(weights))) for i in range(len(weights))]
     shard_strings_per_source = []
     next_chunk = starting_chunk
     shard_list_per_source = [[] for _ in range(len(paths))]
     num_samples_per_source = [0 for _ in range(len(paths))]
-    while not enough_shards(
-        shard_list_per_source, min_shards_needed
-    ) or not enough_samples(num_samples_per_source, needed_samples_per_source):
+    while not enough_shards(shard_list_per_source, min_shards_needed) or not enough_samples(
+        num_samples_per_source, needed_samples_per_source
+    ):
         for i, source_path in enumerate(paths):
             shard_list_source, num_samples_source = get_shards_for_chunk(
                 needed_samples_per_source[i], next_chunk, source_path
@@ -213,9 +204,7 @@ def get_string_for_epoch(
         shard_list_source = shard_list_per_source[i]
         num_samples_source = num_samples_per_source[i]
         shard_root_source = "/".join(source_path.split("/")[:-1]) + "/"
-        shard_string_source = (
-            shard_root_source + "{" + ",".join(shard_list_source) + "}.tar"
-        )
+        shard_string_source = shard_root_source + "{" + ",".join(shard_list_source) + "}.tar"
         if source_path.startswith("s3"):
             shard_string_source = f"pipe:aws s3 cp {shard_string_source} -"
         shard_strings_per_source.append(shard_string_source)

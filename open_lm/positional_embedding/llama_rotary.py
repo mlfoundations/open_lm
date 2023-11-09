@@ -130,9 +130,7 @@ class LLaMARotaryEmbedding(torch.nn.Module):
             seq_len * 2,
         )
 
-    def forward(
-        self, q: torch.Tensor, k: torch.Tensor, start_pos: int = 0
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
+    def forward(self, q: torch.Tensor, k: torch.Tensor, start_pos: int = 0) -> Tuple[torch.Tensor, torch.Tensor]:
         seq_len = q.shape[1]
         self.freqs_cis = self.freqs_cis.to(q.device)
         freqs_cis = self.freqs_cis[start_pos : start_pos + seq_len]

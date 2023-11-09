@@ -34,9 +34,7 @@ class LayerNorm(nn.Module):
         self.elementwise_bias = elementwise_bias
 
         if self.elementwise_gain:
-            self.weight = Parameter(
-                torch.empty(self.normalized_shape, **factory_kwargs)
-            )
+            self.weight = Parameter(torch.empty(self.normalized_shape, **factory_kwargs))
         else:
             self.register_parameter("weight", None)
 
@@ -57,9 +55,7 @@ class LayerNorm(nn.Module):
                 self.bias.zero_()
 
     def forward(self, input: Tensor) -> Tensor:
-        return F.layer_norm(
-            input, self.normalized_shape, self.weight, self.bias, self.eps
-        )
+        return F.layer_norm(input, self.normalized_shape, self.weight, self.bias, self.eps)
 
     def extra_repr(self) -> str:
         return (
@@ -78,14 +74,8 @@ class LPLayerNorm(LayerNorm):
     def forward(self, x):
         module_device = x.device
         downcast_x = _cast_if_autocast_enabled(x)
-        downcast_weight = (
-            _cast_if_autocast_enabled(self.weight)
-            if self.weight is not None
-            else self.weight
-        )
-        downcast_bias = (
-            _cast_if_autocast_enabled(self.bias) if self.bias is not None else self.bias
-        )
+        downcast_weight = _cast_if_autocast_enabled(self.weight) if self.weight is not None else self.weight
+        downcast_bias = _cast_if_autocast_enabled(self.bias) if self.bias is not None else self.bias
         with torch.autocast(enabled=False, device_type=module_device.type):
             return F.layer_norm(
                 downcast_x,

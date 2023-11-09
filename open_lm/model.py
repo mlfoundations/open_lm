@@ -52,10 +52,7 @@ def _rescan_model_configs(model_config_paths=None):
             model_cfg = json.load(f)
             _MODEL_CONFIGS[cf.stem] = model_cfg
 
-    _MODEL_CONFIGS = {
-        k: v
-        for k, v in sorted(_MODEL_CONFIGS.items(), key=lambda x: _natural_key(x[0]))
-    }
+    _MODEL_CONFIGS = {k: v for k, v in sorted(_MODEL_CONFIGS.items(), key=lambda x: _natural_key(x[0]))}
 
 
 _rescan_model_configs()  # initial populate of model config registry
@@ -95,9 +92,7 @@ def get_pos_embed(args: Params):
     elif args.positional_embedding_type == "head_rotary":
         return HeadRotaryWithCast(head_dim, args.seq_len)
     else:
-        raise RuntimeError(
-            f"Unknown positional embedding type {args.positional_embedding_type}"
-        )
+        raise RuntimeError(f"Unknown positional embedding type {args.positional_embedding_type}")
 
 
 class CustomAttn(nn.Module):
@@ -116,9 +111,7 @@ class CustomAttn(nn.Module):
         torch.nn.init.trunc_normal_(self.in_proj.weight, std=std, a=-3 * std, b=3 * std)
         # scale init by depth as in https://arxiv.org/abs/1908.11365 -- worked slightly better.
         std = std / math.sqrt(2 * (layer_id + 1))
-        torch.nn.init.trunc_normal_(
-            self.out_proj.weight, std=std, a=-3 * std, b=3 * std
-        )
+        torch.nn.init.trunc_normal_(self.out_proj.weight, std=std, a=-3 * std, b=3 * std)
 
         # initialize norm layers for queries and keys if needed
         self.q_norm = (
@@ -175,9 +168,7 @@ class Block(nn.Module):
             hidden_dim = args.dim * 4
             self._ff_w1 = nn.Linear(args.dim, hidden_dim, bias=False)
             self._ff_w2 = nn.Linear(hidden_dim, args.dim, bias=False)
-            self.feed_forward = nn.Sequential(
-                self._ff_w1, nn.GELU(approximate="none"), self._ff_w2
-            )
+            self.feed_forward = nn.Sequential(self._ff_w1, nn.GELU(approximate="none"), self._ff_w2)
         self.layer_id = layer_id
         self.attention_norm = args.norm_type(
             args.dim,
@@ -192,26 +183,18 @@ class Block(nn.Module):
         if args.ffn_type == "swiglu":
             # initialize weights trunc_normal(1/sqrt(fan_in))
             std = 1.0 / math.sqrt(args.dim)
-            torch.nn.init.trunc_normal_(
-                self.feed_forward.w12.weight, std=std, a=-3 * std, b=3 * std
-            )
+            torch.nn.init.trunc_normal_(self.feed_forward.w12.weight, std=std, a=-3 * std, b=3 * std)
             # scale init by depth as in https://arxiv.org/abs/1908.11365 -- worked slightly better.
             std = 1.0 / math.sqrt(hidden_dim)
             std = std / math.sqrt(2 * (layer_id + 1))
-            torch.nn.init.trunc_normal_(
-                self.feed_forward.w3.weight, std=std, a=-3 * std, b=3 * std
-            )
+            torch.nn.init.trunc_normal_(self.feed_forward.w3.weight, std=std, a=-3 * std, b=3 * std)
         elif args.ffn_type == "gelu":
             std = 1.0 / math.sqrt(args.dim)
-            torch.nn.init.trunc_normal_(
-                self._ff_w1.weight, std=std, a=-3 * std, b=3 * std
-            )
+            torch.nn.init.trunc_normal_(self._ff_w1.weight, std=std, a=-3 * std, b=3 * std)
 
             std = 1.0 / math.sqrt(hidden_dim)
             std = std / math.sqrt(2 * (layer_id + 1))
-            torch.nn.init.trunc_normal_(
-                self._ff_w2.weight, std=std, a=-3 * std, b=3 * std
-            )
+            torch.nn.init.trunc_normal_(self._ff_w2.weight, std=std, a=-3 * std, b=3 * std)
 
     def forward(self, x):
         h = x + self.attention(self.attention_norm(x), is_causal=True)
@@ -258,9 +241,7 @@ class Transformer(nn.Module, PyTorchModelHubMixin):
         # for the embed layer (from RWKV paper) but this was better.
         std = 1.0 / math.sqrt(params.dim)
         torch.nn.init.trunc_normal_(self.output.weight, std=std, a=-3 * std, b=3 * std)
-        torch.nn.init.trunc_normal_(
-            self.tok_embeddings.weight, std=std, a=-3 * std, b=3 * std
-        )
+        torch.nn.init.trunc_normal_(self.tok_embeddings.weight, std=std, a=-3 * std, b=3 * std)
 
     @torch.jit.ignore
     def set_grad_checkpointing(self, enable=True):
@@ -315,9 +296,7 @@ def create_params(args):
         weight_tying=cfg["weight_tying"],
         norm_type=get_norm_class(cfg.get("model_norm", args.model_norm)),
         apply_qk_norm=cfg.get("qk_norm", args.qk_norm),
-        positional_embedding_type=cfg.get(
-            "positional_embedding_type", args.positional_embedding_type
-        ),
+        positional_embedding_type=cfg.get("positional_embedding_type", args.positional_embedding_type),
         ffn_type=cfg.get("ffn_type", args.ffn_type),
     )
 

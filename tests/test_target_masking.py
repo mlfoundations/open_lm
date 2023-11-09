@@ -46,6 +46,7 @@ def test_create_replace_before_tok():
             [42, -100, 42, 1],
         ]
     )
+
     assert equal(
         replace_before_tok(batched_tokens, special_token, -100, excusive=True), target2
     )

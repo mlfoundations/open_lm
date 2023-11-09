@@ -144,9 +144,7 @@ def log_and_continue(exn):
     return True
 
 
-def group_by_keys_nothrow(
-    data, keys=base_plus_ext, lcase=True, suffixes=None, handler=None
-):
+def group_by_keys_nothrow(data, keys=base_plus_ext, lcase=True, suffixes=None, handler=None):
     """Return function over iterator that groups key, value pairs into samples.
 
     :param keys: function that splits the key into key and extension (base_plus_ext)
@@ -164,11 +162,7 @@ def group_by_keys_nothrow(
         # FIXME webdataset version throws if suffix in current_sample, but we have a potential for
         #  this happening in the current LAION400m dataset if a tar ends with same prefix as the next
         #  begins, rare, but can happen since prefix aren't unique across tar files in that dataset
-        if (
-            current_sample is None
-            or prefix != current_sample["__key__"]
-            or suffix in current_sample
-        ):
+        if current_sample is None or prefix != current_sample["__key__"] or suffix in current_sample:
             if valid_sample(current_sample):
                 yield current_sample
             current_sample = dict(__key__=prefix, __url__=filesample["__url__"])
@@ -290,9 +284,7 @@ class ResampledShards2(IterableDataset):
             if self.weights is None:
                 yield dict(url=self.rng.choice(self.urls))
             else:
-                yield dict(
-                    url=self.rng.choices(self.urls, weights=self.weights, k=1)[0]
-                )
+                yield dict(url=self.rng.choices(self.urls, weights=self.weights, k=1)[0])
 
 
 def filter_lt_seqlen(seq_len, x):
@@ -330,9 +322,7 @@ def get_wds_dataset(
                     num_samples = force_num_samples[ii]
                 else:
                     if args.train_data_mix_weights is not None:
-                        num_samples = int(
-                            args.train_num_samples * args.train_data_mix_weights[ii]
-                        )
+                        num_samples = int(args.train_num_samples * args.train_data_mix_weights[ii])
                     else:
                         num_samples = args.train_num_samples // len(input_shards_)
             else:
@@ -346,9 +336,7 @@ def get_wds_dataset(
             # Eval will just exhaust the iterator if the size is not specified.
             num_samples = args.val_num_samples or 0
 
-        shared_epoch = SharedEpoch(
-            epoch=epoch
-        )  # create a shared epoch store to sync epoch to dataloader worker proc
+        shared_epoch = SharedEpoch(epoch=epoch)  # create a shared epoch store to sync epoch to dataloader worker proc
 
         if resampled:
             pipeline = [
@@ -372,9 +360,7 @@ def get_wds_dataset(
                     [
                         detshuffle2(
                             bufsize=0 if args.disable_buffer else _SHARD_SHUFFLE_SIZE,
-                            initial=0
-                            if args.disable_buffer
-                            else _SHARD_SHUFFLE_INITIAL,
+                            initial=0 if args.disable_buffer else _SHARD_SHUFFLE_INITIAL,
                             seed=args.seed,
                             epoch=shared_epoch,
                         ),
@@ -389,9 +375,7 @@ def get_wds_dataset(
                     wds.shuffle(
                         bufsize=0 if args.disable_buffer else _SAMPLE_SHUFFLE_SIZE,
                         initial=0 if args.disable_buffer else _SHARD_SHUFFLE_INITIAL,
-                        rng=random.Random(args.seed + shared_epoch.get_value())
-                        if args.seed is not None
-                        else None,
+                        rng=random.Random(args.seed + shared_epoch.get_value()) if args.seed is not None else None,
                     ),
                 ]
             )
@@ -407,9 +391,7 @@ def get_wds_dataset(
         if data_key == "json":
             pipeline.extend(
                 [
-                    wds.map_dict(
-                        json=partial(preprocess_json, vocab_size=args.vocab_size)
-                    ),
+                    wds.map_dict(json=partial(preprocess_json, vocab_size=args.vocab_size)),
                     wds.to_tuple("json"),
                     wds.select(partial(filter_lt_seqlen, args.seq_len)),
                     wds.batched(args.batch_size, partial=not is_train),
@@ -418,9 +400,7 @@ def get_wds_dataset(
         else:
             pipeline.extend(
                 [
-                    wds.map_dict(
-                        txt=partial(preprocess_txt, vocab_size=args.vocab_size)
-                    ),
+                    wds.map_dict(txt=partial(preprocess_txt, vocab_size=args.vocab_size)),
                     wds.to_tuple("txt"),
                     wds.select(partial(filter_lt_seqlen, args.seq_len)),
                     wds.batched(args.batch_size, partial=not is_train),
@@ -441,15 +421,9 @@ def get_wds_dataset(
         if not resampled:
             num_shards = num_shards or len(expand_urls(input_shards)[0])
             if num_shards < args.workers * args.world_size:
-                print(
-                    "Please increase --train-num-samples or decrease workers or world size"
-                )
-                print(
-                    f"num_shards: {num_shards}, workers: {args.workers}, world_size: {args.world_size}"
-                )
-            assert (
-                num_shards >= args.workers * args.world_size
-            ), "number of shards must be >= total workers"
+                print("Please increase --train-num-samples or decrease workers or world size")
+                print(f"num_shards: {num_shards}, workers: {args.workers}, world_size: {args.world_size}")
+            assert num_shards >= args.workers * args.world_size, "number of shards must be >= total workers"
         # roll over and repeat a few samples to get same number of full batches on each node
         round_fn = math.floor if floor else math.ceil
         global_batch_size = args.batch_size * args.world_size
@@ -458,15 +432,11 @@ def get_wds_dataset(
         for ii in range(len(datasets)):
             num_batches = round_fn(all_num_samples[ii] / global_batch_size)
             num_workers = max(1, args.workers)
-            num_worker_batches = round_fn(
-                num_batches / num_workers
-            )  # per dataloader worker
+            num_worker_batches = round_fn(num_batches / num_workers)  # per dataloader worker
             num_batches = num_worker_batches * num_workers
             num_samples = num_batches * global_batch_size
             # TODO: what is the effect of setting this?
-            datasets[ii] = datasets[ii].with_epoch(
-                num_worker_batches
-            )  # each worker is iterating over this
+            datasets[ii] = datasets[ii].with_epoch(num_worker_batches)  # each worker is iterating over this
 
             total_num_batches += num_batches
             total_num_samples += num_samples
