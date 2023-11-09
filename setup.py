@@ -12,9 +12,7 @@ with open(path.join(here, "README.md"), encoding="utf-8") as f:
 def _read_reqs(relpath):
     fullpath = path.join(path.dirname(__file__), relpath)
     with open(fullpath) as f:
-        return [
-            s.strip() for s in f.readlines() if (s.strip() and not s.startswith("#"))
-        ]
+        return [s.strip() for s in f.readlines() if (s.strip() and not s.startswith("#"))]
 
 
 REQUIREMENTS = _read_reqs("requirements.txt")

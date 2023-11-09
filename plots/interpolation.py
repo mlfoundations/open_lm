@@ -43,12 +43,8 @@ if __name__ == "__main__":
     ):
         xs, ys, colors = [], [], []
         for alpha in np.arange(0, 1.01, 0.05):
-            chat_eval = (
-                f"{base}/checkpoints/chat-eval-interpolate-{alpha:.2f}-epoch_6.pt"
-            )
-            base_eval = (
-                f"{base}/checkpoints/base-eval-interpolate-{alpha:.2f}-epoch_6.pt"
-            )
+            chat_eval = f"{base}/checkpoints/chat-eval-interpolate-{alpha:.2f}-epoch_6.pt"
+            base_eval = f"{base}/checkpoints/base-eval-interpolate-{alpha:.2f}-epoch_6.pt"
             if os.path.exists(chat_eval) and os.path.exists(base_eval):
                 chat_y = get_perplexity(chat_eval)
                 base_y = get_perplexity(base_eval)

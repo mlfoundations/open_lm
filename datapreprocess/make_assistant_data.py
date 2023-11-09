@@ -99,14 +99,10 @@ def process_files(file_list, buffer, enc, buffer_lock):
                                 buffer.append(chunk)
 
 
-def consumer(
-    my_id, output_dir, threads, buffer, buffer_lock, num_consumers, upload_to_s3=False
-):
+def consumer(my_id, output_dir, threads, buffer, buffer_lock, num_consumers, upload_to_s3=False):
     output_directory = f"{output_dir}/{CHUNK_SIZE - 1}-v1/{my_id}"
     os.makedirs(output_directory, exist_ok=True)
-    shard_writer = ShardWriter(
-        os.path.join(output_directory, "shard-%07d.tar"), maxcount=SHARD_SIZE
-    )
+    shard_writer = ShardWriter(os.path.join(output_directory, "shard-%07d.tar"), maxcount=SHARD_SIZE)
 
     chunks = []
 
@@ -130,14 +126,10 @@ def consumer(
             chunks = []
             time_for_shard = time.time() - start_time
             print("shards / s", num_consumers / time_for_shard)
-            print(
-                "tokens / s", num_consumers * SHARD_SIZE * CHUNK_SIZE / time_for_shard
-            )
+            print("tokens / s", num_consumers * SHARD_SIZE * CHUNK_SIZE / time_for_shard)
             print(
                 "hours req for 1.2T tokens",
-                1_200_000_000_000
-                / (num_consumers * SHARD_SIZE * CHUNK_SIZE / time_for_shard)
-                / 3600,
+                1_200_000_000_000 / (num_consumers * SHARD_SIZE * CHUNK_SIZE / time_for_shard) / 3600,
             )
 
             start_time = time.time()

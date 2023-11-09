@@ -45,15 +45,12 @@ def evaluate(model, tokenizer, cfg):
 
     in_memory_logger = InMemoryLogger()  # track metrics in the in_memory_logger
     loggers: List[LoggerDestination] = [
-        build_logger(name, logger_cfg)
-        for name, logger_cfg in (cfg.get("loggers") or {}).items()
+        build_logger(name, logger_cfg) for name, logger_cfg in (cfg.get("loggers") or {}).items()
     ]
     loggers.append(in_memory_logger)
 
     fsdp_config = cfg.get("fsdp_config", None)
-    fsdp_config = (
-        om.to_container(fsdp_config, resolve=True) if fsdp_config is not None else None
-    )
+    fsdp_config = om.to_container(fsdp_config, resolve=True) if fsdp_config is not None else None
 
     load_path = cfg.get("load_path", None)
 
@@ -98,9 +95,7 @@ def main():
     """
     parser = argparse.ArgumentParser()
     parser.add_argument("--checkpoint")
-    parser.add_argument(
-        "--model", type=str, default="m1b_neox", help="Name of the model to use."
-    )
+    parser.add_argument("--model", type=str, default="m1b_neox", help="Name of the model to use.")
     parser.add_argument("--eval-yaml")
     parser.add_argument("--tokenizer", type=str, default="EleutherAI/gpt-neox-20b")
     add_model_args(parser)

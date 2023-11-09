@@ -43,9 +43,7 @@ def run_model(open_lm: OpenLMforCausalLM, tokenizer, args):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--checkpoint")
-    parser.add_argument(
-        "--model", type=str, default="open_lm_1b", help="Name of the model to use"
-    )
+    parser.add_argument("--model", type=str, default="open_lm_1b", help="Name of the model to use")
 
     parser.add_argument("--input-text", required=True)
     parser.add_argument("--max-gen-len", default=200, type=int)
