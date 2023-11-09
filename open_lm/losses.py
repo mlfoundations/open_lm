@@ -14,12 +14,8 @@ class CrossEntropyLossWithZLoss(CrossEntropyLoss):
         reduction: str = "mean",
         label_smoothing: float = 0,
     ) -> None:
-        super().__init__(
-            weight, size_average, ignore_index, reduce, reduction, label_smoothing
-        )
+        super().__init__(weight, size_average, ignore_index, reduce, reduction, label_smoothing)
         self.eps = eps
 
     def forward(self, input: Tensor, target: Tensor) -> Tensor:
-        return super().forward(input, target) + self.eps * torch.square(
-            torch.logsumexp(input, dim=-1).mean()
-        )
+        return super().forward(input, target) + self.eps * torch.square(torch.logsumexp(input, dim=-1).mean())
