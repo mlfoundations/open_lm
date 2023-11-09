@@ -265,8 +265,62 @@ class Transformer(nn.Module, PyTorchModelHubMixin):
     def get_input_embeddings(self):
         return self.tok_embeddings
 
+    def set_input_embeddings(self, new_input_embeddings):
+        if new_input_embeddings is not None:
+            self.tok_embeddings = new_input_embeddings
+        return self.tok_embeddings
+
     def get_output_embeddings(self):
         return self.output
+
+    def set_output_embeddings(self, new_output_embeddings):
+        if new_output_embeddings is not None:
+            self.output = new_output_embeddings
+        return self.output
+
+    def resize_token_embeddings(self, new_size):
+        # HF implementation: https://github.com/huggingface/transformers/blob/v4.35.0/src/transformers/modeling_utils.py#L1538
+        # Note: This only implements increasing the token embedding size and not decreasing.
+        # Our tokenizer vocab is 50278 but our model vocab is 50432, so we will often have room to spare for new tokens.
+        if new_size < self.vocab_size:
+            return self.get_input_embeddings()
+
+        old_size = self.vocab_size
+        emb_in = self.get_input_embeddings()
+        emb_out = self.get_output_embeddings()
+        std = 1.0 / math.sqrt(self.params.dim)  # For initialization
+
+        # Input embeddings
+        emb_in_new = nn.Embedding(
+            new_size,
+            self.params.dim,
+            device=emb_in.weight.device,
+            dtype=emb_in.weight.dtype,
+        )
+        torch.nn.init.trunc_normal_(emb_in_new.weight, std=std, a=-3 * std, b=3 * std)
+        emb_in_new.weight.data[:old_size, :] = emb_in.weight.data[:old_size, :]
+
+        # Output embeddings
+        emb_out_new = None
+        if emb_out is not None and not self.weight_tying:
+            emb_out_new = nn.Linear(
+                self.params.dim,
+                new_size,
+                bias=False,
+                device=emb_out.weight.device,
+                dtype=emb_out.weight.dtype,
+            )
+            torch.nn.init.trunc_normal_(emb_out_new.weight, std=std, a=-3 * std, b=3 * std)
+            emb_out_new.weight.data[:old_size, :] = emb_out.weight.data[:old_size, :]
+        if self.weight_tying:
+            emb_out_new.weight = emb_in_new.weight
+
+        self.params.vocab_size = new_size
+        self.vocab_size = new_size
+        self.set_input_embeddings(emb_in_new)
+        self.set_output_embeddings(emb_out_new)
+
+        return self.get_input_embeddings()
 
 
 def create_params(args):
