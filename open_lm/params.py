@@ -480,6 +480,12 @@ def parse_args(args):
         default=False,
         help="If true, will end training early if the desired token count is reached. Requires --no-skip-tokens.",
     )
+    parser.add_argument(
+        "--ignore-parse-errors",
+        action="store_true",
+        default=False,
+        help="If true, ignore parse errors in data loading. This should ideally be False, as errors in dataloading can point to bigger issues in your dataset. However, this can be useful when training on a large dataset which has a couple errors."
+    )
 
     add_model_args(parser)
 

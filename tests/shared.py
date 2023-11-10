@@ -62,6 +62,7 @@ class MockTrainArgs:
         self.dataset_manifest = None
         self.target_mask_left = None
         self.target_mask_individual = None
+        self.ignore_parse_errors = False
 
 
 class MockDataArgs(object):
