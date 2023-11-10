@@ -16,3 +16,4 @@ cloudpathlib
 apache_beam
 datasets
 huggingface_hub
+pre-commit
