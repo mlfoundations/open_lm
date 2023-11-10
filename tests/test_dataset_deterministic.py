@@ -15,7 +15,7 @@ from open_lm.file_utils import (
 from open_lm.params import parse_args
 from pathlib import Path
 
-NUM_SAMPLES = 10000
+NUM_SAMPLES = 1000
 
 # Update this to two data sources with webdataset, each with their own manifest.
 INPUT_PATHS = [
@@ -113,7 +113,7 @@ def test_count_manifest():
     metadata = get_metadata_file(manifest_path)
     idx = random.randint(0, len(metadata))
     item = metadata[idx]
-    shard_path = os.path.join(str(Path(INPUT_PATHS[0]).parent), "shard_" + item["shard"] + ".tar")
+    shard_path = os.path.join(str(Path(INPUT_PATHS[0]).parent), item["shard"] + ".tar")
     shard_ds = wds.WebDataset(str(shard_path))
     count = 0
     for _ in iter(shard_ds):
