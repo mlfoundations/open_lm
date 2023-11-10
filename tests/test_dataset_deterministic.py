@@ -14,7 +14,7 @@ from open_lm.file_utils import (
 )
 from open_lm.params import parse_args
 from pathlib import Path
-from utils import download_dl_test_data
+from tests.utils import download_dl_test_data
 
 NUM_SAMPLES = 1000
 
