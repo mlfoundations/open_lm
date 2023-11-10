@@ -78,3 +78,6 @@ class MockDataArgs(object):
         self.world_size = 1
         self.workers = 2
         self.dataset_metadata = None
+        self.seed = 42
+        self.dataset_manifest = None
+        self.target_mask_left = None

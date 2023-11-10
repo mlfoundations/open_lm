@@ -86,8 +86,8 @@ def sample_chunk(chunk, seq_len, target_mask_left_tok):
     else:
         raise Exception(f"Invalid sequence length: Sequence length {seq_len} > {chunk.shape[1]} Chunk size")
 
-    inputs = chunk[:, start_idx : start_idx + seq_len - 1]
-    targets = chunk[:, start_idx + 1 : start_idx + seq_len]
+    inputs = chunk[:, start_idx : start_idx + seq_len]
+    targets = chunk[:, start_idx + 1 : start_idx + seq_len + 1]
 
     if target_mask_left_tok is not None:
         return inputs, replace_before_tok(targets, target_mask_left_tok)
