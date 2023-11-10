@@ -47,7 +47,6 @@ class MockTrainArgs:
         self.seq_len = 300
         self.workers = 1
         self.world_size = 1
-        self.dataset_metadata = None
         self.val_data = None
         self.lr_cooldown_end = 3e-5
         self.force_min_lr = 0.0
@@ -83,7 +82,10 @@ class MockDataArgs(object):
         self.batch_size = 64
         self.world_size = 1
         self.workers = 2
-        self.dataset_metadata = None
+        self.seed = 42
+        self.dataset_manifest = None
+        self.target_mask_left = None
+        self.target_mask_individual = None
 
 
 def create_train_fixtures():
