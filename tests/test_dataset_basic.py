@@ -23,6 +23,6 @@ def test_dataloader_shape():
 
     batch = next(iter(di.dataloader))
     (texts,) = batch
-    inputs, targets = sample_chunk(torch.LongTensor(texts), args.seq_len, args.target_mask_left)
+    inputs, targets = sample_chunk(torch.LongTensor(texts), args)
     assert inputs.shape[-1] == args.seq_len
     assert targets.shape[-1] == args.seq_len

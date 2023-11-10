@@ -463,6 +463,12 @@ def parse_args(args):
         help="Mask the loss to the left of a specified token (including the specified token).",
     )
     parser.add_argument(
+        "--target-mask-individual",
+        type=int,
+        default=None,
+        help="Mask the loss for a special pad token. Useful for sequences shorter than sequence lenght.",
+    )
+    parser.add_argument(
         "--no-skip-tokens",
         action="store_true",
         default=False,
