@@ -4,6 +4,8 @@ import urllib.request
 import hashlib
 import warnings
 
+from huggingface_hub import snapshot_download
+
 
 def download_val_data(name: str, root: str = None):
     # modified from oai _download clip function
@@ -58,3 +60,17 @@ def download_val_data(name: str, root: str = None):
         raise RuntimeError("Model has been downloaded but the SHA256 checksum does not not match")
 
     return download_target
+
+
+def download_dl_test_data(root: str = "./tests/assets"):
+    """Downloads test files if the data doesn't exist in HF cache.
+    """
+
+    snapshot_args = dict(
+        repo_id="mlfoundations/open_lm_test_data",
+        local_dir=root,
+        local_dir_use_symlinks=False,
+        repo_type="dataset",
+    )
+
+    snapshot_download(**snapshot_args)
