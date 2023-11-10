@@ -90,18 +90,16 @@ def sample_chunk(chunk, args):
     elif chunk.shape[1] > args.seq_len + 1:
         start_idx = torch.randint(0, chunk.shape[1] - args.seq_len + 1, (1,)).item()
     else:
-        raise Exception(
-            f"Invalid sequence length: Sequence length {args.seq_len} > {chunk.shape[1]} Chunk size"
-        )
+        raise Exception(f"Invalid sequence length: Sequence length {args.seq_len} > {chunk.shape[1]} Chunk size")
 
-    inputs = chunk[:, start_idx : start_idx + args.seq_len - 1]
-    targets = chunk[:, start_idx + 1 : start_idx + args.seq_len]
+    inputs = chunk[:, start_idx : start_idx + args.seq_len]
+    targets = chunk[:, start_idx + 1 : start_idx + args.seq_len + 1]
 
     # replace elements to be masked with with -100 (pytorch default xent ignore value)
-    if args.target_mask_left_tok is not None:
-        targets = replace_before_tok(targets, args.target_mask_left_tok, -100)
-    if args.target_mask_individual_tok is not None:
-        targets = replace_tok(targets, args.target_mask_individual_tok, -100)
+    if args.target_mask_left is not None:
+        targets = replace_before_tok(targets, args.target_mask_left, -100)
+    if args.target_mask_individual is not None:
+        targets = replace_tok(targets, args.target_mask_individual, -100)
 
     return inputs, targets
 

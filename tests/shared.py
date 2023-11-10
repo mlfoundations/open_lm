@@ -1,5 +1,10 @@
 import torch
+from torch import optim
 
+from open_lm.main import random_seed
+from open_lm.model import create_model
+from open_lm.data import get_data
+from open_lm.scheduler import cosine_lr
 from tests.utils import download_val_data
 
 
@@ -48,7 +53,7 @@ class MockTrainArgs:
         self.force_min_lr = 0.0
         self.scaler = None
         self.accum_freq = 1
-        self.device = "cuda:0"
+        self.device = "cuda:0" if torch.cuda.is_available() else "cpu"
         self.wandb = False
         self.fsdp = False
         self.fsdp_amp = False
@@ -57,6 +62,7 @@ class MockTrainArgs:
         self.dist_url = "env://"
         self.dataset_manifest = None
         self.target_mask_left = None
+        self.target_mask_individual = None
 
 
 class MockDataArgs(object):
@@ -78,3 +84,54 @@ class MockDataArgs(object):
         self.world_size = 1
         self.workers = 2
         self.dataset_metadata = None
+
+
+def create_train_fixtures():
+    # Setup data, optimizer, and other basic settings
+    args = MockTrainArgs("open_lm_11m")
+
+    # only want to look at one batch
+    args.train_num_samples = args.batch_size
+
+    # increase learning rate and remove warmup for maximize change to model weights
+    args.lr = 2
+    args.warmup = 0
+
+    # create base models
+    random_seed()
+    model = create_model(args).to(args.device)
+
+    # create dataloader
+    data = get_data(
+        args,
+        epoch=0,
+        tokenizer=None,
+        skip_train=False,
+    )
+
+    # create optimizer
+    named_parameters = list(model.named_parameters())
+    params = [p for _, p in named_parameters if p.requires_grad]
+    optimizer = optim.AdamW(
+        [
+            {"params": params, "weight_decay": args.wd},
+        ],
+        lr=args.lr,
+        betas=(args.beta1, args.beta2),
+        eps=args.eps,
+    )
+
+    # create scheduler
+    scheduler = cosine_lr(
+        optimizer,
+        args.lr,
+        args.warmup,
+        10,
+        args.lr_cooldown_end,
+        args.force_min_lr,
+    )
+
+    # create loss
+    loss = torch.nn.CrossEntropyLoss()
+
+    return args, model, data, optimizer, scheduler, loss
