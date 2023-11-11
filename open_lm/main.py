@@ -350,6 +350,9 @@ def main(args):
     args.seq_len = model.seq_len
     if args.train_num_samples is not None:
         args.train_num_samples //= args.seq_len
+    if args.val_num_samples is not None:
+        args.val_num_samples //= args.seq_len
+        
     model = model.to(device)
 
     random_seed(args.seed, args.rank)
