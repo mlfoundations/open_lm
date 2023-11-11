@@ -105,7 +105,7 @@ def dl_parse_s3(data, creds=None):
             "s3",
             aws_access_key_id=creds["AWS_ACCESS_KEY_ID"],
             aws_secret_access_key=creds["AWS_SECRET_ACCESS_KEY"],
-            aws_session_token=creds["AWS_SESSION_TOKEN"],
+            aws_session_token=creds.get("AWS_SESSION_TOKEN", None),
         )
     else:
         client = boto3.client("s3")
@@ -383,6 +383,9 @@ if __name__ == "__main__":
     logger.info(f"Total number of keys = {len(input_paths)}")
     df = pd.DataFrame(input_paths, columns=["path"])
     # TODO fix hack for now.
+    ds = ray.data.from_pandas(pd.DataFrame(input_paths, columns=["path"])).repartition(
+        num_files
+    )
     ds = ds.map_batches(
         dl_parse_s3,
         batch_size=1,
