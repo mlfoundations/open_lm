@@ -18,9 +18,7 @@ class ParseKwargs(argparse.Action):
             try:
                 kw[key] = ast.literal_eval(value)
             except ValueError:
-                kw[key] = str(
-                    value
-                )  # fallback to string (avoid need to escape on command line)
+                kw[key] = str(value)  # fallback to string (avoid need to escape on command line)
         setattr(namespace, self.dest, kw)
 
 
@@ -160,15 +158,9 @@ def parse_args(args):
         default=None,
         help="Optional identifier for the experiment when storing logs. Otherwise use current time.",
     )
-    parser.add_argument(
-        "--workers", type=int, default=1, help="Number of dataloader workers per GPU."
-    )
-    parser.add_argument(
-        "--batch-size", type=int, default=64, help="Batch size per GPU."
-    )
-    parser.add_argument(
-        "--epochs", type=int, default=32, help="Number of epochs to train for."
-    )
+    parser.add_argument("--workers", type=int, default=1, help="Number of dataloader workers per GPU.")
+    parser.add_argument("--batch-size", type=int, default=64, help="Batch size per GPU.")
+    parser.add_argument("--epochs", type=int, default=32, help="Number of epochs to train for.")
     parser.add_argument(
         "--epochs-cooldown",
         type=int,
@@ -181,9 +173,7 @@ def parse_args(args):
     parser.add_argument("--beta2", type=float, default=None, help="Adam beta 2.")
     parser.add_argument("--eps", type=float, default=None, help="Adam epsilon.")
     parser.add_argument("--wd", type=float, default=0.2, help="Weight decay.")
-    parser.add_argument(
-        "--warmup", type=int, default=10000, help="Number of steps to warmup for."
-    )
+    parser.add_argument("--warmup", type=int, default=10000, help="Number of steps to warmup for.")
     parser.add_argument(
         "--z-loss-coefficient",
         type=float,
@@ -232,9 +222,7 @@ def parse_args(args):
         default=0.0,
         help="Force the LR to stop decaying at this value.",
     )
-    parser.add_argument(
-        "--save-frequency", type=int, default=1, help="How often to save checkpoints."
-    )
+    parser.add_argument("--save-frequency", type=int, default=1, help="How often to save checkpoints.")
     parser.add_argument(
         "--save-most-recent",
         action="store_true",
@@ -314,9 +302,7 @@ def parse_args(args):
         type=str,
         help="url used to set up distributed training",
     )
-    parser.add_argument(
-        "--dist-backend", default="nccl", type=str, help="distributed backend"
-    )
+    parser.add_argument("--dist-backend", default="nccl", type=str, help="distributed backend")
     parser.add_argument(
         "--fsdp",
         default=False,
@@ -378,9 +364,7 @@ def parse_args(args):
         type=str,
         help="Options are ['wandb', 'tensorboard', 'wandb,tensorboard']",
     )
-    parser.add_argument(
-        "--wandb-notes", default="", type=str, help="Notes if logging with wandb"
-    )
+    parser.add_argument("--wandb-notes", default="", type=str, help="Notes if logging with wandb")
     parser.add_argument(
         "--wandb-project-name",
         type=str,
@@ -398,18 +382,14 @@ def parse_args(args):
         type=str,
         nargs="+",
         default=None,
-        help=(
-            "Apply model average on these checkpoints with the specified coefficients by --average-coefficients."
-        ),
+        help=("Apply model average on these checkpoints with the specified coefficients by --average-coefficients."),
     )
     parser.add_argument(
         "--average-coefficients",
         type=float,
         nargs="+",
         default=None,
-        help=(
-            "Average the model weights with the specified coefficients, model weights specified by --average."
-        ),
+        help=("Average the model weights with the specified coefficients, model weights specified by --average."),
     )
     parser.add_argument(
         "--copy-codebase",
@@ -430,9 +410,7 @@ def parse_args(args):
         help="Don't set device index from local rank (when CUDA_VISIBLE_DEVICES restricted to one per proc).",
     )
     parser.add_argument("--seed", type=int, default=0, help="Default random seed.")
-    parser.add_argument(
-        "--grad-clip-norm", type=float, default=None, help="Gradient clip."
-    )
+    parser.add_argument("--grad-clip-norm", type=float, default=None, help="Gradient clip.")
     parser.add_argument(
         "--log-every-n-steps",
         type=int,
@@ -476,14 +454,19 @@ def parse_args(args):
     parser.add_argument(
         "--use-bnb-linear",
         default=None,
-        help="Replace the network linear layers from the bitsandbytes library. "
-        "Allows int8 training/inference, etc.",
+        help="Replace the network linear layers from the bitsandbytes library. " "Allows int8 training/inference, etc.",
     )
     parser.add_argument(
         "--target-mask-left",
         type=int,
         default=None,
         help="Mask the loss to the left of a specified token (including the specified token).",
+    )
+    parser.add_argument(
+        "--target-mask-individual",
+        type=int,
+        default=None,
+        help="Mask the loss for a special pad token. Useful for sequences shorter than sequence lenght.",
     )
     parser.add_argument(
         "--no-skip-tokens",
@@ -496,6 +479,12 @@ def parse_args(args):
         action="store_true",
         default=False,
         help="If true, will end training early if the desired token count is reached. Requires --no-skip-tokens.",
+    )
+    parser.add_argument(
+        "--ignore-parse-errors",
+        action="store_true",
+        default=False,
+        help="If true, ignore parse errors in data loading. This should ideally be False, as errors in dataloading can point to bigger issues in your dataset. However, this can be useful when training on a large dataset which has a couple errors."
     )
 
     add_model_args(parser)

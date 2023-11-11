@@ -160,19 +160,13 @@ def dist_tokenize(data, tokenizer, content_key):
 def cut_to_context(batch, seqlen=1024, pad_type=PadType.CIRCULAR):
     tokens_list = batch["tokens"]
     flat_token_list = [item for sublist in tokens_list for item in sublist]
-    repartioned_lists = [
-        flat_token_list[i : i + seqlen] for i in range(0, len(flat_token_list), seqlen)
-    ]
+    repartioned_lists = [flat_token_list[i : i + seqlen] for i in range(0, len(flat_token_list), seqlen)]
     end_len = len(repartioned_lists[-1])
     if len(repartioned_lists[-1]) < seqlen:
         if pad_type == PadType.CIRCULAR:
-            repartioned_lists[-1] = (
-                repartioned_lists[-1] + repartioned_lists[0][: (seqlen - end_len)]
-            )
+            repartioned_lists[-1] = repartioned_lists[-1] + repartioned_lists[0][: (seqlen - end_len)]
         else:
-            repartioned_lists[-1] = repartioned_lists[-1] + [
-                SpecialTokens.PAD.value
-            ] * (seqlen - end_len)
+            repartioned_lists[-1] = repartioned_lists[-1] + [SpecialTokens.PAD.value] * (seqlen - end_len)
     return {"tokens": repartioned_lists}
 
 
@@ -266,11 +260,7 @@ def glob_files(path, suffix=".jsonl"):
         # List the objects in the bucket with the given prefix
         paginator = s3.get_paginator("list_objects_v2")
         pages = paginator.paginate(Bucket=bucket_name, Prefix=prefix)
-        all_files = [
-            f"s3://{bucket_name}/{obj['Key']}"
-            for objects in pages
-            for obj in objects.get("Contents", [])
-        ]
+        all_files = [f"s3://{bucket_name}/{obj['Key']}" for objects in pages for obj in objects.get("Contents", [])]
 
         # Filter out the files based on the suffix
         matching_files = [f for f in all_files if f.endswith(suffix)]
@@ -294,9 +284,7 @@ def get_filesystem(environment):
     # Extract the AWS credentials from the environment dictionary
     access_key = environment.get("AWS_ACCESS_KEY_ID")
     secret_key = environment.get("AWS_SECRET_ACCESS_KEY")
-    session_token = environment.get(
-        "AWS_SESSION_TOKEN", None
-    )  # Session token might be optional
+    session_token = environment.get("AWS_SESSION_TOKEN", None)  # Session token might be optional
 
     # Create and return the S3FileSystem
     return fs.S3FileSystem(
@@ -337,11 +325,7 @@ def human_to_bytes(s):
     """
 
     symbols = ("B", "K", "M", "G", "T", "P")
-    letter = (
-        s[-2:].strip().upper()
-        if s[-2:].strip().upper()[:-1] in symbols
-        else s[-1:].upper()
-    )
+    letter = s[-2:].strip().upper() if s[-2:].strip().upper()[:-1] in symbols else s[-1:].upper()
     number = float(s[: -len(letter)].strip())
 
     if letter == "B":
@@ -370,9 +354,9 @@ if __name__ == "__main__":
         required=True
         # e.g s3://dcnlp-data/rpj_tokenized_upsampled_eleutherai_deduplicated/
     )
-    parser.add_argument(
-        "--no_shuffle", help="do not dedup + random shuffle", action="store_true"
-    )
+
+    parser.add_argument("--content_key", type=str, default="text")
+    parser.add_argument("--no_shuffle", help="do not dedup + random shuffle", action="store_true")
     parser.add_argument("--seqlen", type=int, default=2048)
     parser.add_argument("--pad_type", type=str, default="circular")
     parser.add_argument("--dataset_type", help="jsonl or tar", type=str, default="jsonl")
@@ -386,9 +370,7 @@ if __name__ == "__main__":
     parser.add_argument("--materialize", action="store_true")
     parser.add_argument("--ray_address", type=str, default=None)
     parser.add_argument("--block_size", type=str, default="10MB")
-    parser.add_argument(
-        "--ray_spill_location", type=str, default="s3://dcnlp-hub/ray_spill"
-    )
+    parser.add_argument("--ray_spill_location", type=str, default="s3://dcnlp-hub/ray_spill")
 
     args = parser.parse_args()
     # configure remote spilling
@@ -433,7 +415,7 @@ if __name__ == "__main__":
     tokenizer = load_tokenizer(args.tokenizer)
     logger.info(f"Total number of keys = {len(input_paths)}")
     df = pd.DataFrame(input_paths, columns=["path"])
-    #TODO fix hack for now.
+    # TODO fix hack for now.
     ds = ds.map_batches(
         dl_parse_s3,
         batch_size=1,

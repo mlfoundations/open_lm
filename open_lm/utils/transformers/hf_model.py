@@ -23,7 +23,7 @@ class OpenLMforCausalLM(OpenLMModel):
     def __init__(self, config):
         super().__init__(config)
         self.model = Transformer(config)
-        self.lm_head = None        
+        self.lm_head = None
         # Initialize weights and apply final processing
         self.post_init()
 
@@ -78,9 +78,7 @@ class OpenLMforCausalLM(OpenLMModel):
         ```"""
         # decoder outputs consists of (dec_features, layer_state, dec_hidden, dec_attn)
         logits, _ = self.model(input_ids)
-        output = CausalLMOutputWithPast(
-            logits=logits
-        )
+        output = CausalLMOutputWithPast(logits=logits)
         return output
 
     def prepare_inputs_for_generation(
@@ -112,6 +110,6 @@ class OpenLMforCausalLM(OpenLMModel):
         return reordered_past
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     openlm_config = OpenLMConfig.from_pretrained("utils/transformers/open_lm_config")
     print(OpenLMModel(openlm_config))

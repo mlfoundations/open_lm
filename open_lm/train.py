@@ -54,7 +54,7 @@ def backward(total_loss, scaler):
         total_loss.backward()
 
 
-def replace_before_tok(tensor, tok, excusive=False):
+def replace_before_tok(tensor, tok, replaced, excusive=False):
     # NOTE: this implementation supports 0 or 1 instance of tok in a sequence.
     #       if more than one instance appears, the last instace of tok is used.
     #       if exclusive=True every instance of tok will be present in the output
@@ -71,43 +71,46 @@ def replace_before_tok(tensor, tok, excusive=False):
         # retain tok in the output
         tok_mask &= ~tok_positions
 
-    # replace elements to be masked with with -100 (pytorch default xent ignore value)
     out = torch.clone(tensor)
-    out[tok_mask] = -100
+    out[tok_mask] = replaced
 
     return out
 
 
-def sample_chunk(chunk, seq_len, target_mask_left_tok):
-    if chunk.shape[1] == seq_len + 1:
+def replace_tok(tensor, tok, replaced):
+    out = torch.clone(tensor)
+    out[out == tok] = replaced
+
+    return out
+
+
+def sample_chunk(chunk, args):
+    if chunk.shape[1] == args.seq_len + 1:
         start_idx = 0
-    elif chunk.shape[1] > seq_len + 1:
-        start_idx = torch.randint(0, chunk.shape[1] - seq_len + 1, (1,)).item()
+    elif chunk.shape[1] > args.seq_len + 1:
+        start_idx = torch.randint(0, chunk.shape[1] - args.seq_len + 1, (1,)).item()
     else:
-        raise Exception(
-            f"Invalid sequence length: Sequence length {seq_len} > {chunk.shape[1]} Chunk size"
-        )
+        raise Exception(f"Invalid sequence length: Sequence length {args.seq_len} > {chunk.shape[1]} Chunk size")
 
-    inputs = chunk[:, start_idx : start_idx + seq_len - 1]
-    targets = chunk[:, start_idx + 1 : start_idx + seq_len]
+    inputs = chunk[:, start_idx : start_idx + args.seq_len]
+    targets = chunk[:, start_idx + 1 : start_idx + args.seq_len + 1]
 
-    if target_mask_left_tok is not None:
-        return inputs, replace_before_tok(targets, target_mask_left_tok)
+    # replace elements to be masked with with -100 (pytorch default xent ignore value)
+    if args.target_mask_left is not None:
+        targets = replace_before_tok(targets, args.target_mask_left, -100)
+    if args.target_mask_individual is not None:
+        targets = replace_tok(targets, args.target_mask_individual, -100)
 
     return inputs, targets
 
 
-def train_one_epoch(
-    model, data, loss, epoch, optimizer, scaler, scheduler, args, tb_writer=None
-):
+def train_one_epoch(model, data, loss, epoch, optimizer, scaler, scheduler, args, tb_writer=None):
     device = torch.device(args.device)
     autocast = get_autocast(args.precision)
 
     model.train()
 
-    data["train"].set_epoch(
-        epoch
-    )  # set epoch in process safe manner via sampler or shared_epoch
+    data["train"].set_epoch(epoch)  # set epoch in process safe manner via sampler or shared_epoch
     dataloader = data["train"].dataloader
     num_batches_per_epoch = dataloader.num_batches
     sample_digits = math.ceil(math.log(dataloader.num_samples + 1, 10))
@@ -138,9 +141,7 @@ def train_one_epoch(
 
         if args.accum_freq == 1:
             with autocast():
-                inputs, targets = sample_chunk(
-                    texts, args.seq_len, args.target_mask_left
-                )
+                inputs, targets = sample_chunk(texts, args)
                 out, _ = model(inputs)
 
                 if args.log_logit_mean:
@@ -152,12 +153,10 @@ def train_one_epoch(
         else:
             # split up batch into accum_freq chunks -- if you have --batch-size 8 and --accum-freq 4
             # then you only process 2 items at a time. batch-size must be divisible by accume-freq.
-            assert (
-                args.batch_size % args.accum_freq == 0
-            ), "Batch size must be divisible by accum_freq"
+            assert args.batch_size % args.accum_freq == 0, "Batch size must be divisible by accum_freq"
             per_batch = args.batch_size // args.accum_freq
 
-            inputs, targets = sample_chunk(texts, args.seq_len, args.target_mask_left)
+            inputs, targets = sample_chunk(texts, args)
 
             for ii in range(args.accum_freq):
                 maybe_no_sync = nullcontext
@@ -176,9 +175,7 @@ def train_one_epoch(
                             logit_m.update(torch.mean(out).item())
 
                         local_loss = (
-                            loss(
-                                out.reshape(-1, args.vocab_size), targets_ii.reshape(-1)
-                            )
+                            loss(out.reshape(-1, args.vocab_size), targets_ii.reshape(-1))
                             * inputs_ii.shape[0]
                             / inputs.shape[0]
                         )
@@ -191,9 +188,7 @@ def train_one_epoch(
         if scaler is not None:
             if args.grad_clip_norm is not None:
                 scaler.unscale_(optimizer)
-                torch.nn.utils.clip_grad_norm_(
-                    model.parameters(), args.grad_clip_norm, norm_type=2.0
-                )
+                torch.nn.utils.clip_grad_norm_(model.parameters(), args.grad_clip_norm, norm_type=2.0)
             scaler.step(optimizer)
             scaler.update()
         else:
@@ -201,17 +196,13 @@ def train_one_epoch(
                 if isinstance(model, FSDP):
                     model.clip_grad_norm_(args.grad_clip_norm, norm_type=2.0)
                 else:
-                    torch.nn.utils.clip_grad_norm_(
-                        model.parameters(), args.grad_clip_norm, norm_type=2.0
-                    )
+                    torch.nn.utils.clip_grad_norm_(model.parameters(), args.grad_clip_norm, norm_type=2.0)
             optimizer.step()
 
         batch_time_m.update(time.time() - end)
         end = time.time()
         batch_count = i + 1
-        if is_master(args) and (
-            i % args.log_every_n_steps == 0 or batch_count == num_batches_per_epoch
-        ):
+        if is_master(args) and (i % args.log_every_n_steps == 0 or batch_count == num_batches_per_epoch):
             batch_size = len(inputs)
             num_samples = batch_count * batch_size * args.world_size
             samples_per_epoch = dataloader.num_samples
@@ -280,9 +271,7 @@ def evaluate(model, data, start_epoch, args, writer):
 
     model.eval()
 
-    data["val"].set_epoch(
-        start_epoch
-    )  # set epoch in process safe manner via sampler or shared_epoch
+    data["val"].set_epoch(start_epoch)  # set epoch in process safe manner via sampler or shared_epoch
     dataloader = data["val"].dataloader
 
     losses_m = AverageMeter()
@@ -299,7 +288,7 @@ def evaluate(model, data, start_epoch, args, writer):
         data_time_m.update(time.time() - end)
 
         with autocast():
-            inputs, targets = sample_chunk(texts, args.seq_len, args.target_mask_left)
+            inputs, targets = sample_chunk(texts, args)
 
             out, _ = model(inputs)
             total_loss = loss(out.reshape(-1, args.vocab_size), targets.reshape(-1))

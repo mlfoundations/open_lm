@@ -34,22 +34,21 @@ def run_model(open_lm: OpenLMforCausalLM, tokenizer, args):
         max_new_tokens=args.max_gen_len,
     )
     output = tokenizer.decode(output[0].cpu().numpy())
-    print('-' * 50)
+    print("-" * 50)
     print("\t\t Model output:")
-    print('-' * 50)
+    print("-" * 50)
     print(output)
 
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--checkpoint')
-    parser.add_argument('--model', type=str, default='open_lm_1b',  
-                        help='Name of the model to use')
+    parser.add_argument("--checkpoint")
+    parser.add_argument("--model", type=str, default="open_lm_1b", help="Name of the model to use")
 
-    parser.add_argument('--input-text', required=True)
-    parser.add_argument('--max-gen-len', default=200, type=int)
-    parser.add_argument('--temperature', default=0.8, type=float)
-    parser.add_argument('--top-p', default=0.95, type=float)
+    parser.add_argument("--input-text", required=True)
+    parser.add_argument("--max-gen-len", default=200, type=int)
+    parser.add_argument("--temperature", default=0.8, type=float)
+    parser.add_argument("--top-p", default=0.95, type=float)
 
     add_model_args(parser)
     args = parser.parse_args()
@@ -58,8 +57,7 @@ def main():
 
     print("Loading model into the right classes...")
     open_lm = OpenLMforCausalLM(OpenLMConfig(create_params(args)))
-    tokenizer = GPTNeoXTokenizerFast.from_pretrained('EleutherAI/gpt-neox-20b')
-
+    tokenizer = GPTNeoXTokenizerFast.from_pretrained("EleutherAI/gpt-neox-20b")
 
     state_dict = checkpoint["state_dict"]
     state_dict = {x.replace("module.", ""): y for x, y in state_dict.items()}

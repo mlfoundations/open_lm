@@ -7,7 +7,11 @@ import glob
 from open_lm.model import _MODEL_CONFIGS
 from open_lm.main import random_seed
 from open_lm.data import get_wds_dataset
-from open_lm.file_utils import get_string_for_epoch, get_metadata_file, get_shards_for_chunk
+from open_lm.file_utils import (
+    get_string_for_epoch,
+    get_metadata_file,
+    get_shards_for_chunk,
+)
 from open_lm.params import parse_args
 from pathlib import Path
 
@@ -36,9 +40,7 @@ def retrieve_dataset_once(epoch, weights, seed, disable_buffer, min_shards_neede
     args.vocab_size = _MODEL_CONFIGS[args.model]["vocab_size"]
     args.seq_len = _MODEL_CONFIGS[args.model]["seq_len"]
     args.world_size = 1
-    data = get_wds_dataset(
-        args, is_train=True, epoch=epoch, force_num_samples=num_samples_per_source
-    )
+    data = get_wds_dataset(args, is_train=True, epoch=epoch, force_num_samples=num_samples_per_source)
     dl = data.dataloader
     iterator = iter(dl)
     item = next(iterator)
@@ -95,6 +97,7 @@ def test_deterministic_resampled(epoch, weights, seed):
     output2 = retrieve_dataset_once_resampled(epoch, weights, seed)
     assert output1 == output2
 
+
 @pytest.mark.parametrize("epoch", [0, 2])
 @pytest.mark.parametrize("weights", [[0.5, 0.5], [0.6, 0.4]])
 @pytest.mark.parametrize("min_shards_needed", [2, 4])
@@ -110,9 +113,7 @@ def test_count_manifest():
     metadata = get_metadata_file(manifest_path)
     idx = random.randint(0, len(metadata))
     item = metadata[idx]
-    shard_path = os.path.join(
-        str(Path(INPUT_PATHS[0]).parent), "shard_" + item["shard"] + ".tar"
-    )
+    shard_path = os.path.join(str(Path(INPUT_PATHS[0]).parent), "shard_" + item["shard"] + ".tar")
     shard_ds = wds.WebDataset(str(shard_path))
     count = 0
     for _ in iter(shard_ds):

@@ -63,9 +63,7 @@ class Generator:
                 next_token = torch.argmax(last_logits, dim=-1)
             next_token = next_token.reshape(-1)
             # only replace token if prompt has already been generated
-            next_token = torch.where(
-                input_text_mask[:, cur_pos], tokens[:, cur_pos], next_token
-            )
+            next_token = torch.where(input_text_mask[:, cur_pos], tokens[:, cur_pos], next_token)
             tokens[:, cur_pos] = next_token
 
             # TODO: enable caching again for inference

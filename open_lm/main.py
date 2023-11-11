@@ -84,10 +84,7 @@ def get_latest_checkpoint(path: str, remote: bool):
         print(result)
         if result.returncode == 1:
             return None
-        checkpoints = [
-            os.path.join(path, x.split(" ")[-1])
-            for x in result.stdout.decode().split("\n")[:-1]
-        ]
+        checkpoints = [os.path.join(path, x.split(" ")[-1]) for x in result.stdout.decode().split("\n")[:-1]]
     else:
         checkpoints = glob.glob(path + "**/epoch_*.pt", recursive=True)
     if checkpoints:
@@ -134,9 +131,7 @@ def load_optimizer(args, model, optimizer, scaler):
         if optimizer is not None:
             osd = checkpoint["optimizer"]
             if args.fsdp:
-                osd = FSDP.optim_state_dict_to_load(
-                    model=model, optim=optimizer, optim_state_dict=osd
-                )
+                osd = FSDP.optim_state_dict_to_load(model=model, optim=optimizer, optim_state_dict=osd)
             optimizer.load_state_dict(osd)
             logging.info(f"=> resuming optimizer")
         if scaler is not None and "scaler" in checkpoint:
@@ -150,9 +145,7 @@ def load_data_chunks(args):
     if "next_chunk" in checkpoint and "samples_seen" in checkpoint:
         return checkpoint["next_chunk"], checkpoint["samples_seen"]
     else:
-        logging.info(
-            f"=> WARNING: tried to resume a checkpoint without data chunk info. Assuming next_chunk = 0."
-        )
+        logging.info(f"=> WARNING: tried to resume a checkpoint without data chunk info. Assuming next_chunk = 0.")
         return 0, 0
 
 
@@ -195,9 +188,7 @@ def save_checkpoint(
         if scaler is not None:
             checkpoint_dict_opt["scaler"] = scaler.state_dict()
 
-        if completed_epoch == args.epochs or (
-            args.save_frequency > 0 and (completed_epoch % args.save_frequency) == 0
-        ):
+        if completed_epoch == args.epochs or (args.save_frequency > 0 and (completed_epoch % args.save_frequency) == 0):
             torch.save(
                 checkpoint_dict_model,
                 os.path.join(args.checkpoint_path, f"epoch_{completed_epoch}.pt"),
@@ -208,14 +199,10 @@ def save_checkpoint(
             )
 
         if args.delete_previous_checkpoint:
-            previous_checkpoint = os.path.join(
-                args.checkpoint_path, f"epoch_{completed_epoch - 1}.pt"
-            )
+            previous_checkpoint = os.path.join(args.checkpoint_path, f"epoch_{completed_epoch - 1}.pt")
             if os.path.exists(previous_checkpoint):
                 os.remove(previous_checkpoint)
-            previous_checkpoint = os.path.join(
-                args.checkpoint_path, f"optimizer_{completed_epoch - 1}.pt"
-            )
+            previous_checkpoint = os.path.join(args.checkpoint_path, f"optimizer_{completed_epoch - 1}.pt")
             if os.path.exists(previous_checkpoint):
                 os.remove(previous_checkpoint)
 
@@ -264,9 +251,7 @@ def main(args):
         log_filename = f"out-{args.rank}" if args.log_local else "out.log"
         args.log_path = os.path.join(log_base_path, log_filename)
         if os.path.exists(args.log_path) and not resume_latest:
-            print(
-                "Error. Experiment already exists. Use --name {} to specify a new experiment."
-            )
+            print("Error. Experiment already exists. Use --name {} to specify a new experiment.")
             return -1
 
     # Setup text logger
@@ -278,9 +263,7 @@ def main(args):
     args.tensorboard = "tensorboard" in args.report_to or "all" in args.report_to
     args.checkpoint_path = os.path.join(log_base_path, "checkpoints")
     if is_master(args):
-        args.tensorboard_path = (
-            os.path.join(log_base_path, "tensorboard") if args.tensorboard else ""
-        )
+        args.tensorboard_path = os.path.join(log_base_path, "tensorboard") if args.tensorboard else ""
         for dirname in [args.tensorboard_path, args.checkpoint_path]:
             if dirname:
                 os.makedirs(dirname, exist_ok=True)
@@ -294,9 +277,7 @@ def main(args):
         if args.remote_sync is not None:
             checkpoint_path = os.path.join(args.remote_sync, args.name, "checkpoints")
             if args.save_most_recent:
-                print(
-                    "Error. Cannot use save-most-recent with remote_sync and resume latest."
-                )
+                print("Error. Cannot use save-most-recent with remote_sync and resume latest.")
                 return -1
             if args.remote_sync_protocol != "s3":
                 print("Error. Sync protocol not supported when using resume latest.")
@@ -313,9 +294,7 @@ def main(args):
                     resume_from = None
             else:
                 # otherwise, list checkpoint dir contents and pick the newest checkpoint
-                resume_from = get_latest_checkpoint(
-                    checkpoint_path, remote=args.remote_sync is not None
-                )
+                resume_from = get_latest_checkpoint(checkpoint_path, remote=args.remote_sync is not None)
             if resume_from:
                 logging.info(f"Found latest resume checkpoint at {resume_from}.")
             else:
@@ -371,6 +350,9 @@ def main(args):
     args.seq_len = model.seq_len
     if args.train_num_samples is not None:
         args.train_num_samples //= args.seq_len
+    if args.val_num_samples is not None:
+        args.val_num_samples //= args.seq_len
+        
     model = model.to(device)
 
     random_seed(args.seed, args.rank)
@@ -410,25 +392,16 @@ def main(args):
             " with coefficients: ",
             args.average_coefficients,
         )
-        assert (
-            num_models_to_average > 1
-        ), "num_models_to_average must be > 1 - else use --pretrained"
+        assert num_models_to_average > 1, "num_models_to_average must be > 1 - else use --pretrained"
         if args.average_coefficients is None:
-            args.average_coefficients = [
-                1.0 / num_models_to_average
-            ] * num_models_to_average
+            args.average_coefficients = [1.0 / num_models_to_average] * num_models_to_average
         else:
             assert len(args.average_coefficients) == num_models_to_average
-        state_dict = {
-            k: v * args.average_coefficients[0]
-            for k, v in get_state_dict(args.average[0]).items()
-        }
+        state_dict = {k: v * args.average_coefficients[0] for k, v in get_state_dict(args.average[0]).items()}
         for i in range(1, num_models_to_average):
             state_dict_i = get_state_dict(args.average[i])
             for k in state_dict:
-                state_dict[k] = (
-                    state_dict[k] + state_dict_i[k] * args.average_coefficients[i]
-                )
+                state_dict[k] = state_dict[k] + state_dict_i[k] * args.average_coefficients[i]
         model.load_state_dict(state_dict)
 
     # Add data chunk when resuming (only for dataset without resampling)
@@ -436,13 +409,8 @@ def main(args):
     samples_seen = 0
     if args.resume is not None and args.dataset_manifest is not None:
         next_chunk, samples_seen = load_data_chunks(args)
-        if (
-            samples_seen >= args.train_num_samples * args.epochs
-            and args.accurate_total_tokens
-        ):
-            raise RuntimeError(
-                "Loaded a checkpoint which has already seen the desired number of tokens."
-            )
+        if samples_seen >= args.train_num_samples * args.epochs and args.accurate_total_tokens:
+            raise RuntimeError("Loaded a checkpoint which has already seen the desired number of tokens.")
 
     if args.distributed:
         if args.fsdp:
@@ -471,9 +439,7 @@ def main(args):
                 )
 
             if args.rank == 0:
-                print(
-                    f"Before FSDP parameter num: {sum(p.numel() for p in model.parameters())}"
-                )
+                print(f"Before FSDP parameter num: {sum(p.numel() for p in model.parameters())}")
                 print(f"Before FSDP {torch.cuda.memory_allocated()/1024**3:.3} GB")
 
             fsdp_kwargs = {}
@@ -500,20 +466,14 @@ def main(args):
                 **fsdp_kwargs,
             )
 
-            print(
-                f"After FSDP parameter num: {sum(p.numel() for p in model.parameters())} on rank {args.rank}"
-            )
-            print(
-                f"After FSDP {torch.cuda.memory_allocated()/1024**3:.3} GB on rank {args.rank}"
-            )
+            print(f"After FSDP parameter num: {sum(p.numel() for p in model.parameters())} on rank {args.rank}")
+            print(f"After FSDP {torch.cuda.memory_allocated()/1024**3:.3} GB on rank {args.rank}")
         else:
             ddp_args = {}
             if args.ddp_static_graph:
                 # this doesn't exist in older PyTorch, arg only added if enabled
                 ddp_args["static_graph"] = True
-            model = torch.nn.parallel.DistributedDataParallel(
-                model, device_ids=[device], **ddp_args
-            )
+            model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[device], **ddp_args)
 
     # create optimizer and scaler
     optimizer = None
@@ -553,9 +513,24 @@ def main(args):
         skip_train=args.dataset_manifest is not None,
     )
 
+    if (
+        args.target_mask_left is not None
+        and args.target_mask_individual == args.target_mask_left
+    ):
+        logging.error(
+            f"--target-mask-left and --target-mask-individual set to same value of {args.target_mask_left}."
+        )
+        exit(1)
+
     if args.target_mask_left is not None:
         # tokens handled with same modulo in dataloading
         args.target_mask_left = proc_token(args.target_mask_left, args.vocab_size)
+
+    if args.target_mask_individual is not None:
+        # tokens handled with same modulo in dataloading
+        args.target_mask_individual = proc_token(
+            args.target_mask_individual, args.vocab_size
+        )
 
     if args.torchcompile:
         logging.info("Compiling model...")
@@ -565,9 +540,7 @@ def main(args):
     scheduler = None
     if "train" in data and optimizer is not None:
         if args.dataset_manifest is not None:
-            total_steps = (args.train_num_samples * args.epochs) // (
-                args.batch_size * args.world_size
-            )
+            total_steps = (args.train_num_samples * args.epochs) // (args.batch_size * args.world_size)
         else:
             total_steps = (data["train"].dataloader.num_batches) * args.epochs
 
@@ -637,9 +610,7 @@ def main(args):
 
         final_epoch = False
         if args.dataset_manifest is not None:
-            assert (
-                not args.dataset_resampled
-            ), "dataset_manifest and dataset_resampled are mutually exclusive"
+            assert not args.dataset_resampled, "dataset_manifest and dataset_resampled are mutually exclusive"
             (
                 train_data_string_per_source,
                 num_samples_per_source,
@@ -659,24 +630,17 @@ def main(args):
             total_samples = args.epochs * args.train_num_samples
             remaining_samples = total_samples - samples_seen
             if args.no_skip_tokens:
-                if (
-                    remaining_samples < sum(num_samples_per_source)
-                    and args.accurate_total_tokens
-                ):
+                if remaining_samples < sum(num_samples_per_source) and args.accurate_total_tokens:
                     remaining_samples_per_source = [
                         int(
                             np.ceil(
-                                args.train_data_mix_weights[i]
-                                * remaining_samples
-                                / sum(args.train_data_mix_weights)
+                                args.train_data_mix_weights[i] * remaining_samples / sum(args.train_data_mix_weights)
                             )
                         )
                         for i in range(len(args.train_data_mix_weights))
                     ]
                     chosen_num_samples = remaining_samples_per_source
-                    logging.info(
-                        "Model has seen the desired number of tokens. Running one final epoch."
-                    )
+                    logging.info("Model has seen the desired number of tokens. Running one final epoch.")
                     final_epoch = True
                 else:
                     chosen_num_samples = num_samples_per_source
@@ -684,8 +648,12 @@ def main(args):
                 chosen_num_samples = None
 
             data["train"] = get_wds_dataset(
-                args, True, epoch, force_num_samples=chosen_num_samples, data_key=args.data_key,
-            )                
+                args,
+                True,
+                epoch,
+                force_num_samples=chosen_num_samples,
+                data_key=args.data_key,
+            )
 
         try:
             prev_step = int(optimizer.state_dict()["state"][0]["step"].item())
@@ -720,9 +688,7 @@ def main(args):
         completed_epoch = epoch + 1
         evaluation_loss = -1
         if "val" in data:
-            evaluation_loss = evaluate(model, data, completed_epoch, args, writer)[
-                "loss"
-            ]
+            evaluation_loss = evaluate(model, data, completed_epoch, args, writer)["loss"]
 
         # 613 - 610 at halfway
         # Saving checkpoints.
@@ -764,17 +730,13 @@ def copy_codebase(args):
 
     new_code_path = os.path.join(args.logs, args.name, "code")
     if os.path.exists(new_code_path):
-        print(
-            f"Error. Experiment already exists at {new_code_path}. Use --name to specify a new experiment."
-        )
+        print(f"Error. Experiment already exists at {new_code_path}. Use --name to specify a new experiment.")
         return -1
     print(f"Copying codebase to {new_code_path}")
     current_code_path = os.path.realpath(__file__)
     for _ in range(3):
         current_code_path = os.path.dirname(current_code_path)
-    copytree(
-        current_code_path, new_code_path, ignore=ignore_patterns("log", "logs", "wandb")
-    )
+    copytree(current_code_path, new_code_path, ignore=ignore_patterns("log", "logs", "wandb"))
     print("Done copying code.")
     return 1
 

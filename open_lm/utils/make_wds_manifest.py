@@ -53,10 +53,13 @@ def count_samples(shard_path, tmp_dir):
 def worker_fn(input_data):
     basename, data_dir, tmp_dir = input_data
     shard_path = data_dir / basename
-    return (basename, {
-        "shard": basename.split(".")[0],
-        "num_chunks": count_samples(shard_path, tmp_dir),
-    })
+    return (
+        basename,
+        {
+            "shard": basename.split(".")[0],
+            "num_chunks": count_samples(shard_path, tmp_dir),
+        },
+    )
 
 
 def main(args):
@@ -71,7 +74,6 @@ def main(args):
         data = []
         for worker_data in tqdm(pool.imap_unordered(worker_fn, input_data)):
             data.append(worker_data)
-            
 
     data = sorted(data)
     data = [item[1] for item in data]
