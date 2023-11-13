@@ -14,8 +14,9 @@ from open_lm.file_utils import (
 )
 from open_lm.params import parse_args
 from pathlib import Path
+from tests.utils import download_dl_test_data
 
-NUM_SAMPLES = 10000
+NUM_SAMPLES = 1000
 
 # Update this to two data sources with webdataset, each with their own manifest.
 INPUT_PATHS = [
@@ -73,6 +74,7 @@ def retrieve_dataset_once_resampled(epoch, weights, seed, min_shards_needed=2):
 @pytest.mark.parametrize("weights", [[0.5, 0.5], [0.9, 0.1]])
 @pytest.mark.parametrize("seed", [0, 17])
 def test_deterministic_no_buffer(epoch, weights, seed):
+    download_dl_test_data("tests/assets")
     disable_buffer = True
     output1 = retrieve_dataset_once(epoch, weights, seed, disable_buffer)
     output2 = retrieve_dataset_once(epoch, weights, seed, disable_buffer)
@@ -83,6 +85,7 @@ def test_deterministic_no_buffer(epoch, weights, seed):
 @pytest.mark.parametrize("weights", [[0.5, 0.5], [0.9, 0.1]])
 @pytest.mark.parametrize("seed", [0, 17])
 def test_deterministic_with_buffer(epoch, weights, seed):
+    download_dl_test_data("tests/assets")
     disable_buffer = False
     output1 = retrieve_dataset_once(epoch, weights, seed, disable_buffer)
     output2 = retrieve_dataset_once(epoch, weights, seed, disable_buffer)
@@ -93,6 +96,7 @@ def test_deterministic_with_buffer(epoch, weights, seed):
 @pytest.mark.parametrize("weights", [[0.5, 0.5], [0.9, 0.1]])
 @pytest.mark.parametrize("seed", [0, 17])
 def test_deterministic_resampled(epoch, weights, seed):
+    download_dl_test_data("tests/assets")
     output1 = retrieve_dataset_once_resampled(epoch, weights, seed)
     output2 = retrieve_dataset_once_resampled(epoch, weights, seed)
     assert output1 == output2
@@ -102,6 +106,7 @@ def test_deterministic_resampled(epoch, weights, seed):
 @pytest.mark.parametrize("weights", [[0.5, 0.5], [0.6, 0.4]])
 @pytest.mark.parametrize("min_shards_needed", [2, 4])
 def test_min_shards(epoch, weights, min_shards_needed):
+    download_dl_test_data("tests/assets")
     shard_strings, _, _ = get_string_for_epoch(NUM_SAMPLES, epoch, INPUT_PATHS, weights, min_shards_needed)
     for item in shard_strings:
         num_shards = len(item.split(","))
@@ -109,11 +114,12 @@ def test_min_shards(epoch, weights, min_shards_needed):
 
 
 def test_count_manifest():
+    download_dl_test_data("tests/assets")
     manifest_path = INPUT_PATHS[0]
     metadata = get_metadata_file(manifest_path)
     idx = random.randint(0, len(metadata))
     item = metadata[idx]
-    shard_path = os.path.join(str(Path(INPUT_PATHS[0]).parent), "shard_" + item["shard"] + ".tar")
+    shard_path = os.path.join(str(Path(INPUT_PATHS[0]).parent), item["shard"] + ".tar")
     shard_ds = wds.WebDataset(str(shard_path))
     count = 0
     for _ in iter(shard_ds):
