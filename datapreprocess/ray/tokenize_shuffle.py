@@ -380,9 +380,8 @@ def map_write_wds(batch, batch_size, folder, counter):
             tokens = [int(x) for x in batch["tokens"][i]]
             token_count = ray.get(counter.increment_token_count.remote(len(tokens)))
             json_string = json.dumps(tokens)
-            gzipped_json = gzip.compress(json_string.encode())
             uid = hashlib.md5(json_string.encode()).hexdigest()
-            sample = {"__key__": uid, "json.gz": gzipped_json}
+            sample = {"__key__": uid, "json.gz": tokens} # wds 0.2.75 automatically compresses if gz ext
             sink.write(sample)
 
     bio.seek(0)
