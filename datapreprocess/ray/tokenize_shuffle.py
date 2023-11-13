@@ -24,6 +24,7 @@ import psutil
 import pyarrow.fs as fs
 import pyarrow.json
 import ray
+import glob
 import webdataset as wds
 import zstandard as zstd
 from botocore.exceptions import (
@@ -126,7 +127,7 @@ def jsonl_file_reader(fh: BinaryIO, content_key: str):
 def zstd_compressed_reader(fh: BinaryIO, content_key: str):
     dctx = zstd.ZstdDecompressor()
     with dctx.stream_reader(fh) as reader:
-        for item in jsonl_file_reader(reader):
+        for item in jsonl_file_reader(reader, content_key):
             yield item
 
 
@@ -388,7 +389,13 @@ def map_write_wds(batch, batch_size, folder, counter):
 
     bio.seek(0)
     write_to_location(folder, tar_name, bio)
-    return batch
+
+    return_dict = {
+        "shard": [tar_name.split(".")[0]],
+        "num_chunks": [len(batch["tokens"])]
+    }
+
+    return return_dict
 
 
 def write_to_location(folder, tar_name, bio):
@@ -456,8 +463,8 @@ def glob_files(path, suffix=".jsonl"):
 
     else:
         # Use glob for local paths
-        search_pattern = f"{path.rstrip('/')}/*{suffix}"
-        matching_files = glob.glob(search_pattern)
+        search_pattern = f"{path.rstrip('/')}/**/*{suffix}"
+        matching_files = glob.glob(search_pattern, recursive=True)
 
     return matching_files
 
@@ -640,7 +647,17 @@ if __name__ == "__main__":
             "folder": args.output.strip("/"),
             "counter": counter,
         },
-    ).count()
+    )
+
+    # Sort by shard name
+    ds = ds.repartition(1)
+    ds = ds.sort(key="shard")
+    ds.write_json(
+        args.output.strip("/"),
+        filesystem = fs,
+        block_path_provider = lambda *a, **kw: os.path.join(args.output.rstrip("/"), "manifest.jsonl")
+    )
+
     end_time = time.time()
     duration = end_time - start_time
     final_token_count = ray.get(counter.increment_token_count.remote(0))
