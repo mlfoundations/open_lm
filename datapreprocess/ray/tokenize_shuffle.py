@@ -375,14 +375,16 @@ def map_write_wds(batch, batch_size, folder, counter):
 
     # Write the batch to a tarball using webdataset's TarWriter
     bio = io.BytesIO()
+    token_counter = 0
     with wds.TarWriter(bio) as sink:
         for i in range(len(batch["tokens"])):
             tokens = [int(x) for x in batch["tokens"][i]]
-            token_count = ray.get(counter.increment_token_count.remote(len(tokens)))
+            token_counter += len(tokens)
             json_string = json.dumps(tokens)
             uid = hashlib.md5(json_string.encode()).hexdigest()
             sample = {"__key__": uid, "json.gz": tokens} # wds 0.2.75 automatically compresses if gz ext
             sink.write(sample)
+    token_count = ray.get(counter.increment_token_count.remote(token_counter))
 
     bio.seek(0)
     write_to_location(folder, tar_name, bio)
