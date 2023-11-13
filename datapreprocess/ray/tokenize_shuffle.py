@@ -562,7 +562,7 @@ if __name__ == "__main__":
     parser.add_argument("--ray_address", type=str, default=None)
     parser.add_argument("--block_size", type=str, default="10MB")
     parser.add_argument("--no_shuffle", action="store_true")
-    parser.add_argument("--ray_spill_location", type=str, default="s3://dcnlp-hub/ray_spill")
+    parser.add_argument("--ray_spill_location", type=str, default="/tmp/ray_spill")
 
     args = parser.parse_args()
     # configure remote spilling
@@ -575,9 +575,9 @@ if __name__ == "__main__":
     else:
         fs = None
     if args.ray_address is None:
-        ray.init(runtime_env=runtime_env, _temp_dir="/mnt/ray_tmp/")
+        ray.init(runtime_env=runtime_env, _temp_dir=args.ray_spill_location)
     else:
-        ray.init(args.ray_address, runtime_env=runtime_env, _temp_dir="/mnt/ray_tmp/")
+        ray.init(args.ray_address, runtime_env=runtime_env, _temp_dir=args.ray_spill_location)
     num_nodes = len(ray.nodes())
     # TODO  support multiple inputs
     input_folders = args.input.split(",")
