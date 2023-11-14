@@ -136,6 +136,12 @@ This will create a file called ```manifest.jsonl``` under ```/preproc_data```. T
  --logs path/to/logging/dir/
 ```
 
+### Large Scale Runs
+
+For runs that are expected to use all data available, when training without replacement it is recommended to enable the flags `--no-skip-tokens` and `--accurate-total-tokens`. These flags will use all data allocated per epoch when loading data without replacement, while keeping the total number of tokens seen during training the same.
+
+Note that these options might lead to **fewer checkpoints seen than the number requested** (even though the final number of tokens is the desired one). This is because the number of shards allocated to the checkpoint must be greater than or equal to the number of dataloader workers across all processes (when training with multiple sources, both are expected to satisfy the above requirement separately). To see all samples during training, this will require making fewer checkpoints than the original number desired if necessary (with each checkpoint having seen more samples, so that the total is correct).
+
 ## Evaluate Model
 Once trained, we can evaluate the model. This requires [LLM Foundry](https://github.com/mosaicml/llm-foundry), which can be installed via `pip install llm-foundry`. Next some configurations are required to pass to the evaluator: a skeleton of these parameters is located at [eval/in_memory_hf_eval.yaml](eval/in_memory_hf_eval.yaml). Then just run the following script, making sure to point it at the checkpoint of your trained model (and it's correspending config .json file):
 ```
