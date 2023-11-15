@@ -304,8 +304,9 @@ def evaluate(model, data, start_epoch, args, writer):
         "batch_time": batch_time_m.avg,
         "samples_per_second": sps_m.avg,
         "samples_per_second_per_gpu": spspg_m.avg,
-        "tokens": start_epoch * args.train_num_samples * args.seq_len,
     }
+    if args.train_num_samples is not None:
+        log_data["tokens"] = start_epoch * args.train_num_samples * args.seq_len
 
     for name, val in log_data.items():
         name = "valid/" + name
