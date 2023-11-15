@@ -616,7 +616,8 @@ def main(args):
                 args.train_data_mix_weights,
                 args.workers * args.world_size,
             )
-            if is_master(args) and prev_chunk + 1 != next_chunk and not next_chunk == 0:
+            if is_master(args) and prev_chunk + 1 != next_chunk and not next_chunk < prev_chunk:
+                # Warning printed if more chunks than normal assigned. Warning skipped if we just looped.
                 logging.warning(
                     f"Epoch {epoch}, shards allocated for epoch contain more tokens than requested. "
                     f"This will make checkpoints less frequent than requested. To alleviate this, "
