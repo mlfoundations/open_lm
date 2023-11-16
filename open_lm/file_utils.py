@@ -6,6 +6,7 @@ import os
 import subprocess
 import sys
 import time
+import logging
 
 import fsspec
 import numpy as np
@@ -194,10 +195,10 @@ def get_string_for_epoch(num_samples, starting_chunk, paths, weights, min_shards
             num_samples_per_source[i] += num_samples_source
         next_chunk += 1
         if source_exhausted(paths, shard_list_per_source):
-            print(shard_list_per_source)
-            raise ValueError(
-                "Number of shards requested is more than the number of shards available."
-                "Consider lowering the number of workers and / or the number of GPUs."
+            logging.warning(
+                "Number of shards requested for a single epoch is more than the number of shards available. "
+                "Consider lowering the number of workers and / or the number of GPUs, to avoid continuous "
+                "reuse of samples."
             )
 
     for i, source_path in enumerate(paths):
@@ -210,12 +211,3 @@ def get_string_for_epoch(num_samples, starting_chunk, paths, weights, min_shards
         shard_strings_per_source.append(shard_string_source)
 
     return shard_strings_per_source, num_samples_per_source, next_chunk
-
-
-if __name__ == "__main__":
-    print(sys.argv)
-    # path = 's3://s-laion/open_lm_shuffle/rpj_shuffled_mosaic_upsampled_tiktoken_100k_shards_try2/shard_metadata.jsonl'
-    # out = get_string_for_epoch(10000000000 // 2048, 10, path)
-
-
-# 10000000000
