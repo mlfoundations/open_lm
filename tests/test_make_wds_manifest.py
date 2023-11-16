@@ -32,7 +32,7 @@ def test_make_manifest_from_source(source_dir):
 
 
 def test_make_toplevel_manifest():
-	download_dl_test_data('test/assets')
+	download_dl_test_data('tests/assets')
 
 	MOCK_MANIFEST = 'tests/assets/mock_manifest.jsonl'
 	if os.path.exists(MOCK_MANIFEST):
