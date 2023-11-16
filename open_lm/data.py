@@ -129,6 +129,40 @@ class SyntheticDataset(Dataset):
         return ((torch.rand(self.seq_len + 1, generator=generator) * self.vocab_size).long(),)
 
 
+def _batched_fulldata(data, batchsize=20, collation_fn=wds.filters.default_collation_fn, partial=True):
+    """Implementation of _batched that fills last batch instead of dropping it.
+    """
+    batch = []
+    backup_first_batch = None
+    for sample in data:
+        if len(batch) >= batchsize:
+            if backup_first_batch is None:
+                backup_first_batch = batch
+            if collation_fn is not None:
+                batch = collation_fn(batch)
+            yield batch
+            batch = []
+        batch.append(sample)
+    if len(batch) == 0:
+        return
+    elif len(batch) == batchsize or partial:
+        if collation_fn is not None:
+            batch = collation_fn(batch)
+        yield batch
+    elif len(batch) < batchsize and not partial and backup_first_batch is not None:
+        # Only change compared to wds.batched - fill last batch instead of dropping it, and return a final batch
+        for sample in backup_first_batch:
+            if len(batch) >= batchsize:
+                if collation_fn is not None:
+                    batch = collation_fn(batch)
+                yield batch
+                return
+            batch.append(sample)
+
+
+batched_fulldata = wds.pipelinefilter(_batched_fulldata)
+
+
 def expand_urls(urls, weights=None):
     if weights is None:
         expanded_urls = wds.shardlists.expand_urls(urls)
@@ -388,13 +422,15 @@ def get_wds_dataset(
             pipeline = [wds.SimpleShardList(input_shards)]
 
         # at this point we have an iterator over all the shards
+        # disable shuffling if sampling w/o replacement to ensure no repeat
+        not_use_shuffle = args.disable_buffer or not resampled
         if is_train:
             if not resampled:
                 pipeline.extend(
                     [
                         detshuffle2(
-                            bufsize=0 if args.disable_buffer else _SHARD_SHUFFLE_SIZE,
-                            initial=0 if args.disable_buffer else _SHARD_SHUFFLE_INITIAL,
+                            bufsize=0 if not_use_shuffle else _SHARD_SHUFFLE_SIZE,
+                            initial=0 if not_use_shuffle else _SHARD_SHUFFLE_INITIAL,
                             seed=args.seed,
                             epoch=shared_epoch,
                         ),
@@ -407,8 +443,8 @@ def get_wds_dataset(
                     # at this point, we have an iterator over the shards assigned to each worker at each node
                     tarfile_to_samples_nothrow,  # wds.tarfile_to_samples(handler=log_and_continue),
                     wds.shuffle(
-                        bufsize=0 if args.disable_buffer else _SAMPLE_SHUFFLE_SIZE,
-                        initial=0 if args.disable_buffer else _SHARD_SHUFFLE_INITIAL,
+                        bufsize=0 if not_use_shuffle else _SAMPLE_SHUFFLE_SIZE,
+                        initial=0 if not_use_shuffle else _SAMPLE_SHUFFLE_INITIAL,
                         rng=random.Random(args.seed + shared_epoch.get_value()) if args.seed is not None else None,
                     ),
                 ]
