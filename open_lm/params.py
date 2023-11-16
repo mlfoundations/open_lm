@@ -487,18 +487,6 @@ def parse_args(args):
         help="Mask the loss for a special pad token. Useful for sequences shorter than sequence lenght.",
     )
     parser.add_argument(
-        "--no-skip-tokens",
-        action="store_true",
-        default=False,
-        help="Use as many tokens from the data as possible. Requires --dataset-manifest and takes precedence over --train-num-samples. Using --accurate-total-tokens is recommended.",
-    )
-    parser.add_argument(
-        "--accurate-total-tokens",
-        action="store_true",
-        default=False,
-        help="If true, will end training early if the desired token count is reached. Requires --no-skip-tokens.",
-    )
-    parser.add_argument(
         "--ignore-parse-errors",
         action="store_true",
         default=False,
