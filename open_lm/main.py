@@ -409,7 +409,7 @@ def main(args):
     samples_seen = 0
     if args.resume is not None and args.dataset_manifest is not None:
         next_chunk, samples_seen = load_data_chunks(args)
-        if samples_seen >= args.train_num_samples * args.epochs and args.accurate_total_tokens:
+        if samples_seen >= args.train_num_samples * args.epochs:
             raise RuntimeError("Loaded a checkpoint which has already seen the desired number of tokens.")
 
     if args.distributed:
@@ -630,22 +630,19 @@ def main(args):
 
             total_samples = args.epochs * args.train_num_samples
             remaining_samples = total_samples - samples_seen
-            if args.no_skip_tokens:
-                if remaining_samples < sum(num_samples_per_source) and args.accurate_total_tokens:
-                    remaining_samples_per_source = [
-                        int(
-                            np.ceil(
-                                args.train_data_mix_weights[i] * remaining_samples / sum(args.train_data_mix_weights)
-                            )
+            if remaining_samples < sum(num_samples_per_source):
+                remaining_samples_per_source = [
+                    int(
+                        np.ceil(
+                            args.train_data_mix_weights[i] * remaining_samples / sum(args.train_data_mix_weights)
                         )
-                        for i in range(len(args.train_data_mix_weights))
-                    ]
-                    chosen_num_samples = remaining_samples_per_source
-                    final_epoch = True
-                else:
-                    chosen_num_samples = num_samples_per_source
+                    )
+                    for i in range(len(args.train_data_mix_weights))
+                ]
+                chosen_num_samples = remaining_samples_per_source
+                final_epoch = True
             else:
-                chosen_num_samples = None
+                chosen_num_samples = num_samples_per_source
 
             data["train"] = get_wds_dataset(
                 args,
