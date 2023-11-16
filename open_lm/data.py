@@ -12,7 +12,6 @@ from dataclasses import dataclass
 from multiprocessing import Value
 from functools import partial
 import json
-
 import numpy as np
 import pandas as pd
 import torch
@@ -36,6 +35,7 @@ from webdataset.tariterators import (
 from webdataset.mix import RandomMix
 
 
+
 def proc_token(x, vocab_size):
     if type(x) is int:
         return x % vocab_size if x < 0 else x
@@ -54,6 +54,41 @@ def preprocess_json(text, vocab_size):
     text = json.loads(text.decode())
     text = [proc_token(x, vocab_size) for x in text]
     return text
+
+
+def _batched_fulldata(data, 
+                      batchsize=20, 
+                      collation_fn=wds.filters.default_collation_fn,
+                      partial=True):
+    batch = []
+    first_batch = None
+    for sample in data:
+        if len(batch) >= batchsize:
+            if first_batch == None:
+                first_batch = batch            
+            if collation_fn is not None:
+                batch = collation_fn(batch)
+            yield batch
+
+            batch = []
+        batch.append(sample)
+
+    if len(batch) == 0:
+        return
+    elif len(batch) == batchsize or partial:
+        if collation_fn is not None:
+            batch = collation_fn(batch)
+        yield batch
+    elif len(batch) < batchsize and not partial:
+        for sample in first_batch:
+            batch.append(sample)       
+            if len(batch) >= batchsize:
+                if collation_fn is not None:
+                    batch = collation_fn(batch)
+                yield batch
+                return
+
+batched_fulldata = wds.pipelinefilter(_batched_fulldata)
 
 
 class SharedEpoch:
@@ -305,16 +340,15 @@ def get_wds_dataset(
     tokenizer=None,
     data_key="json",
     force_num_samples=None,
-):
+):  
     input_shards_ = args.train_data if is_train else args.val_data
 
     assert input_shards_ is not None
 
     datasets = []
     all_num_samples = []
-    for ii, input_shards in enumerate(input_shards_):
+    for ii, input_shards in enumerate(input_shards_): # Loop over all shards
         resampled = getattr(args, "dataset_resampled", False) and is_train
-
         num_shards = None
         if is_train:
             if args.train_num_samples is not None:
@@ -395,7 +429,7 @@ def get_wds_dataset(
                     wds.map_dict(json=partial(preprocess_json, vocab_size=args.vocab_size), **map_dict_handler),
                     wds.to_tuple("json"),
                     wds.select(partial(filter_lt_seqlen, args.seq_len)),
-                    wds.batched(args.batch_size, partial=not is_train),
+                    batched_fulldata(args.batch_size, partial=not is_train),
                 ]
             )
         else:
@@ -404,7 +438,7 @@ def get_wds_dataset(
                     wds.map_dict(txt=partial(preprocess_txt, vocab_size=args.vocab_size), **map_dict_handler),
                     wds.to_tuple("txt"),
                     wds.select(partial(filter_lt_seqlen, args.seq_len)),
-                    wds.batched(args.batch_size, partial=not is_train),
+                    batched_fulldata(args.batch_size, partial=not is_train),
                 ]
             )
 
@@ -417,6 +451,7 @@ def get_wds_dataset(
         dataset = RandomMix(datasets, probs=args.train_data_mix_weights, longest=True)
     else:
         pass
+
         # dataset = datasets[0]
     if is_train:
         if not resampled:
@@ -438,7 +473,7 @@ def get_wds_dataset(
             num_samples = num_batches * global_batch_size
             # TODO: what is the effect of setting this?
             datasets[ii] = datasets[ii].with_epoch(num_worker_batches)  # each worker is iterating over this
-
+            
             total_num_batches += num_batches
             total_num_samples += num_samples
     else:
