@@ -11,7 +11,7 @@ import numpy as np
 from functools import partial
 from pathlib import Path
 import json
-
+import math
 import torch
 from torch import optim
 from torch.cuda.amp import GradScaler
@@ -611,6 +611,7 @@ def main(args):
         final_epoch = False
         if args.dataset_manifest is not None:
             assert not args.dataset_resampled, "dataset_manifest and dataset_resampled are mutually exclusive"
+            curr_chunk = next_chunk
             (
                 train_data_string_per_source,
                 num_samples_per_source,
@@ -622,7 +623,7 @@ def main(args):
                 args.train_data_mix_weights,
                 args.workers * args.world_size,
             )
-            print(f"=> epoch {epoch}, training on {train_data_string_per_source}")
+            
             if data["train"] is not None:
                 del data["train"]
             args.train_data = train_data_string_per_source
@@ -640,7 +641,6 @@ def main(args):
                         for i in range(len(args.train_data_mix_weights))
                     ]
                     chosen_num_samples = remaining_samples_per_source
-                    logging.info("Model has seen the desired number of tokens. Running one final epoch.")
                     final_epoch = True
                 else:
                     chosen_num_samples = num_samples_per_source
@@ -653,8 +653,42 @@ def main(args):
                 epoch,
                 force_num_samples=chosen_num_samples,
                 data_key=args.data_key,
+                floor=True if not final_epoch else False  # Round up in the final epoch so that we see enough tokens
             )
+            if final_epoch and data["train"].dataloader.num_samples > sum(num_samples_per_source):
+                # In this corner case, due to rounding in the final epoch we might repeat some tokens.
+                # To fix this, we explicitly request more samples, so that we have enough unique ones.
+                rounded_up_num_samples = data["train"].dataloader.num_samples
+                (
+                    train_data_string_per_source,
+                    num_samples_per_source,
+                    next_chunk,
+                ) = get_string_for_epoch(
+                    rounded_up_num_samples,
+                    curr_chunk,  # Start from the current chunk
+                    args.dataset_manifest,
+                    args.train_data_mix_weights,
+                    args.workers * args.world_size,
+                )
+                if data["train"] is not None:
+                    del data["train"]
+                args.train_data = train_data_string_per_source
+                data["train"] = get_wds_dataset(
+                    args,
+                    True,
+                    epoch,
+                    force_num_samples=chosen_num_samples,
+                    data_key=args.data_key,
+                    floor=False
+                )
 
+
+        if is_master(args):
+            logging.info(f"=> epoch {epoch}, training on {args.train_data}")
+
+        if is_master(args) and final_epoch:
+            logging.info("Model has seen the desired number of tokens. Running one final epoch.")
+        
         try:
             prev_step = int(optimizer.state_dict()["state"][0]["step"].item())
         except KeyError:
