@@ -361,15 +361,10 @@ def add_hash(item, column="tokens"):
 
 
 def map_write_wds(batch, batch_size, folder, counter):
-    # Calculate tar index based on the first id
-
-    # Determine the number of leading zeros dynamically based on total_count
     tar_index = ray.get(counter.increment.remote())
-
     digits = 8  # default to 8
     # Format tar index with the determined number of leading zeros
     tar_index_str = f"{tar_index:0{digits}}"
-
     # Create tar file name
     tar_name = f"{tar_index_str}.tar"
     token_count = 0
@@ -383,7 +378,6 @@ def map_write_wds(batch, batch_size, folder, counter):
             uid = hashlib.md5(json_string.encode()).hexdigest()
             sample = {"__key__": uid, "json.gz": json_string}
             sink.write(sample)
-
     bio.seek(0)
     token_count = ray.get(counter.increment_token_count.remote(token_count))
     write_to_location(folder, tar_name, bio)
@@ -554,7 +548,7 @@ if __name__ == "__main__":
     parser.add_argument("--pad_type", type=str, default="circular")
     parser.add_argument("--tokenizer", type=str, default="EleutherAI/gpt-neox-20b")
     parser.add_argument("--initial_batch_size", type=int, default=2048)
-    parser.add_argument("--wds_chunk_size", type=int, default=16384)
+    parser.add_argument("--wds_chunk_size", type=int, default=8192)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--per_node_parallelism", type=int, default=8)
     parser.add_argument("--subset", type=int, default=None)
@@ -607,13 +601,12 @@ if __name__ == "__main__":
 
     ctx = DataContext.get_current()
     ctx.use_push_based_shuffle = True
-    # ctx.execution_options.resource_limits.object_store_memory = float("inf")
     ray.data.DataContext.get_current().execution_options.verbose_progress = True
     start_time = time.time()
     tokenizer = load_tokenizer(args.tokenizer)
     logger.info(f"Total number of keys = {len(input_paths)}")
     df = pd.DataFrame(input_paths, columns=["path"])
-    ds = ray.data.from_pandas(pd.DataFrame(input_paths, columns=["path"])).repartition(num_files)
+    ds = ray.data.from_pandas(pd.DataFrame(input_paths, columns=["path"])).repartition(num_cores * num_nodes)
     ds = ds.flat_map(
         lambda x: process_keys(
             x,
@@ -639,6 +632,7 @@ if __name__ == "__main__":
             "folder": args.output.strip("/"),
             "counter": counter,
         },
+        batch_format="pandas",
     ).count()
     end_time = time.time()
     duration = end_time - start_time
