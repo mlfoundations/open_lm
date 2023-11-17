@@ -516,6 +516,7 @@ def get_wds_dataset(
                 # Never loop in single epoch!
                 datasets[ii] = datasets[ii].repeat(nepochs=1, nbatches=num_worker_batches)
             
+            print(args.rank, num_batches, num_worker_batches)
             total_num_batches += num_batches
             total_num_samples += num_samples
     else:

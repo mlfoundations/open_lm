@@ -599,11 +599,12 @@ def main(args):
             logging.info("Using CrossEntropyLossWithZLoss.")
         loss = CrossEntropyLossWithZLoss(args.z_loss_coefficient)
 
-    for epoch in range(start_epoch, args.epochs):
+    final_epoch = False
+    epoch = start_epoch
+    while not final_epoch:
         if is_master(args):
             logging.info(f"Start epoch {epoch}")
 
-        final_epoch = False
         if args.dataset_manifest is not None:
             assert not args.dataset_resampled, "dataset_manifest and dataset_resampled are mutually exclusive"
             (
@@ -675,10 +676,10 @@ def main(args):
             logging.info(f"Training exiting due to NaN value")
             break
 
-        completed_epoch = epoch + 1
+        epoch = epoch + 1
         evaluation_loss = -1
         if "val" in data:
-            evaluation_loss = evaluate(model, data, completed_epoch, args, writer)["loss"]
+            evaluation_loss = evaluate(model, data, epoch, args, writer)["loss"]
 
         # 613 - 610 at halfway
         # Saving checkpoints.
@@ -687,7 +688,7 @@ def main(args):
             model,
             optimizer,
             scaler,
-            completed_epoch,
+            epoch,
             evaluation_loss,
             next_shard_per_source=next_shard_per_source if args.dataset_manifest is not None else None,
             samples_seen=samples_seen if args.dataset_manifest is not None else None,
@@ -696,6 +697,7 @@ def main(args):
         if final_epoch:
             logging.info("Ending training due to data exhaustion.")
             break
+
 
     if args.wandb and is_master(args):
         wandb.finish()
