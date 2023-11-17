@@ -374,6 +374,7 @@ def get_wds_dataset(
     tokenizer=None,
     data_key="json",
     force_num_samples=None,
+    multi_epoch=False
 ):  
     input_shards_ = args.train_data if is_train else args.val_data
 
@@ -507,8 +508,13 @@ def get_wds_dataset(
             num_worker_batches = round_fn(num_batches / num_workers)  # per dataloader worker
             num_batches = num_worker_batches * num_workers
             num_samples = num_batches * global_batch_size
-            # TODO: what is the effect of setting this?
-            datasets[ii] = datasets[ii].with_epoch(num_worker_batches)  # each worker is iterating over this
+
+            if multi_epoch:
+                # It's fine to loop in multi epoch.
+                datasets[ii] = datasets[ii].with_epoch(num_worker_batches)
+            else:
+                # Never loop in single epoch!
+                datasets[ii] = datasets[ii].repeat(nepochs=1, nbatches=num_worker_batches)
             
             total_num_batches += num_batches
             total_num_samples += num_samples

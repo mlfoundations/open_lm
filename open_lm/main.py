@@ -615,7 +615,8 @@ def main(args):
                 next_shard_per_source,
                 args.dataset_manifest,
                 args.train_data_mix_weights,
-                args.workers * args.world_size,
+                args.workers,
+                args.world_size
             )
 
             if data["train"] is not None:
