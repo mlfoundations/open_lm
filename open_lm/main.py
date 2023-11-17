@@ -604,7 +604,9 @@ def main(args):
         final_epoch = False
         if args.dataset_manifest is not None:
             assert not args.dataset_resampled, "dataset_manifest and dataset_resampled are mutually exclusive"
-            assert not (args.no_skip_tokens ^ args.accurate_total_tokens), "either both or none of --no-skip-tokens / --accurate-total-tokens should be specified"
+            assert not (
+                args.no_skip_tokens ^ args.accurate_total_tokens
+            ), "either both or none of --no-skip-tokens / --accurate-total-tokens should be specified"
 
             (
                 train_data_string_per_source,
