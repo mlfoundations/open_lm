@@ -88,6 +88,7 @@ class TestGradientAccumulation(unittest.TestCase):
             optimizer=optimizer1,
             scaler=scaler,
             scheduler=None,
+            total_steps=-1,
             args=Namespace(**args),
         )
         # Train model2 with accumulation
@@ -100,6 +101,7 @@ class TestGradientAccumulation(unittest.TestCase):
             optimizer=optimizer2,
             scaler=scaler,
             scheduler=None,
+            total_steps=-1,
             args=Namespace(**args),
         )
         # Check if the weights are similar
