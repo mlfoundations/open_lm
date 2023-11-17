@@ -509,12 +509,10 @@ def get_wds_dataset(
             num_batches = num_worker_batches * num_workers
             num_samples = num_batches * global_batch_size
 
-            if multi_epoch:
-                # It's fine to loop in multi epoch.
-                datasets[ii] = datasets[ii].with_epoch(num_worker_batches)
-            else:
-                # Never loop in single epoch!
-                datasets[ii] = datasets[ii].repeat(nepochs=1, nbatches=num_worker_batches)
+            # This forces the dataloader to take num_worker_batches steps per worker, so num_batches total.
+            # Note that this internally sets num_repetitions = sys.maxsize, therefore allowing repeats. We are
+            # safeguarded by the fact that num_worker_batches is the number of minimum worker batches.
+            datasets[ii] = datasets[ii].with_epoch(num_worker_batches)
             
             print(args.rank, num_batches, num_worker_batches)
             total_num_batches += num_batches
