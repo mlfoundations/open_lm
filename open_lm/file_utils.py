@@ -7,6 +7,7 @@ import subprocess
 import sys
 import time
 import logging
+import copy
 from itertools import islice
 
 import fsspec
@@ -186,7 +187,7 @@ def adjust_samples(shard_list, manifest, starting_index, num_workers, world_size
     and wds.split_by_worker does.
     """
     num_samples = [manifest[j]["num_chunks"] for j in range(starting_index, starting_index + len(shard_list))]
-    samples_per_worker = [[] for _ in num_workers * world_size]
+    samples_per_worker = [[] for _ in range(num_workers * world_size)]
     for gpu in range(world_size):
         samples_gpu = []
         for n in islice(num_samples, gpu, None, world_size):
@@ -196,7 +197,7 @@ def adjust_samples(shard_list, manifest, starting_index, num_workers, world_size
             for s in islice(samples_gpu, worker, None, num_workers):
                 samples_per_worker[gpu * num_workers + worker] = s
 
-    return min(samples_per_worker) * num_workers
+    return min(samples_per_worker) * num_workers * world_size
 
 
 
@@ -258,13 +259,14 @@ def _single_epoch_string(num_samples, starting_shard_per_source, paths, weights,
 
     manifests = [get_metadata_file(path) for path in paths]
     shard_strings_per_source = []
-    next_shard_per_source = starting_shard_per_source
+    next_shard_per_source = copy.deepcopy(starting_shard_per_source)
     shard_list_per_source = [[] for _ in range(len(paths))]
     num_samples_per_source = [0 for _ in range(len(paths))]
 
     total_num_workers = num_workers * world_size
-    while not enough_shards(shard_list_per_source, total_num_workers) or not enough_samples(
-        num_samples_per_source, needed_samples_per_source
+    while (
+        not enough_shards(shard_list_per_source, total_num_workers) or
+        not enough_samples(num_samples_per_source, needed_samples_per_source)
     ):
         try:
             for i in range(len(paths)):
@@ -284,6 +286,10 @@ def _single_epoch_string(num_samples, starting_shard_per_source, paths, weights,
         num_multiples = len(shard_list_per_source[i]) // total_num_workers
         shard_list_per_source[i] = shard_list_per_source[i][:num_multiples * total_num_workers]
 
+        # Put back unused shards.
+        next_shard_per_source[i] = starting_shard_per_source[i] + len(shard_list_per_source[i])
+
+        print(num_samples_per_source[i])
         # Fix the number of samples to be num_workers * samples of the worker with the minimum amount of samples
         num_samples_per_source[i] = adjust_samples(shard_list_per_source[i], manifests[i], starting_shard_per_source[i], num_workers, world_size)
 
