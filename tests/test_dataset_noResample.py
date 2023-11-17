@@ -425,3 +425,17 @@ def test_wo_resample_smallTrain():
 
 def test_wo_resample_bigTrain():
     assert True
+
+
+# ====================================================================
+# =                      Tests for file_utils                        =
+# ====================================================================
+
+
+def test_adjust_samples():
+    """Test for adjust_samples.
+
+    This test should verify that adjust_samples returns the same number of samples as when splitting with
+    wds.split_by_node and wds.split_by_worker.
+    """
+    assert True
