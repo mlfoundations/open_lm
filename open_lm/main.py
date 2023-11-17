@@ -142,11 +142,13 @@ def load_optimizer(args, model, optimizer, scaler):
 
 def load_data_chunks(args):
     checkpoint = pt_load(args.resume, map_location="cpu")
-    if "next_chunk" in checkpoint and "samples_seen" in checkpoint:
-        return checkpoint["next_chunk"], checkpoint["samples_seen"]
+    if "next_shard_per_source" in checkpoint and "samples_seen" in checkpoint:
+        return checkpoint["next_shard_per_source"], checkpoint["samples_seen"]
     else:
-        logging.info(f"=> WARNING: tried to resume a checkpoint without data chunk info. Assuming next_chunk = 0.")
-        return 0, 0
+        logging.info(
+            f"=> WARNING: tried to resume a checkpoint without data chunk info. Assuming next_shard_per_source = 0."
+        )
+        return [0 for _ in range(len(args.dataset_manifest))], 0
 
 
 def save_checkpoint(
@@ -156,7 +158,7 @@ def save_checkpoint(
     scaler,
     completed_epoch,
     evaluation_loss,
-    next_chunk=None,
+    next_shard_per_source=None,
     samples_seen=None,
 ):
     cpu_state, optim_state = None, None
@@ -173,8 +175,8 @@ def save_checkpoint(
             "state_dict": cpu_state if args.fsdp else model.state_dict(),
             "evaluation_loss": evaluation_loss,
         }
-        if next_chunk is not None:
-            checkpoint_dict_model["next_chunk"] = next_chunk
+        if next_shard_per_source is not None:
+            checkpoint_dict_model["next_shard_per_source"] = next_shard_per_source
 
         if samples_seen is not None:
             checkpoint_dict_model["samples_seen"] = samples_seen
@@ -352,7 +354,7 @@ def main(args):
         args.train_num_samples //= args.seq_len
     if args.val_num_samples is not None:
         args.val_num_samples //= args.seq_len
-        
+
     model = model.to(device)
 
     random_seed(args.seed, args.rank)
@@ -405,10 +407,10 @@ def main(args):
         model.load_state_dict(state_dict)
 
     # Add data chunk when resuming (only for dataset without resampling)
-    next_chunk = 0
+    next_shard_per_source = [0 for _ in range(len(args.dataset_manifest))] if args.dataset_manifest is not None else 0
     samples_seen = 0
     if args.resume is not None and args.dataset_manifest is not None:
-        next_chunk, samples_seen = load_data_chunks(args)
+        next_shard_per_source, samples_seen = load_data_chunks(args)
         if samples_seen >= args.train_num_samples * args.epochs:
             raise RuntimeError("Loaded a checkpoint which has already seen the desired number of tokens.")
 
@@ -513,13 +515,8 @@ def main(args):
         skip_train=args.dataset_manifest is not None,
     )
 
-    if (
-        args.target_mask_left is not None
-        and args.target_mask_individual == args.target_mask_left
-    ):
-        logging.error(
-            f"--target-mask-left and --target-mask-individual set to same value of {args.target_mask_left}."
-        )
+    if args.target_mask_left is not None and args.target_mask_individual == args.target_mask_left:
+        logging.error(f"--target-mask-left and --target-mask-individual set to same value of {args.target_mask_left}.")
         exit(1)
 
     if args.target_mask_left is not None:
@@ -528,9 +525,7 @@ def main(args):
 
     if args.target_mask_individual is not None:
         # tokens handled with same modulo in dataloading
-        args.target_mask_individual = proc_token(
-            args.target_mask_individual, args.vocab_size
-        )
+        args.target_mask_individual = proc_token(args.target_mask_individual, args.vocab_size)
 
     if args.torchcompile:
         logging.info("Compiling model...")
@@ -611,19 +606,18 @@ def main(args):
         final_epoch = False
         if args.dataset_manifest is not None:
             assert not args.dataset_resampled, "dataset_manifest and dataset_resampled are mutually exclusive"
-            curr_chunk = next_chunk
             (
                 train_data_string_per_source,
                 num_samples_per_source,
-                next_chunk,
+                next_shard_per_source,
             ) = get_string_for_epoch(
                 args.train_num_samples,
-                next_chunk,
+                next_shard_per_source,
                 args.dataset_manifest,
                 args.train_data_mix_weights,
                 args.workers * args.world_size,
             )
-            
+
             if data["train"] is not None:
                 del data["train"]
             args.train_data = train_data_string_per_source
@@ -632,11 +626,7 @@ def main(args):
             remaining_samples = total_samples - samples_seen
             if remaining_samples < sum(num_samples_per_source):
                 remaining_samples_per_source = [
-                    int(
-                        np.ceil(
-                            args.train_data_mix_weights[i] * remaining_samples / sum(args.train_data_mix_weights)
-                        )
-                    )
+                    int(np.ceil(args.train_data_mix_weights[i] * remaining_samples / sum(args.train_data_mix_weights)))
                     for i in range(len(args.train_data_mix_weights))
                 ]
                 chosen_num_samples = remaining_samples_per_source
@@ -645,21 +635,15 @@ def main(args):
                 chosen_num_samples = num_samples_per_source
 
             data["train"] = get_wds_dataset(
-                args,
-                True,
-                epoch,
-                force_num_samples=chosen_num_samples,
-                data_key=args.data_key,
-                floor=True
+                args, True, epoch, force_num_samples=chosen_num_samples, data_key=args.data_key, floor=True
             )
-
 
         if is_master(args):
             logging.info(f"=> epoch {epoch}, training on {args.train_data}")
 
         if is_master(args) and final_epoch:
             logging.info("Model has seen the desired number of tokens. Running one final epoch.")
-        
+
         try:
             prev_step = int(optimizer.state_dict()["state"][0]["step"].item())
         except KeyError:
@@ -704,7 +688,7 @@ def main(args):
             scaler,
             completed_epoch,
             evaluation_loss,
-            next_chunk=next_chunk if args.dataset_manifest is not None else None,
+            next_shard_per_source=next_shard_per_source if args.dataset_manifest is not None else None,
             samples_seen=samples_seen if args.dataset_manifest is not None else None,
         )
 
