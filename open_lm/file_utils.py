@@ -238,7 +238,10 @@ def _multi_epoch_string(num_samples, starting_chunk, paths, weights, min_shards_
         shard_list_source = shard_list_per_source[i]
         num_samples_source = num_samples_per_source[i]
         shard_root_source = "/".join(source_path.split("/")[:-1]) + "/"
-        shard_string_source = shard_root_source + "{" + ",".join(shard_list_source) + "}.tar"
+        if len(shard_list_source) == 1:
+            shard_string_source = shard_root_source + shard_list_source[0] + ".tar"
+        else:
+            shard_string_source = shard_root_source + "{" + ",".join(shard_list_source) + "}.tar"
         if source_path.startswith("s3"):
             shard_string_source = f"pipe:aws s3 cp {shard_string_source} -"
         shard_strings_per_source.append(shard_string_source)
@@ -301,7 +304,10 @@ def _single_epoch_string(num_samples, starting_shard_per_source, paths, weights,
         # Combine into a single shard string for training
         shard_list_source = shard_list_per_source[i]
         shard_root_source = "/".join(source_path.split("/")[:-1]) + "/"
-        shard_string_source = shard_root_source + "{" + ",".join(shard_list_source) + "}.tar"
+        if len(shard_list_source) == 1:
+            shard_string_source = shard_root_source + shard_list_source[0] + ".tar"
+        else:
+            shard_string_source = shard_root_source + "{" + ",".join(shard_list_source) + "}.tar"
         if source_path.startswith("s3"):
             shard_string_source = f"pipe:aws s3 cp {shard_string_source} -"
         shard_strings_per_source.append(shard_string_source)
