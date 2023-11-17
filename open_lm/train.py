@@ -104,7 +104,7 @@ def sample_chunk(chunk, args):
     return inputs, targets
 
 
-def train_one_epoch(model, data, loss, epoch, optimizer, scaler, scheduler, args, tb_writer=None):
+def train_one_epoch(model, data, loss, epoch, optimizer, scaler, scheduler, total_steps, args, tb_writer=None):
     device = torch.device(args.device)
     autocast = get_autocast(args.precision)
 
@@ -133,6 +133,10 @@ def train_one_epoch(model, data, loss, epoch, optimizer, scaler, scheduler, args
 
         if not args.skip_scheduler:
             scheduler(step)
+
+        if step > total_steps:
+            logging.warning(f"step: {step} exceeds total_steps: {total_steps}. ending training.")
+            break
 
         (texts,) = batch
         texts = torch.LongTensor(texts).to(device)
