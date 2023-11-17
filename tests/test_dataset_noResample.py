@@ -22,24 +22,21 @@ INPUT_PATHS = [
     "tests/assets/source_id_00/manifest.jsonl",
     "tests/assets/source_id_01/manifest.jsonl",
 ]
+SINGLE_SOURCE = [INPUT_PATHS[0]]
+
 TOTAL_SEQ_COUNT = 666 * 2
+SINGLE_SEQ_COUNT = 666
 
 """ TEST STRATEGY:
 Tests to just handle the edge cases in sampling WITHOUT replacement.
 
+We are just going to cover the path where we have:
+- Exactly one source 
+- Never request more data than we have available
 
-The main cases partition based on the 'num_training_tokens' specified:
-- num_training_tokens == num_dataset_tokens
-    + Then every sample in the dataset should be passed EXACTLY once 
-      (maybe weirdness/repetitions with multiple nodes/workers + batch size?)
-
-- num_training_tokens < num_dataset_tokens
-    + No sample should ever be seen twice
-    + We should see only num_training_tokens (modulo Seqlen maybe?)
-
-- num_training_tokens > num_dataset_tokens
-    + First num_dataset_tokens should see every token exactly once
-    + Then we should roll over and start seeing elements for the second time 
+And generally we want to assert that:
+- We never see any repeated data 
+- We see exactly the right number of samples as desired (some math here)
 
 """
 
@@ -63,15 +60,19 @@ def get_dataset_size(paths, count_tokens=False):
 
 
 
-def retrieve_dataset_once(total_seqs, epoch, weights, seed, disable_buffer, batch_size, num_workers, 
+def retrieve_dataset_once(total_seqs, paths, epoch, weights, seed, disable_buffer, batch_size, num_workers, 
                           min_shards_needed=1):
-    """ Returns the output of get_wds_dataset -- not dataloader or nothing fancy """
+    """ Returns the output of get_wds_dataset -- not dataloader or nothing fancy
+    ONLY WORKS FOR A SINGLE SOURCE
+    """
+
+    assert len(paths) == 1
     args = parse_args("")
     random_seed(seed)
 
 
-    train_data_string_per_source, num_seqs_per_source, _ = get_string_for_epoch(
-        total_seqs, epoch, INPUT_PATHS, weights, min_shards_needed)
+    train_data_string_per_source, num_seqs_per_source, _ = get_string_for_epoch2(
+        total_seqs, epoch, paths, weights, min_shards_needed)
 
     args.train_num_samples = total_seqs
     args.train_data = train_data_string_per_source
@@ -84,10 +85,233 @@ def retrieve_dataset_once(total_seqs, epoch, weights, seed, disable_buffer, batc
     args.seq_len = _MODEL_CONFIGS[args.model]["seq_len"]
     args.world_size = 1 
     
-    data = get_wds_dataset(args, is_train=True, epoch=epoch, force_num_samples=num_seqs_per_source)
+    data = get_wds_dataset(args, is_train=True, epoch=epoch, force_num_samples=[total_seqs])
     return data
 
 
+
+# ======================================================
+# =           Single Source Test Cases                 =
+# ======================================================
+
+@pytest.mark.parametrize('num_samples,epoch,batch_size,min_shards_needed',
+                         [(10, 0, 1, 1),
+                          (100, 0, 25, 2),
+                          (150, 1, 50, 4),
+                          (666, 0, 111, 3)])
+def test_singleSource_singleWorker_perfectBatch(num_samples, epoch, batch_size, min_shards_needed):
+    """ Cases where:
+        - Only a single source
+        - Only a single worker 
+        - The batch_size perfectly divides the number of samples requested
+
+    Should see exactly num_samples at the end, and no repeats
+    """
+    data = retrieve_dataset_once(num_samples, SINGLE_SOURCE, epoch, None, 
+                                 seed=42, disable_buffer=True, batch_size=batch_size,
+                                 num_workers=1, min_shards_needed=min_shards_needed)
+
+    data_ids = []
+    for batch in data.dataloader:
+        for seq in batch[0]:
+            data_ids.append(tuple(seq[:3]))
+
+    assert len(set(data_ids)) == len(data_ids) == num_samples# Checking no repeats and exact
+
+
+
+
+@pytest.mark.parametrize('num_samples,epoch,batch_size, min_shards_needed',
+                         [(50, 0, 7, 1),
+                          (250, 2, 13, 4),
+                          (666, 0, 13, 1)])
+def test_singleSource_singleWorker_imperfectBatch(num_samples, epoch, batch_size, min_shards_needed):
+    """ Cases where:
+        - Only a single source
+        - Only a single worker
+        - Batch size does NOT divide the number of samples
+
+    Should see no repeats, but the greatest multiple of batch_size <= num_samples
+    """
+    data = retrieve_dataset_once(num_samples, SINGLE_SOURCE, epoch, None, 
+                                 seed=42, disable_buffer=True, batch_size=batch_size,
+                                 num_workers=1, min_shards_needed=min_shards_needed)
+
+    data_ids = []
+    for batch in data.dataloader:
+        for seq in batch[0]:
+            data_ids.append(tuple(seq[:3]))
+
+    assert len(set(data_ids)) == len(data_ids) # Check no repeats
+    assert len(data_ids) == batch_size * (num_samples // batch_size) #
+
+
+
+
+def test_singleSource_multiWorker_perfectBatch_0():
+    """ 
+    Not using pytest.mark.parametrize because I need to be careful about the reasoning
+    Start with a simple case:
+    - 2 workers, each should consume (fully) one tar file
+    """
+    num_samples = 200
+    epoch = 0
+    batch_size = 10
+    min_shards_needed = num_workers = 2
+
+    data = retrieve_dataset_once(num_samples, SINGLE_SOURCE, epoch, None, 
+                                 seed=42, disable_buffer=True, batch_size=batch_size,
+                                 num_workers=num_workers, min_shards_needed=min_shards_needed)
+
+    data_ids = []
+    for batch in data.dataloader:
+        for seq in batch[0]:
+            data_ids.append(tuple(seq[:3]))
+
+    assert len(set(data_ids)) == len(data_ids) # Check no repeats
+    # Now reasoning about this, I should consume each fully
+
+
+    target_data_ids = [(0, i, j) for i in range(2) for j in range(100)]
+    assert sorted(target_data_ids) == sorted(data_ids)
+
+
+
+def test_singleSource_multiWorker_0():
+    """ 
+    Not using pytest.mark.parametrize because I need to be careful about the reasoning
+    - 2 workers, each should consume (fully) one tar file
+    """
+    num_samples = 200
+    epoch = 0
+    batch_size = 10
+    min_shards_needed = num_workers = 2
+
+    data = retrieve_dataset_once(num_samples, SINGLE_SOURCE, epoch, None, 
+                                 seed=42, disable_buffer=True, batch_size=batch_size,
+                                 num_workers=num_workers, min_shards_needed=min_shards_needed)
+
+    data_ids = []
+    for batch in data.dataloader:
+        for seq in batch[0]:
+            data_ids.append(tuple(seq[:3]))
+
+    assert len(set(data_ids)) == len(data_ids) # Check no repeats
+    # Now reasoning about this, I should consume each fully
+
+    target_data_ids = [(0, i, j) for i in range(2) for j in range(100)] # All of chunk 0000, chunk 0001
+    assert sorted(target_data_ids) == sorted(data_ids)
+
+
+def test_singleSource_multiWorker_1():
+    """ 
+    Not using pytest.mark.parametrize because I need to be careful about the reasoning
+    - 2 workers, each should consume (partially) one tar file (but no batch weirdness)
+    """
+    num_samples = 150
+    epoch = 0
+    batch_size = 5
+    min_shards_needed = num_workers = 2
+
+    data = retrieve_dataset_once(num_samples, SINGLE_SOURCE, epoch, None, 
+                                 seed=42, disable_buffer=True, batch_size=batch_size,
+                                 num_workers=num_workers, min_shards_needed=min_shards_needed)
+
+    data_ids = []
+    for batch in data.dataloader:
+        for seq in batch[0]:
+            data_ids.append(tuple(seq[:3]))
+
+    assert len(set(data_ids)) == len(data_ids) # Check no repeats
+
+    target_data_ids = [(0, i, j) for i in range(2) for j in range(75)] # 3/4 of chunk 0000, chunk 0001
+    assert sorted(target_data_ids) == sorted(data_ids)
+
+
+
+def test_singleSource_multiWorker_2():
+    """ 
+    Not using pytest.mark.parametrize because I need to be careful about the reasoning
+    - 2 workers, each should consume (partially) one tar file (but yes batch weirdness)
+    """
+    num_samples = 150
+    epoch = 0
+    batch_size = 10
+    min_shards_needed = num_workers = 2
+
+    data = retrieve_dataset_once(num_samples, SINGLE_SOURCE, epoch, None, 
+                                 seed=42, disable_buffer=True, batch_size=batch_size,
+                                 num_workers=num_workers, min_shards_needed=min_shards_needed)
+
+    data_ids = []
+    for batch in data.dataloader:
+        for seq in batch[0]:
+            data_ids.append(tuple(seq[:3]))
+
+    assert len(set(data_ids)) == len(data_ids) # Check no repeats
+    # Now reasoning about this, I should consume each partially. Each worker gets 150/20=7.5->7 batches
+    target_data_ids = [(0, i, j) for i in range(2) for j in range(70)] 
+    assert sorted(target_data_ids) == sorted(data_ids)
+
+
+def test_singleSource_multiWorker_3():
+    """ 
+    Not using pytest.mark.parametrize because I need to be careful about the reasoning
+
+    - 2 workers, one worker should get 1 tarfile, the other worker should get 2 tarfiles
+    - no batch weirdness
+
+    So if I ask for 300 samples, but each shard has 100, then I need 3 shards
+    But then if I distribute across 2 workers, i should get 
+    worker_0:= [shard_0000], worker_1:=[shard_0001, shard_0002] (or some such thing)
+    and then each worker should ask to see 300/(batch_size * num_workers) = 15 batches
+    so worker_0 exhausts its supply
+    and worker_1 only sees 15 batches
+    """
+    num_samples = 300
+    epoch = 0
+    batch_size = 10
+    min_shards_needed = num_workers = 2
+
+    data = retrieve_dataset_once(num_samples, SINGLE_SOURCE, epoch, None, 
+                                 seed=42, disable_buffer=True, batch_size=batch_size,
+                                 num_workers=num_workers, min_shards_needed=min_shards_needed)
+
+    data_ids = []
+    for batch in data.dataloader:
+        for seq in batch[0]:
+            data_ids.append(tuple(seq[:3]))
+
+    assert len(set(data_ids)) == len(data_ids) # Check no repeats
+    assert len(data_ids) == 250
+
+
+def test_singleSource_multiWorker_4():
+    """
+    - 2 workers, one worker gets one tarfile, the other gets 2 tarfiles
+    - yes batch weirdness
+
+    I ask for 256 samples, so I should get two workers with 1,2 tars each
+    ??? 
+    TALKING TO GEORGE ABOUT THE PROPER BEHAVIOR HERE
+    """
+    num_samples = 256
+    epoch = 0
+    batch_size = 10
+
+    min_shards_needed = num_workers = 2
+
+    data = retrieve_dataset_once(num_samples, SINGLE_SOURCE, epoch, None, 
+                                 seed=42, disable_buffer=True, batch_size=batch_size,
+                                 num_workers=num_workers, min_shards_needed=min_shards_needed)
+
+    data_ids = []
+    for batch in data.dataloader:
+        for seq in batch[0]:
+            data_ids.append(tuple(seq[:3]))
+
+    assert len(set(data_ids)) == len(data_ids) # Check no repeats
+    assert len(data_ids) == 250    
 
 
 # ====================================================================

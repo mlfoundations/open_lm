@@ -12,6 +12,7 @@ import fsspec
 import numpy as np
 import torch
 from tqdm import tqdm
+from itertools import cycle
 
 
 def remote_sync_s3(local_dir, remote_dir):
@@ -211,3 +212,95 @@ def get_string_for_epoch(num_samples, starting_chunk, paths, weights, min_shards
         shard_strings_per_source.append(shard_string_source)
 
     return shard_strings_per_source, num_samples_per_source, next_chunk
+
+
+
+def get_string_for_epoch2(num_samples, starting_chunk, paths, weights, min_shards_needed):
+    if weights is None:
+        weights = [1.0 / len(paths) for _ in range(len(paths))]
+
+    needed_samples_per_source = [int(np.ceil(weights[i] * num_samples / sum(weights))) for i in range(len(weights))]
+
+    
+    outputs = []
+    for samples_needed, path in zip(needed_samples_per_source, paths):
+        outputs.append(get_strings_for_epoch_single_source(samples_needed, starting_chunk, 
+                                                           path, min_shards_needed=min_shards_needed))
+
+    shard_list_per_source = [_[0] for _ in outputs]
+    shard_strings_per_source = []
+    num_samples_per_source = [_[1] for _ in outputs]
+
+    for i, source_path in enumerate(paths):
+        shard_list_source = shard_list_per_source[i]
+        num_samples_source = num_samples_per_source[i]
+        shard_root_source = "/".join(source_path.split("/")[:-1]) + "/"
+        if len(shard_list_source) == 1:
+            shard_string_source = shard_root_source + shard_list_source[0] + ".tar"
+        else:
+            shard_string_source = shard_root_source + "{" + ",".join(shard_list_source) + "}.tar"
+        if source_path.startswith("s3"):
+            shard_string_source = f"pipe:aws s3 cp {shard_string_source} -"
+        shard_strings_per_source.append(shard_string_source)
+
+    return shard_strings_per_source, num_samples_per_source, starting_chunk + 1    
+
+
+
+def get_strings_for_epoch_single_source(samples_needed, starting_chunk, path, min_shards_needed):
+    """
+    Gets the starting_chunk'th collection of shards that meets the following criteria:
+    - at least min_shards_needed shards
+    - total number of samples >= samples_needed
+
+    With the edge case that if:
+        number of samples needed > all samples 
+    OR 
+        number of shards < min_shards_needed
+
+    We log a warning and return the whole collection of shards
+    """
+    metadata = get_metadata_file(path)
+    return_all = False
+
+
+    # Handle edge case
+    if len(metadata) < min_shards_needed:
+        logging.warning(       
+                "Number of shards requested for a single epoch is more than the number of shards available. "
+                "Consider lowering the number of workers and / or the number of GPUs, to avoid continuous "
+                "reuse of samples."
+                )
+        return_all = True
+    elif sum(_['num_chunks'] for _ in metadata) < samples_needed:
+        logging.warning(
+            "Number of samples requested for a single epoch is less than the number of samples available. "
+            "Consider adding another source or requesting fewer samples")
+        return_all = True
+    if return_all:
+        return [_['shard'] for _ in metadata], sum(_['num_chunks'] for _ in metadata)
+
+
+    # Standard flow (kinda inefficient, but who cares?)
+    # Create chunks that pass the checks, and just loop until we get to the 'starting_chunk'th one
+    passes_check = lambda files, total: len(files) >= min_shards_needed and total >= samples_needed
+    metadata_looped = cycle([(_['shard'], _['num_chunks']) for _ in metadata])
+
+    cur_files = []
+    cur_samples = 0
+    cur_chunk = 0
+
+    while True: 
+        if passes_check(cur_files, cur_samples):
+            if cur_chunk == starting_chunk:
+                return cur_files, cur_samples
+            else:
+                cur_files, cur_samples = [], 0
+                cur_chunk += 1
+        else:
+            next_file, next_count = next(metadata_looped)
+            cur_files.append(next_file)
+            cur_samples += next_count
+
+
+
