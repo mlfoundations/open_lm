@@ -632,11 +632,12 @@ def main(args):
             logging.info("Using CrossEntropyLossWithZLoss.")
         loss = CrossEntropyLossWithZLoss(args.z_loss_coefficient)
 
-    for epoch in range(start_epoch, args.epochs):
+    final_epoch = False
+    epoch = start_epoch
+    while not final_epoch:
         if is_master(args):
             logging.info(f"Start epoch {epoch}")
 
-        final_epoch = False
         if args.dataset_manifest is not None:
             assert not args.dataset_resampled, "dataset_manifest and dataset_resampled are mutually exclusive"
             (
@@ -696,6 +697,7 @@ def main(args):
         if args.distributed:
             dist.barrier()
 
+        done_training = global_step >= total_steps
         steps_done_epoch = global_step - prev_step
         samples_seen = samples_seen + steps_done_epoch * args.batch_size * args.world_size
 
@@ -703,11 +705,11 @@ def main(args):
             logging.info("Training exiting due to NaN value")
             break
 
-        completed_epoch = epoch + 1
+        epoch = epoch + 1
         evaluation_loss = -1
-        if "val" in data and (completed_epoch % args.val_frequency == 0 or completed_epoch == args.epochs):
+        if "val" in data and (epoch % args.val_frequency == 0 or done_training):
             # validate based on frequency and always validate the last checkpoint
-            evaluation_loss = evaluate(model, data, completed_epoch, args, writer)["loss"]
+            evaluation_loss = evaluate(model, data, epoch, args, writer)["loss"]
 
         # Saving checkpoints.
         save_checkpoint(
@@ -715,7 +717,7 @@ def main(args):
             model,
             optimizer,
             scaler,
-            completed_epoch,
+            epoch,
             evaluation_loss,
             step=global_step,
             next_shard_per_source=next_shard_per_source if args.dataset_manifest is not None else None,
@@ -725,6 +727,7 @@ def main(args):
         if final_epoch:
             logging.info("Ending training due to data exhaustion.")
             break
+
 
     if args.wandb and is_master(args):
         wandb.finish()
