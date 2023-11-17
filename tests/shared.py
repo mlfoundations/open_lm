@@ -87,6 +87,7 @@ class MockDataArgs(object):
         self.dataset_manifest = None
         self.target_mask_left = None
         self.target_mask_individual = None
+        self.ignore_parse_errors = False
 
 
 def create_train_fixtures():

@@ -312,6 +312,7 @@ def get_wds_dataset(
 
     datasets = []
     all_num_samples = []
+    shared_epoch = SharedEpoch(epoch=epoch)  # create a shared epoch store to sync epoch to dataloader worker proc
     for ii, input_shards in enumerate(input_shards_):
         resampled = getattr(args, "dataset_resampled", False) and is_train
 
@@ -335,8 +336,6 @@ def get_wds_dataset(
         else:
             # Eval will just exhaust the iterator if the size is not specified.
             num_samples = args.val_num_samples or 0
-
-        shared_epoch = SharedEpoch(epoch=epoch)  # create a shared epoch store to sync epoch to dataloader worker proc
 
         if resampled:
             pipeline = [
