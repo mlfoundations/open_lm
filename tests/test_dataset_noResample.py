@@ -13,7 +13,7 @@ from open_lm.file_utils import (
 )
 from open_lm.params import parse_args
 from pathlib import Path
-from tests.utils import download_dl_test_data
+from tests.utils import download_dl_test_data, make_fake_tarfiles
 import json
 from collections import Counter, defaultdict
 
@@ -334,6 +334,7 @@ def test_wo_resample_exact_a(batch_size, num_workers):
     - that we get the exact dataset that we requested (by ids) 
     
     """
+    make_fake_tarfiles()
     seq_count = TOTAL_SEQ_COUNT
     data = retrieve_dataset_once(seq_count, 0, [0.5, 0.5], 1234, True,
                                  batch_size, num_workers, min_shards_needed=1)
@@ -369,6 +370,7 @@ def test_wo_resample_exact_b(batch_size, num_workers):
 
     - total set of ids is all ids
     """
+    make_fake_tarfiles()
     seq_count = TOTAL_SEQ_COUNT
     total_workers = batch_size * num_workers * len(INPUT_PATHS)
     data = retrieve_dataset_once(seq_count, 0, [0.5, 0.5], 1234, True,
@@ -383,40 +385,28 @@ def test_wo_resample_exact_b(batch_size, num_workers):
         for seq in batch[0]:
             _id = tuple(seq[:3])
             all_ids[_id] += 1
-            if i != len(all_batches) - 1:
-                all_but_last_ids[_id] += 1
+            
+    for i in range(2):
+        for j in range(7):
+            for k in range(100):
+                if j == 0 and k < 6:
+                    # First 6 samples per source should have been seen twice
+                    assert all_ids[(i,j,k)] == 2
+                elif (i,j,k) in all_ids:
+                    assert all_ids[(i,j,k)] == 1
 
 
-    expected_ids = []
+    expected_ids_per_source = [[], []]
     for i in range(seq_count):
-        expected_ids.append((i  % 2, (i //2) // 100, (i // 2) % 100))
-
-    seens = []
-    expecteds = []
-
-    # Asserts on all_but_lasts
-    seens.append(max(all_but_last_ids.values()))
-    expecteds.append(1)
-
-    seens.append(sum(all_but_last_ids.values()))
-    expecteds.append(total_workers * (seq_count // total_workers))
+        expected_ids_per_source[i % 2].append((i  % 2, (i //2) // 100, (i // 2) % 100))
 
     # Asserts on all ids
-    seens.append(max(all_ids.values()))
-    expecteds.append(2)
-
-    seens.append(sum(all_ids.values()))
-    expecteds.append(seq_count + total_workers - (seq_count % total_workers))
-
-    seens.append(len(all_ids))
-    expecteds.append(seq_count)
+    assert max(all_ids.values()) == 2
+    assert sum(all_ids.values()) == seq_count + total_workers - (seq_count % total_workers)
+    assert len(all_ids) == seq_count
 
     # And actually get the set of all ids
-    seens.append(sorted(list(all_ids.keys())))
-    expecteds.append(expected_ids)
-
-    assert tuple(seens) == tuple(expecteds)
-
+    assert sorted(list(all_ids.keys())) == expected_ids_per_source[0] + expected_ids_per_source[1]
 
 # ====================================================================
 # =           Tests when num_train_samples < dataset_size            =
@@ -434,4 +424,18 @@ def test_wo_resample_smallTrain():
 
 
 def test_wo_resample_bigTrain():
+    assert True
+
+
+# ====================================================================
+# =                      Tests for file_utils                        =
+# ====================================================================
+
+
+def test_adjust_samples():
+    """Test for adjust_samples.
+
+    This test should verify that adjust_samples returns the same number of samples as when splitting with
+    wds.split_by_node and wds.split_by_worker.
+    """
     assert True
