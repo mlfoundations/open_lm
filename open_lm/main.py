@@ -568,7 +568,8 @@ def main(args):
     scheduler = None
     if "train" in data and optimizer is not None:
         if args.dataset_manifest is not None:
-            total_steps = (args.train_num_samples * args.epochs) // (args.batch_size * args.world_size)
+            # Account for workers when counting total_steps.
+            total_steps = ((args.train_num_samples * args.epochs) // (args.batch_size * args.world_size * args.workers)) * args.workers 
         else:
             total_steps = (data["train"].dataloader.num_batches) * args.epochs
 
@@ -632,9 +633,9 @@ def main(args):
             logging.info("Using CrossEntropyLossWithZLoss.")
         loss = CrossEntropyLossWithZLoss(args.z_loss_coefficient)
 
-    final_epoch = False
+    done_training = False
     epoch = start_epoch
-    while not final_epoch:
+    while not done_training:
         if is_master(args):
             logging.info(f"Start epoch {epoch}")
 
@@ -657,20 +658,9 @@ def main(args):
                 del data["train"]
             args.train_data = train_data_string_per_source
 
-            total_samples = args.epochs * args.train_num_samples
-            remaining_samples = total_samples - samples_seen
-            if remaining_samples < sum(num_samples_per_source):
-                remaining_samples_per_source = [
-                    int(np.ceil(args.train_data_mix_weights[i] * remaining_samples / sum(args.train_data_mix_weights)))
-                    for i in range(len(args.train_data_mix_weights))
-                ]
-                chosen_num_samples = remaining_samples_per_source
-                final_epoch = True
-            else:
-                chosen_num_samples = num_samples_per_source
-
+            # Draw num_samples_per_source at most from dataset - rounded down to guarantee uniqueness.
             data["train"] = get_wds_dataset(
-                args, True, epoch, force_num_samples=chosen_num_samples, data_key=args.data_key, floor=True
+                args, True, epoch, force_num_samples=num_samples_per_source, data_key=args.data_key, floor=True
             )
 
         prev_step = global_step
@@ -724,8 +714,8 @@ def main(args):
             samples_seen=samples_seen if args.dataset_manifest is not None else None,
         )
 
-        if final_epoch:
-            logging.info("Ending training due to data exhaustion.")
+        if is_master(args) and done_training:
+            logging.info("Model has seen the desired number of tokens. Ending training.")
             break
 
 

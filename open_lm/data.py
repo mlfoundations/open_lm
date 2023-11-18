@@ -507,9 +507,9 @@ def get_wds_dataset(
         total_num_batches = 0
         total_num_samples = 0
         for ii in range(len(datasets)):
-            num_batches = round_fn(all_num_samples[ii] / global_batch_size)
-            num_workers = max(1, args.workers)
-            num_worker_batches = round_fn(num_batches / num_workers)  # per dataloader worker
+            # Calculate batches per worker, round as little as possible.
+            num_workers = max(1, args.num_workers)
+            num_worker_batches = round_fn(all_num_samples[ii] / (global_batch_size * num_workers))
             num_batches = num_worker_batches * num_workers
             num_samples = num_batches * global_batch_size
 

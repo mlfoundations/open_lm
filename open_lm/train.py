@@ -132,11 +132,18 @@ def train_one_epoch(model, data, loss, epoch, step, optimizer, scaler, scheduler
 
     end = time.time()
 
+    try:
+        starting_step = int(optimizer.state_dict()["state"][0]["step"].item())
+    except KeyError:
+        # Throws keyerror if it is the first step
+        starting_step = 0
+    done_training = False
+
     for i, batch in enumerate(dataloader):
         if not args.skip_scheduler:
             scheduler(step)
 
-        if step > total_steps:
+        if step >= total_steps:
             logging.warning(f"step: {step} exceeds total_steps: {total_steps}. ending training.")
             break
 
