@@ -104,7 +104,7 @@ def sample_chunk(chunk, args):
     return inputs, targets
 
 
-def train_one_epoch(model, data, loss, epoch, optimizer, scaler, scheduler, args, tb_writer=None):
+def train_one_epoch(model, data, loss, epoch, optimizer, scaler, scheduler, total_steps, args, tb_writer=None):
     device = torch.device(args.device)
     autocast = get_autocast(args.precision)
 
@@ -124,12 +124,23 @@ def train_one_epoch(model, data, loss, epoch, optimizer, scaler, scheduler, args
 
     end = time.time()
 
+    try:
+        starting_step = int(optimizer.state_dict()["state"][0]["step"].item())
+    except KeyError:
+        # Throws keyerror if it is the first step
+        starting_step = 0
+    done_training = False
+
     for i, batch in enumerate(dataloader):
         try:
             step = int(optimizer.state_dict()["state"][0]["step"].item())
         except KeyError:
             # Throws keyerror if it is the first step
             step = 0
+
+        if step >= total_steps:
+            done_training = True
+            break
 
         if not args.skip_scheduler:
             scheduler(step)
@@ -253,10 +264,17 @@ def train_one_epoch(model, data, loss, epoch, optimizer, scaler, scheduler, args
                 # in this case we would like to free resources and prevent other issues
                 # e.g., saving checkpoints and optmization states that may lead to skipped
                 # training on restarts.
-                return False
+                return False, {}
 
     # end for
-    return True
+    final_step = int(optimizer.state_dict()["state"][0]["step"].item())
+    training_stats = {
+        "done_training": done_training,
+        "steps_done_epoch": final_step - starting_step,
+        "samples_seen": (final_step - starting_step) * args.batch_size * args.world_size
+    }
+
+    return True, training_stats
 
 
 @torch.inference_mode()
