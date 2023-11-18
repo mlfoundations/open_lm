@@ -352,7 +352,7 @@ def main(args):
         args.train_num_samples //= args.seq_len
     if args.val_num_samples is not None:
         args.val_num_samples //= args.seq_len
-        
+
     model = model.to(device)
 
     random_seed(args.seed, args.rank)
@@ -513,13 +513,8 @@ def main(args):
         skip_train=args.dataset_manifest is not None,
     )
 
-    if (
-        args.target_mask_left is not None
-        and args.target_mask_individual == args.target_mask_left
-    ):
-        logging.error(
-            f"--target-mask-left and --target-mask-individual set to same value of {args.target_mask_left}."
-        )
+    if args.target_mask_left is not None and args.target_mask_individual == args.target_mask_left:
+        logging.error(f"--target-mask-left and --target-mask-individual set to same value of {args.target_mask_left}.")
         exit(1)
 
     if args.target_mask_left is not None:
@@ -528,9 +523,7 @@ def main(args):
 
     if args.target_mask_individual is not None:
         # tokens handled with same modulo in dataloading
-        args.target_mask_individual = proc_token(
-            args.target_mask_individual, args.vocab_size
-        )
+        args.target_mask_individual = proc_token(args.target_mask_individual, args.vocab_size)
 
     if args.torchcompile:
         logging.info("Compiling model...")
@@ -611,6 +604,10 @@ def main(args):
         final_epoch = False
         if args.dataset_manifest is not None:
             assert not args.dataset_resampled, "dataset_manifest and dataset_resampled are mutually exclusive"
+            assert not (
+                args.no_skip_tokens ^ args.accurate_total_tokens
+            ), "either both or none of --no-skip-tokens / --accurate-total-tokens should be specified"
+
             (
                 train_data_string_per_source,
                 num_samples_per_source,
@@ -671,6 +668,7 @@ def main(args):
             optimizer,
             scaler,
             scheduler,
+            total_steps,
             args,
             tb_writer=writer,
         )
