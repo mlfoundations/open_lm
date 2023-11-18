@@ -216,7 +216,11 @@ def train_one_epoch(model, data, loss, epoch, step, optimizer, scaler, scheduler
         end = time.time()
         batch_count = i + 1
         step += 1
-        if is_master(args) and (i % args.log_every_n_steps == 0 or batch_count == num_batches_per_epoch):
+        if is_master(args) and (
+            i % args.log_every_n_steps == 0 or
+            batch_count == num_batches_per_epoch or
+            step == total_steps - 1
+        ):
             batch_size = len(inputs)
             num_samples = batch_count * batch_size * args.world_size
             samples_per_epoch = dataloader.num_samples
