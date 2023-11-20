@@ -60,7 +60,7 @@ def get_dataset_size(paths, count_tokens=False):
 
 
 
-def retrieve_dataset_once(total_seqs, paths, epoch, weights, seed, disable_buffer, batch_size, num_workers, 
+def retrieve_dataset_once(total_seqs, paths, epoch, next_shard, weights, seed, disable_buffer, batch_size, num_workers, 
                           min_shards_needed=1):
     """ Returns the output of get_wds_dataset -- not dataloader or nothing fancy
     ONLY WORKS FOR A SINGLE SOURCE
@@ -71,8 +71,8 @@ def retrieve_dataset_once(total_seqs, paths, epoch, weights, seed, disable_buffe
     random_seed(seed)
 
 
-    train_data_string_per_source, num_seqs_per_source, _ = get_string_for_epoch2(
-        total_seqs, epoch, paths, weights, min_shards_needed)
+    train_data_string_per_source, num_seqs_per_source, _ = get_string_for_epoch(
+        total_seqs, [next_shard], paths, weights, min_shards_needed, world_size=1)
 
     args.train_num_samples = total_seqs
     args.train_data = train_data_string_per_source
@@ -94,12 +94,12 @@ def retrieve_dataset_once(total_seqs, paths, epoch, weights, seed, disable_buffe
 # =           Single Source Test Cases                 =
 # ======================================================
 
-@pytest.mark.parametrize('num_samples,epoch,batch_size,min_shards_needed',
+@pytest.mark.parametrize('num_samples,next_shard,batch_size,min_shards_needed',
                          [(10, 0, 1, 1),
-                          (100, 0, 25, 2),
+                          (6, 0, 4, 2),
                           (150, 1, 50, 4),
                           (666, 0, 111, 3)])
-def test_singleSource_singleWorker_perfectBatch(num_samples, epoch, batch_size, min_shards_needed):
+def test_singleSource_singleWorker_perfectBatch(num_samples, next_shard, batch_size, min_shards_needed):
     """ Cases where:
         - Only a single source
         - Only a single worker 
@@ -107,7 +107,7 @@ def test_singleSource_singleWorker_perfectBatch(num_samples, epoch, batch_size, 
 
     Should see exactly num_samples at the end, and no repeats
     """
-    data = retrieve_dataset_once(num_samples, SINGLE_SOURCE, epoch, None, 
+    data = retrieve_dataset_once(num_samples, SINGLE_SOURCE, 0, next_shard, None, 
                                  seed=42, disable_buffer=True, batch_size=batch_size,
                                  num_workers=1, min_shards_needed=min_shards_needed)
 
@@ -121,11 +121,11 @@ def test_singleSource_singleWorker_perfectBatch(num_samples, epoch, batch_size, 
 
 
 
-@pytest.mark.parametrize('num_samples,epoch,batch_size, min_shards_needed',
+@pytest.mark.parametrize('num_samples,next_shard,batch_size, min_shards_needed',
                          [(50, 0, 7, 1),
-                          (250, 2, 13, 4),
+                          (6, 2, 0, 4),
                           (666, 0, 13, 1)])
-def test_singleSource_singleWorker_imperfectBatch(num_samples, epoch, batch_size, min_shards_needed):
+def test_singleSource_singleWorker_imperfectBatch(num_samples, next_shard, batch_size, min_shards_needed):
     """ Cases where:
         - Only a single source
         - Only a single worker
@@ -133,7 +133,7 @@ def test_singleSource_singleWorker_imperfectBatch(num_samples, epoch, batch_size
 
     Should see no repeats, but the greatest multiple of batch_size <= num_samples
     """
-    data = retrieve_dataset_once(num_samples, SINGLE_SOURCE, epoch, None, 
+    data = retrieve_dataset_once(num_samples, SINGLE_SOURCE, 0, next_shard, None, 
                                  seed=42, disable_buffer=True, batch_size=batch_size,
                                  num_workers=1, min_shards_needed=min_shards_needed)
 
@@ -156,10 +156,11 @@ def test_singleSource_multiWorker_perfectBatch_0():
     """
     num_samples = 200
     epoch = 0
+    next_shard = 0
     batch_size = 10
     min_shards_needed = num_workers = 2
 
-    data = retrieve_dataset_once(num_samples, SINGLE_SOURCE, epoch, None, 
+    data = retrieve_dataset_once(num_samples, SINGLE_SOURCE, epoch, next_shard, None, 
                                  seed=42, disable_buffer=True, batch_size=batch_size,
                                  num_workers=num_workers, min_shards_needed=min_shards_needed)
 
@@ -184,10 +185,11 @@ def test_singleSource_multiWorker_0():
     """
     num_samples = 200
     epoch = 0
+    next_shard = 0
     batch_size = 10
     min_shards_needed = num_workers = 2
 
-    data = retrieve_dataset_once(num_samples, SINGLE_SOURCE, epoch, None, 
+    data = retrieve_dataset_once(num_samples, SINGLE_SOURCE, epoch, next_shard, None, 
                                  seed=42, disable_buffer=True, batch_size=batch_size,
                                  num_workers=num_workers, min_shards_needed=min_shards_needed)
 
@@ -210,10 +212,11 @@ def test_singleSource_multiWorker_1():
     """
     num_samples = 150
     epoch = 0
+    next_shard = 0
     batch_size = 5
     min_shards_needed = num_workers = 2
 
-    data = retrieve_dataset_once(num_samples, SINGLE_SOURCE, epoch, None, 
+    data = retrieve_dataset_once(num_samples, SINGLE_SOURCE, epoch, next_shard, None, 
                                  seed=42, disable_buffer=True, batch_size=batch_size,
                                  num_workers=num_workers, min_shards_needed=min_shards_needed)
 
@@ -236,10 +239,11 @@ def test_singleSource_multiWorker_2():
     """
     num_samples = 150
     epoch = 0
+    next_shard = 0
     batch_size = 10
     min_shards_needed = num_workers = 2
 
-    data = retrieve_dataset_once(num_samples, SINGLE_SOURCE, epoch, None, 
+    data = retrieve_dataset_once(num_samples, SINGLE_SOURCE, epoch, next_shard, None, 
                                  seed=42, disable_buffer=True, batch_size=batch_size,
                                  num_workers=num_workers, min_shards_needed=min_shards_needed)
 
@@ -270,10 +274,11 @@ def test_singleSource_multiWorker_3():
     """
     num_samples = 300
     epoch = 0
+    next_shard = 0
     batch_size = 10
     min_shards_needed = num_workers = 2
 
-    data = retrieve_dataset_once(num_samples, SINGLE_SOURCE, epoch, None, 
+    data = retrieve_dataset_once(num_samples, SINGLE_SOURCE, epoch, next_shard, None, 
                                  seed=42, disable_buffer=True, batch_size=batch_size,
                                  num_workers=num_workers, min_shards_needed=min_shards_needed)
 
@@ -297,11 +302,12 @@ def test_singleSource_multiWorker_4():
     """
     num_samples = 256
     epoch = 0
+    next_shard = 0
     batch_size = 10
 
     min_shards_needed = num_workers = 2
 
-    data = retrieve_dataset_once(num_samples, SINGLE_SOURCE, epoch, None, 
+    data = retrieve_dataset_once(num_samples, SINGLE_SOURCE, epoch, next_shard, None, 
                                  seed=42, disable_buffer=True, batch_size=batch_size,
                                  num_workers=num_workers, min_shards_needed=min_shards_needed)
 
@@ -336,7 +342,7 @@ def test_wo_resample_exact_a(batch_size, num_workers):
     """
     make_fake_tarfiles()
     seq_count = TOTAL_SEQ_COUNT
-    data = retrieve_dataset_once(seq_count, 0, [0.5, 0.5], 1234, True,
+    data = retrieve_dataset_once(seq_count, INPUT_PATHS, 0, 0, [0.5, 0.5], 1234, True,
                                  batch_size, num_workers, min_shards_needed=1)
     data_ids = []
     for batch in data.dataloader:
@@ -373,7 +379,7 @@ def test_wo_resample_exact_b(batch_size, num_workers):
     make_fake_tarfiles()
     seq_count = TOTAL_SEQ_COUNT
     total_workers = batch_size * num_workers * len(INPUT_PATHS)
-    data = retrieve_dataset_once(seq_count, 0, [0.5, 0.5], 1234, True,
+    data = retrieve_dataset_once(seq_count, INPUT_PATHS, 0, 0, [0.5, 0.5], 1234, True,
                                  batch_size, num_workers, min_shards_needed=1)
 
 
