@@ -17,6 +17,8 @@ import pandas as pd
 import torch
 import webdataset as wds
 from PIL import Image
+from itertools import islice
+
 from torch.utils.data import (
     Dataset,
     DataLoader,
@@ -333,6 +335,19 @@ def filter_lt_seqlen(seq_len, x):
     return valid_sample
 
 
+class FiniteDataPipeline(wds.DataPipeline):
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+    def __iter__(self):
+        """Create an iterator through the pipeline, repeating and slicing as requested.
+        
+        This differs from wds.DataPipeline since it allows for slicing even if self.repetitions = 1.
+        """
+        return islice(self.iterator(), self.nsamples)
+
+
 def get_wds_dataset(
     args,
     is_train,
@@ -449,7 +464,7 @@ def get_wds_dataset(
         else:
             raise ValueError(f"Unrecognized data key: {data_key}")
 
-        dataset = wds.DataPipeline(*pipeline)
+        dataset = FiniteDataPipeline(*pipeline)
         datasets.append(dataset)
         all_num_samples.append(num_samples)
 
@@ -484,7 +499,6 @@ def get_wds_dataset(
             # safeguarded by the fact that num_worker_batches is the number of minimum worker batches.
             datasets[ii] = datasets[ii].with_epoch(num_worker_batches)
             
-            print(args.rank, num_batches, num_worker_batches)
             total_num_batches += num_batches
             total_num_samples += num_samples
     else:
