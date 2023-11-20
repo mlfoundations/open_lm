@@ -447,7 +447,7 @@ def get_wds_dataset(
                     wds.map_dict(json=partial(preprocess_json, vocab_size=args.vocab_size), **map_dict_handler),
                     wds.to_tuple("json"),
                     wds.select(partial(filter_lt_seqlen, args.seq_len)),
-                    wds.batched(args.batch_size, partial=not is_train),
+                    batched_fulldata(args.batch_size, partial=not is_train),
                 ]
             )
         else:
@@ -456,7 +456,7 @@ def get_wds_dataset(
                     wds.map_dict(txt=partial(preprocess_txt, vocab_size=args.vocab_size), **map_dict_handler),
                     wds.to_tuple("txt"),
                     wds.select(partial(filter_lt_seqlen, args.seq_len)),
-                    wds.batched(args.batch_size, partial=not is_train),
+                    batched_fulldata(args.batch_size, partial=not is_train),
                 ]
             )
 
