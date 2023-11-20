@@ -352,7 +352,7 @@ def get_wds_dataset(
     args,
     is_train,
     epoch=0,
-    floor=False,
+    floor=True,
     tokenizer=None,
     data_key="json",
     force_num_samples=None,
