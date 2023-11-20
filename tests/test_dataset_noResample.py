@@ -96,7 +96,7 @@ def retrieve_dataset_once(total_seqs, paths, epoch, next_shard, weights, seed, d
 
 @pytest.mark.parametrize('num_samples,next_shard,batch_size,min_shards_needed',
                          [(10, 0, 1, 1),
-                          (6, 0, 4, 2),
+                          (100, 0, 25, 2),
                           (150, 1, 50, 4),
                           (666, 0, 111, 3)])
 def test_singleSource_singleWorker_perfectBatch(num_samples, next_shard, batch_size, min_shards_needed):
@@ -123,7 +123,7 @@ def test_singleSource_singleWorker_perfectBatch(num_samples, next_shard, batch_s
 
 @pytest.mark.parametrize('num_samples,next_shard,batch_size, min_shards_needed',
                          [(50, 0, 7, 1),
-                          (6, 2, 0, 4),
+                          (250, 2, 13, 4),
                           (666, 0, 13, 1)])
 def test_singleSource_singleWorker_imperfectBatch(num_samples, next_shard, batch_size, min_shards_needed):
     """ Cases where:
