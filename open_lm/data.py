@@ -83,7 +83,7 @@ def _batched_fulldata(data,
         yield batch
     elif len(batch) < batchsize and not partial:
         for sample in first_batch:
-            batch.append(sample)       
+            batch.append(sample)
             if len(batch) >= batchsize:
                 if collation_fn is not None:
                     batch = collation_fn(batch)

@@ -17,6 +17,8 @@ from tests.utils import download_dl_test_data, make_fake_tarfiles
 import json
 from collections import Counter, defaultdict
 
+import numpy as np
+
 SEQ_LEN = 2048
 INPUT_PATHS = [
     "tests/assets/source_id_00/manifest.jsonl",
@@ -76,7 +78,7 @@ def retrieve_dataset_once(total_seqs, paths, epoch, next_shard, weights, seed, d
 
     args.train_num_samples = total_seqs
     args.train_data = train_data_string_per_source
-    args.num_workers = num_workers
+    args.workers = num_workers
     args.batch_size = batch_size
     args.seed = seed
     args.dataset_resampled = False
@@ -84,11 +86,37 @@ def retrieve_dataset_once(total_seqs, paths, epoch, next_shard, weights, seed, d
     args.vocab_size = _MODEL_CONFIGS[args.model]["vocab_size"]
     args.seq_len = _MODEL_CONFIGS[args.model]["seq_len"]
     args.world_size = 1 
-    
     data = get_wds_dataset(args, is_train=True, epoch=epoch, force_num_samples=[total_seqs])
     return data
 
 
+def retrieve_dataset_once_2(total_seqs, paths, epoch, next_shard, weights, seed, disable_buffer, batch_size, num_workers, 
+                          min_shards_needed=1):
+    """ Returns the output of get_wds_dataset -- not dataloader or nothing fancy
+    SUPPORTS MULTIPLE SOURCES
+    """
+
+    args = parse_args("")
+    random_seed(seed)
+
+    train_data_string_per_source, num_seqs_per_source, _ = get_string_for_epoch(
+        total_seqs, [next_shard, next_shard], paths, weights, min_shards_needed, world_size=1)
+
+    args.train_num_samples = total_seqs
+    args.train_data = train_data_string_per_source
+    args.train_data_mix_weights = weights
+    args.workers = num_workers
+    args.batch_size = batch_size
+    args.seed = seed
+    args.dataset_resampled = False
+    args.disable_buffer = disable_buffer
+    args.vocab_size = _MODEL_CONFIGS[args.model]["vocab_size"]
+    args.seq_len = _MODEL_CONFIGS[args.model]["seq_len"]
+    args.world_size = 1
+
+    chosen_num_samples = [np.floor(weights[i] * total_seqs / sum(weights)) for i in range(len(paths))]
+    data = get_wds_dataset(args, is_train=True, epoch=epoch, force_num_samples=chosen_num_samples)
+    return data
 
 # ======================================================
 # =           Single Source Test Cases                 =
@@ -106,6 +134,9 @@ def test_singleSource_singleWorker_perfectBatch(num_samples, next_shard, batch_s
         - The batch_size perfectly divides the number of samples requested
 
     Should see exactly num_samples at the end, and no repeats
+
+    TODO: the final test case of this fails because of the requirement that the number of shards must be a multiple of
+    the number of workers.
     """
     data = retrieve_dataset_once(num_samples, SINGLE_SOURCE, 0, next_shard, None, 
                                  seed=42, disable_buffer=True, batch_size=batch_size,
@@ -271,6 +302,9 @@ def test_singleSource_multiWorker_3():
     and then each worker should ask to see 300/(batch_size * num_workers) = 15 batches
     so worker_0 exhausts its supply
     and worker_1 only sees 15 batches
+
+    TODO: the new default behavior is to round down so the number of shards is evenly divisible across workers. This
+    test needs to be adapted to that.
     """
     num_samples = 300
     epoch = 0
@@ -299,6 +333,10 @@ def test_singleSource_multiWorker_4():
     I ask for 256 samples, so I should get two workers with 1,2 tars each
     ??? 
     TALKING TO GEORGE ABOUT THE PROPER BEHAVIOR HERE
+
+    TODO: Same as the above one, this is affected by the rounding down behavior. The best way to do this is to ask for 
+    356 samples, which will make each worker have 2 tarfiles. This will make it similar to multiWorker_2 - the case
+    of uneven shard assignment across workers is no longer an issue
     """
     num_samples = 256
     epoch = 0
@@ -342,8 +380,8 @@ def test_wo_resample_exact_a(batch_size, num_workers):
     """
     make_fake_tarfiles()
     seq_count = TOTAL_SEQ_COUNT
-    data = retrieve_dataset_once(seq_count, INPUT_PATHS, 0, 0, [0.5, 0.5], 1234, True,
-                                 batch_size, num_workers, min_shards_needed=1)
+    data = retrieve_dataset_once_2(seq_count, INPUT_PATHS, 0, 0, [0.5, 0.5], 1234, True,
+                                    batch_size, num_workers, min_shards_needed=1)
     data_ids = []
     for batch in data.dataloader:
         for seq in batch[0]:
@@ -379,8 +417,8 @@ def test_wo_resample_exact_b(batch_size, num_workers):
     make_fake_tarfiles()
     seq_count = TOTAL_SEQ_COUNT
     total_workers = batch_size * num_workers * len(INPUT_PATHS)
-    data = retrieve_dataset_once(seq_count, INPUT_PATHS, 0, 0, [0.5, 0.5], 1234, True,
-                                 batch_size, num_workers, min_shards_needed=1)
+    data = retrieve_dataset_once_2(seq_count, INPUT_PATHS, 0, 0, [0.5, 0.5], 1234, True,
+                                    batch_size, num_workers, min_shards_needed=1)
 
 
     all_batches = list(data.dataloader)

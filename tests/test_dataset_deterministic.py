@@ -33,7 +33,7 @@ def retrieve_dataset_once(epoch, next_shard, weights, seed, disable_buffer, min_
     )
     args.train_num_samples = NUM_SAMPLES
     args.train_data = train_data_string_per_source
-    args.num_workers = 2
+    args.workers = 2
     args.batch_size = 2
     args.seed = seed
     args.dataset_resampled = False
