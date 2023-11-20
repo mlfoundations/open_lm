@@ -1,4 +1,5 @@
 import copy
+import pytest
 
 import torch
 import torch.multiprocessing as mp
@@ -68,9 +69,11 @@ def _grad_acc_helper_single(test_fsdp, accs=[2, 1], threshold=1e-7):
         assert torch.allclose(p1, p2, atol=threshold)
 
 
+@pytest.mark.gpu
 def test_grad_acc():
     _grad_acc_helper(test_fsdp=False)
 
 
+@pytest.mark.gpu
 def test_grad_acc_fsdp():
     _grad_acc_helper(test_fsdp=True)
