@@ -9,7 +9,7 @@ lint: ## [Local development] Run mypy, pylint and black
 	python -m black --check -l 120 open_lm
 
 black: ## [Local development] Auto-format python code using black
-	python -m black -l 120 .
+	python3 -m black -l 120 open_lm
 
 TEST_ARGS = tests ## set default to run all tests
 test: ## [Local development] Run unit tests

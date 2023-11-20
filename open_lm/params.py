@@ -484,7 +484,7 @@ def parse_args(args):
         "--ignore-parse-errors",
         action="store_true",
         default=False,
-        help="If true, ignore parse errors in data loading. This should ideally be False, as errors in dataloading can point to bigger issues in your dataset. However, this can be useful when training on a large dataset which has a couple errors."
+        help="If true, ignore parse errors in data loading. This should ideally be False, as errors in dataloading can point to bigger issues in your dataset. However, this can be useful when training on a large dataset which has a couple errors.",
     )
 
     add_model_args(parser)
