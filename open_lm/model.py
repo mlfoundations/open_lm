@@ -84,6 +84,13 @@ def xformers_attn(queries, keys, values, is_causal):
     return xops.memory_efficient_attention(queries, keys, values, attn_bias=mask)
 
 
+def torch_attn(queries, keys, values, is_causal):
+    # Need to call contiguous in torch >=2.1, otherwise later calls to .view() fail.
+    # Possibly related: https://github.com/pytorch/pytorch/issues/110213 - behavior of scaled_dot_product_attention
+    # changed between 2.0 and 2.1
+    return F.scaled_dot_product_attention(queries, keys, values, is_causal=is_causal).contiguous()
+
+
 def get_pos_embed(args: Params):
     head_dim = args.dim // args.n_heads
     if args.positional_embedding_type == "rotary":
@@ -104,7 +111,7 @@ class CustomAttn(nn.Module):
         self.in_proj = nn.Linear(args.dim, 3 * args.n_heads * self.head_dim, bias=False)
         self.out_proj = nn.Linear(args.n_heads * self.head_dim, args.dim, bias=False)
         self.pos_embed = get_pos_embed(args)
-        self.attn_fn = xformers_attn if torch.cuda.is_available() else F.scaled_dot_product_attention
+        self.attn_fn = xformers_attn if torch.cuda.is_available() else torch_attn
         self.apply_qk_norm = args.apply_qk_norm
 
         # initialize weights by trunc_normal(1/sqrt(fan_in))
