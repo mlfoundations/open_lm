@@ -117,7 +117,7 @@ def parse_args(args):
     )
     parser.add_argument(
         "--dataset-type",
-        choices=["webdataset", "auto"],
+        choices=["webdataset", "auto", "synthetic"],
         default="auto",
         help="Which type of dataset to process.",
     )
@@ -496,5 +496,9 @@ def parse_args(args):
     for name, val in default_params.items():
         if getattr(args, name) is None:
             setattr(args, name, val)
+
+    if args.dataset_type == "synthetic":
+        assert args.train_data is None, "--train-data must not be specified if --dataset-type='synthetic'"
+        assert args.dataset_manifest is None, "--dataset-manifest must not be specified if --dataset-type='synthetic'"
 
     return args

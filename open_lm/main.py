@@ -485,7 +485,7 @@ def main(args):
     optimizer = None
     scaler = None
 
-    if args.train_data or (args.dataset_manifest is not None):
+    if args.train_data or args.dataset_type == "synthetic" or args.dataset_manifest is not None:
         named_parameters = list(model.named_parameters())
         no_decay_params = []  # to be potentially used later
         params = [p for n, p in named_parameters if p.requires_grad]

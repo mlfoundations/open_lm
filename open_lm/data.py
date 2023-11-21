@@ -80,17 +80,18 @@ class DataInfo:
             self.sampler.set_epoch(epoch)
 
 
-# class RandomMix_(RandomMix):
-#     def __init__(self, datasets, probs=None, longest=False):
-#         super().__init__(datasets, probs=probs, longest=longest)
+class SyntheticDataset(Dataset):
+    def __init__(self, seq_len, vocab_size, dataset_size=100):
+        self.vocab_size = vocab_size
+        self.seq_len = seq_len
+        self.dataset_size = dataset_size
 
-#     def with_epoch(self, nsamples=-1, nbatches=-1):
-#         """Change the epoch to return the given number of samples/batches.
+    def __len__(self):
+        return self.dataset_size
 
-#         The two arguments mean the same thing."""
-#         self.repetitions = sys.maxsize
-#         self.nsamples = max(nsamples, nbatches)
-#         return self
+    def __getitem__(self, idx):
+        generator = torch.Generator().manual_seed(idx)
+        return ((torch.rand(self.seq_len + 1, generator=generator) * self.vocab_size).long(),)
 
 
 def expand_urls(urls, weights=None):
@@ -476,8 +477,33 @@ def get_wds_dataset(
     return DataInfo(dataloader=dataloader, shared_epoch=shared_epoch)
 
 
+def get_synthetic_dataset(args, is_train, epoch, tokenizer, data_key):
+    print(f"{args.train_num_samples=}")
+    dataset = SyntheticDataset(seq_len=args.seq_len, vocab_size=args.vocab_size, dataset_size=args.train_num_samples)
+    print(f"{len(dataset)=}")
+    sampler = DistributedSampler(dataset) if args.distributed and is_train else None
+    shuffle = is_train and sampler is None
+
+    dataloader = DataLoader(
+        dataset,
+        batch_size=args.batch_size,
+        shuffle=shuffle,
+        num_workers=args.workers,
+        pin_memory=True,
+        sampler=sampler,
+        drop_last=is_train,
+    )
+    dataloader.num_samples = len(dataset)
+    dataloader.num_batches = len(dataloader)
+
+    return DataInfo(dataloader, sampler)
+
+
 def get_dataset_fn(data_path, dataset_type):
-    return get_wds_dataset
+    if dataset_type == "synthetic":
+        return get_synthetic_dataset
+    else:
+        return get_wds_dataset
 
 
 def get_data(args, epoch=0, tokenizer=None, skip_train=False):
