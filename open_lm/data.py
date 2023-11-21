@@ -503,7 +503,6 @@ def get_wds_dataset(
         total_num_batches = num_batches
         total_num_samples = num_samples
 
-    print("persistent workers:", args.dataset_manifest is None)
     dataloader = wds.WebLoader(
         dataset,
         batch_size=None,

@@ -8,7 +8,9 @@ from contextlib import nullcontext
 
 import numpy as np
 import torch
+import torch.distributed as dist
 import torch.nn.functional as F
+from torch.distributed.distributed_c10d import ReduceOp
 from torch.nn.parallel.distributed import DistributedDataParallel
 from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
 
@@ -131,6 +133,7 @@ def train_one_epoch(model, data, loss, epoch, optimizer, scaler, scheduler, tota
         starting_step = 0
     done_training = False
 
+    other_proc_ran_out_of_data = False
     for i, batch in enumerate(dataloader):
         try:
             step = int(optimizer.state_dict()["state"][0]["step"].item())
@@ -213,6 +216,17 @@ def train_one_epoch(model, data, loss, epoch, optimizer, scaler, scheduler, tota
         batch_time_m.update(time.time() - end)
         end = time.time()
         batch_count = i + 1
+
+        global_loss_tensor = total_loss.detach().clone()
+        procs_with_data = torch.ones_like(global_loss_tensor)
+        communication_tensor = torch.cat([global_loss_tensor.unsqueeze(0), procs_with_data.unsqueeze(0)])
+        dist.all_reduce(communication_tensor, op=ReduceOp.AVG)
+
+        # If some process no longer has data, stop training - for this epoch
+        if not torch.allclose(communication_tensor[1], torch.tensor(1.0)):
+            other_proc_ran_out_of_data = True
+            break
+
         if is_master(args) and (i % args.log_every_n_steps == 0 or batch_count == num_batches_per_epoch or step == total_steps - 1):
             batch_size = len(inputs)
             num_samples = batch_count * batch_size * args.world_size
@@ -222,7 +236,7 @@ def train_one_epoch(model, data, loss, epoch, optimizer, scaler, scheduler, tota
             # gathered_loss = [torch.zeros_like(total_loss) for _ in range(args.world_size)]
             # torch.distributed.all_gather(gathered_loss, total_loss)
             # losses_m.update(sum(gathered_loss).item() / args.world_size, batch_size * args.world_size)
-            losses_m.update(total_loss.item(), batch_size)
+            losses_m.update(communication_tensor[0].item(), batch_size)
             samples_per_second = inputs.numel() * args.world_size / batch_time_m.val
             samples_per_second_per_gpu = inputs.numel() / batch_time_m.val
             logging.info(
@@ -265,6 +279,13 @@ def train_one_epoch(model, data, loss, epoch, optimizer, scaler, scheduler, tota
                 # e.g., saving checkpoints and optmization states that may lead to skipped
                 # training on restarts.
                 return False, {}
+
+    # If training stopped because we ran out of data, communicate that to the other procs.
+    if not other_proc_ran_out_of_data:
+        global_loss_tensor = torch.tensor(torch.nan).to(device)
+        procs_with_data = torch.zeros_like(global_loss_tensor)
+        communication_tensor = torch.cat([global_loss_tensor.unsqueeze(0), procs_with_data.unsqueeze(0)])
+        dist.all_reduce(communication_tensor, op=ReduceOp.AVG)
 
     # end for
     final_step = int(optimizer.state_dict()["state"][0]["step"].item())
