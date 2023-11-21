@@ -8,6 +8,7 @@ from dataclasses import dataclass
 import torch
 from torch import nn
 from torch.utils.checkpoint import checkpoint
+from torch.nn import functional as F
 
 import xformers.ops as xops
 
@@ -103,7 +104,7 @@ class CustomAttn(nn.Module):
         self.in_proj = nn.Linear(args.dim, 3 * args.n_heads * self.head_dim, bias=False)
         self.out_proj = nn.Linear(args.n_heads * self.head_dim, args.dim, bias=False)
         self.pos_embed = get_pos_embed(args)
-        self.attn_fn = xformers_attn
+        self.attn_fn = xformers_attn if torch.cuda.is_available() else F.scaled_dot_product_attention
         self.apply_qk_norm = args.apply_qk_norm
 
         # initialize weights by trunc_normal(1/sqrt(fan_in))
