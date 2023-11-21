@@ -104,7 +104,15 @@ def sample_chunk(chunk, args):
     return inputs, targets
 
 
-def train_one_epoch(model, data, loss, epoch, optimizer, scaler, scheduler, total_steps, args, tb_writer=None):
+def train_one_epoch(model, data, loss, epoch, step, optimizer, scaler, scheduler, total_steps, args, tb_writer=None):
+    """Trains model for one epoch on the provided data.
+
+    Returns:
+        success (bool): Whether training completed successfully
+        step (int): Global step at the end of the epoch. Note that "epoch" actually is not one full pass through the
+            data, but rather the number of tokens specified by `--train-num-samples`, rounded based on shard size.
+            As such, the number of steps in an "epoch" can vary, and we have to keep track of steps separately.
+    """
     device = torch.device(args.device)
     autocast = get_autocast(args.precision)
 
@@ -125,12 +133,6 @@ def train_one_epoch(model, data, loss, epoch, optimizer, scaler, scheduler, tota
     end = time.time()
 
     for i, batch in enumerate(dataloader):
-        try:
-            step = int(optimizer.state_dict()["state"][0]["step"].item())
-        except KeyError:
-            # Throws keyerror if it is the first step
-            step = 0
-
         if not args.skip_scheduler:
             scheduler(step)
 
@@ -206,6 +208,7 @@ def train_one_epoch(model, data, loss, epoch, optimizer, scaler, scheduler, tota
         batch_time_m.update(time.time() - end)
         end = time.time()
         batch_count = i + 1
+        step += 1
         if is_master(args) and (i % args.log_every_n_steps == 0 or batch_count == num_batches_per_epoch):
             batch_size = len(inputs)
             num_samples = batch_count * batch_size * args.world_size
@@ -257,10 +260,10 @@ def train_one_epoch(model, data, loss, epoch, optimizer, scaler, scheduler, tota
                 # in this case we would like to free resources and prevent other issues
                 # e.g., saving checkpoints and optmization states that may lead to skipped
                 # training on restarts.
-                return False
+                return False, step
 
     # end for
-    return True
+    return True, step
 
 
 @torch.inference_mode()

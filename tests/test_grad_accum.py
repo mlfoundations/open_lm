@@ -52,7 +52,18 @@ def _grad_acc_helper_single(test_fsdp, accs=[2, 1], threshold=1e-7):
         if test_fsdp:
             model = FSDP(model)
         args.accum_freq = accum_freq
-        train_one_epoch(model, data, loss, 0, optimizer, args.scaler, scheduler, 10, args)
+        train_one_epoch(
+            model=model,
+            data=data,
+            loss=loss,
+            epoch=0,
+            step=0,
+            optimizer=optimizer,
+            scaler=args.scaler,
+            scheduler=scheduler,
+            total_steps=10,
+            args=args,
+        )
 
     # check that models weights are similar (within some threshold)
     for p1, p2 in zip(model_accum_grad.parameters(), model_no_accum_grad.parameters()):
