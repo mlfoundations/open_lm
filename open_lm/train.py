@@ -287,11 +287,8 @@ def train_one_epoch(model, data, loss, epoch, optimizer, scaler, scheduler, tota
     # If training stopped because we ran out of data, communicate that to the other procs.
     if not other_proc_ran_out_of_data:
         procs_with_data = torch.tensor(0, dtype=torch.long, device=device)
-        print("Rank 2, waiting to send.")
         dist.all_reduce(procs_with_data, op=ReduceOp.SUM)
     
-    print(f"Rank {args.rank}, finalizing")
-
     # end for
     final_step = int(optimizer.state_dict()["state"][0]["step"].item())
     training_stats = {
