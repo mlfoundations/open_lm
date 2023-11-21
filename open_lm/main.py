@@ -110,15 +110,17 @@ def load_model(args, model):
         # resuming a train checkpoint w/ epoch and optimizer state
         start_epoch = checkpoint["epoch"]
         sd = checkpoint["state_dict"]
+        global_step = checkpoint["step"]
         if next(iter(sd.items()))[0].startswith("module"):
             sd = {k[len("module.") :]: v for k, v in sd.items()}
         model.load_state_dict(sd)
         logging.info(f"=> resuming checkpoint '{args.resume}' (epoch {start_epoch})")
     else:
         # loading a bare (model only) checkpoint for fine-tune or evaluation
+        start_epoch, global_step = 0, 0
         model.load_state_dict(checkpoint)
         logging.info(f"=> loaded checkpoint '{args.resume}' (epoch {start_epoch})")
-    return start_epoch
+    return start_epoch, global_step
 
 
 def load_optimizer(args, model, optimizer, scaler):
@@ -156,6 +158,7 @@ def save_checkpoint(
     scaler,
     completed_epoch,
     evaluation_loss,
+    step,
     next_chunk=None,
     samples_seen=None,
 ):
@@ -178,6 +181,9 @@ def save_checkpoint(
 
         if samples_seen is not None:
             checkpoint_dict_model["samples_seen"] = samples_seen
+
+        if step is not None:
+            checkpoint_dict_model["step"] = step
 
         checkpoint_dict_opt = {
             "epoch": completed_epoch,
@@ -372,16 +378,16 @@ def main(args):
                 f.write(f"{name}: {val}\n")
 
     # optionally resume model from a checkpoint
-    start_epoch = 0
+    start_epoch, global_step = 0, 0
     if args.resume is not None:
-        start_epoch = load_model(args, model)
+        start_epoch, global_step = load_model(args, model)
     elif args.pretrained is not None:
         print("=> loading from a pre-trained model.")
         args.resume = args.pretrained
-        ep = load_model(args, model)
+        _epoch, _step = load_model(args, model)
         # this flag continues training from the pre-trained model.
         if args.load_pretrained_state:
-            start_epoch = ep
+            start_epoch, global_step = _epoch, _step
         else:
             args.resume = None
     elif args.average is not None:
@@ -652,35 +658,33 @@ def main(args):
                 data_key=args.data_key,
             )
 
-        try:
-            prev_step = int(optimizer.state_dict()["state"][0]["step"].item())
-        except KeyError:
-            prev_step = 0
+        prev_step = global_step
 
         if args.distributed:
             dist.barrier()
 
-        success = train_one_epoch(
+        success, global_step = train_one_epoch(
             model,
             data,
             loss,
-            epoch,
-            optimizer,
-            scaler,
-            scheduler,
-            total_steps,
-            args,
+            epoch=epoch,
+            step=global_step,
+            optimizer=optimizer,
+            scaler=scaler,
+            scheduler=scheduler,
+            total_steps=total_steps,
+            args=args,
             tb_writer=writer,
         )
 
         if args.distributed:
             dist.barrier()
 
-        steps_done_epoch = int(optimizer.state_dict()["state"][0]["step"].item()) - prev_step
+        steps_done_epoch = global_step - prev_step
         samples_seen = samples_seen + steps_done_epoch * args.batch_size * args.world_size
 
         if not success:
-            logging.info(f"Training exiting due to NaN value")
+            logging.info("Training exiting due to NaN value")
             break
 
         completed_epoch = epoch + 1
@@ -688,7 +692,6 @@ def main(args):
         if "val" in data:
             evaluation_loss = evaluate(model, data, completed_epoch, args, writer)["loss"]
 
-        # 613 - 610 at halfway
         # Saving checkpoints.
         save_checkpoint(
             args,
@@ -697,6 +700,7 @@ def main(args):
             scaler,
             completed_epoch,
             evaluation_loss,
+            step=global_step,
             next_chunk=next_chunk if args.dataset_manifest is not None else None,
             samples_seen=samples_seen if args.dataset_manifest is not None else None,
         )
