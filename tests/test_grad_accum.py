@@ -26,7 +26,7 @@ def _grad_acc_helper(test_fsdp, accs=[2, 1], threshold=1e-7):
 def _grad_acc_helper_fsdp(rank, world_size, accs, threshold):
     # Initialize distributed training
     torch.distributed.init_process_group(
-        backend="nccl",
+        backend="nccl" if torch.cuda.is_available() else "gloo",
         init_method="tcp://127.0.0.1:29501",
         rank=rank,
         world_size=world_size,
@@ -52,24 +52,13 @@ def _grad_acc_helper_single(test_fsdp, accs=[2, 1], threshold=1e-7):
         if test_fsdp:
             model = FSDP(model)
         args.accum_freq = accum_freq
-        train_one_epoch(
-            model,
-            data,
-            loss,
-            0,
-            optimizer,
-            args.scaler,
-            scheduler,
-            10,
-            args,
-        )
+        train_one_epoch(model, data, loss, 0, optimizer, args.scaler, scheduler, 10, args)
 
     # check that models weights are similar (within some threshold)
     for p1, p2 in zip(model_accum_grad.parameters(), model_no_accum_grad.parameters()):
         assert torch.allclose(p1, p2, atol=threshold)
 
 
-@pytest.mark.gpu
 def test_grad_acc():
     _grad_acc_helper(test_fsdp=False)
 

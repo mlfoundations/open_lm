@@ -608,7 +608,11 @@ def main(args):
                 args.no_skip_tokens ^ args.accurate_total_tokens
             ), "either both or none of --no-skip-tokens / --accurate-total-tokens should be specified"
 
-            (train_data_string_per_source, num_samples_per_source, next_chunk,) = get_string_for_epoch(
+            (
+                train_data_string_per_source,
+                num_samples_per_source,
+                next_chunk,
+            ) = get_string_for_epoch(
                 args.train_num_samples,
                 next_chunk,
                 args.dataset_manifest,

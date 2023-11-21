@@ -1,2 +1,8 @@
 [tool.black]
 line-length = 120
+
+[tool.pytest.ini_options]
+markers = [
+    "slow: marks tests as slow",
+    "gpu: marks tests as requiring gpus",
+]
