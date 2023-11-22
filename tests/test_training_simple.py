@@ -10,7 +10,7 @@ def test_train_simple():
         "--train-num-samples", str(num_batches * seq_len),
         "--batch-size", str(batch_size),
         "--dataset-type", "synthetic",
-        "--model", "open_lm_11m",
+        "--model", "open_lm_test_tiny",
         "--epochs", "1",
     ])
     # fmt: on
