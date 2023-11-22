@@ -398,7 +398,7 @@ def get_wds_dataset(
                     wds.select(partial(filter_lt_seqlen, args.seq_len)),
                     wds.batched(args.batch_size, partial=not is_train),
                 ]
-            )  
+            )
         elif data_key == "txt":
             pipeline.extend(
                 [
@@ -407,7 +407,7 @@ def get_wds_dataset(
                     wds.select(partial(filter_lt_seqlen, args.seq_len)),
                     wds.batched(args.batch_size, partial=not is_train),
                 ]
-            )  
+            )
         else:
             raise ValueError(f"Unrecognized data key: {data_key}")
 
