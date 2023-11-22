@@ -229,9 +229,7 @@ def main(args):
     device = init_distributed_device(args)
 
     if args.hf_model is not None and args.hf_seq_len is None:
-        print(
-            "If passing --hf-model, must also pass --hf-seq-len to be used for training/fine-tuning."
-        )
+        print("If passing --hf-model, must also pass --hf-seq-len to be used for training/fine-tuning.")
         return -1
 
     if args.hf_model is not None and args.fsdp and args.hf_fsdp_block is None:
@@ -448,9 +446,7 @@ def main(args):
                         break
 
                 if transformer_layer_cls is None:
-                    print(
-                        f"--hf-fsdp-block {args.hf_fsdp_block} not found in --hf-model {args.hf_model}"
-                    )
+                    print(f"--hf-fsdp-block {args.hf_fsdp_block} not found in --hf-model {args.hf_model}")
                     return -1
 
             else:
