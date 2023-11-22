@@ -685,7 +685,8 @@ def main(args):
 
         completed_epoch = epoch + 1
         evaluation_loss = -1
-        if "val" in data:
+        if "val" in data and (completed_epoch % args.val_frequency == 0 or completed_epoch == args.epochs):
+            # validate based on frequency and always validate the last checkpoint
             evaluation_loss = evaluate(model, data, completed_epoch, args, writer)["loss"]
 
         # Saving checkpoints.

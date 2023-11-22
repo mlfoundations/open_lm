@@ -239,7 +239,7 @@ def parse_args(args):
         "--val-frequency",
         type=int,
         default=1,
-        help="How often to run evaluation with val data.",
+        help="How often to run evaluation with val-data (in epochs). Last epoch validated if val-data provided.",
     )
     parser.add_argument(
         "--resume",
