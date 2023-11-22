@@ -24,8 +24,6 @@ jobs:
           source .env/bin/activate
           python -m pip install -U pip
           make install-dev
-          mkdir $HOME/.aws/
-          wget https://gist.githubusercontent.com/Vaishaal/f109bfab6a194a93040ae2a19b6be251/raw/7d8026ae234d77ba1ca29b1f9d114c6780308ae4/dummy_creds -O $HOME/.aws/credentials
       - name: Lint
         run: |
           source .env/bin/activate

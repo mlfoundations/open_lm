@@ -13,7 +13,7 @@ black: ## [Local development] Auto-format python code using black
 
 TEST_ARGS = tests ## set default to run all tests
 test: ## [Local development] Run unit tests
-	python -m pytest -x -s -v $(TEST_ARGS) -m "not gpu"
+	python -m pytest -x -s -v $(TEST_ARGS) -m "not gpu" -m "not s3"
 
 test-gpu: ## [Local development] Run unit tests
 	python -m pytest -x -s -v $(TEST_ARGS) -m gpu
