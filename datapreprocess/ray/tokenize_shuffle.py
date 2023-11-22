@@ -95,15 +95,7 @@ class Sources(enum.Enum):
 # hard coded from Mitchell
 # These are sampling frequencies for each source used to match
 # the Mosaic training run on RPJ
-# SAMPLING_FREQUENCIES = {}
-# SAMPLING_FREQUENCIES[Sources.COMMON_CRAWL] = 1.0
-# SAMPLING_FREQUENCIES[Sources.C4] = 1.0
-# SAMPLING_FREQUENCIES[Sources.GITHUB] = 1.0
-# SAMPLING_FREQUENCIES[Sources.WIKIPEDIA] = 1.0
-# SAMPLING_FREQUENCIES[Sources.BOOKS] = 1.0
-# SAMPLING_FREQUENCIES[Sources.ARXIV] = 1.0
-# SAMPLING_FREQUENCIES[Sources.STACKEXCHANGE] = 1.0
-# SAMPLING_FREQUENCIES[Sources.UNKNOWN] = 1.0
+# TODO load from JSON
 
 SAMPLING_FREQUENCIES = {}
 SAMPLING_FREQUENCIES[Sources.COMMON_CRAWL] = 0.9233485194
@@ -126,7 +118,7 @@ def jsonl_file_reader(fh: BinaryIO, content_key: str):
 def zstd_compressed_reader(fh: BinaryIO, content_key: str):
     dctx = zstd.ZstdDecompressor()
     with dctx.stream_reader(fh) as reader:
-        for item in jsonl_file_reader(reader):
+        for item in jsonl_file_reader(reader, content_key=content_key):
             yield item
 
 
@@ -146,16 +138,6 @@ def get_reader(file_type, content_key: str):
         return lambda x: gzip_compressed_reader(x, content_key=content_key)
     else:
         raise Exception("Unsupported filetype")
-
-
-def tokenize_tiktoken(tokenizer, string):
-    eot_token = "<|endoftext|>"
-    pad_token = "<|pad|>"
-    return tokenizer.encode(string, allowed_special={eot_token, pad_token})
-
-
-def tokenize_eleutherai(tokenizer, string):
-    return tokenizer(string).input_ids
 
 
 def get_raw_filetype(key: str):
@@ -179,11 +161,13 @@ def preprocess(
     tokenizer=None,
     do_sample: bool = False,
 ):
+    tokenizer_fn, vocab_size = tokenizer
     rng = random.Random(hash(key) + seed)
+    EOT = SpecialTokens.END_OF_TEXT.value % (vocab_size + len(SpecialTokens))
+    PAD = SpecialTokens.PAD.value % (vocab_size + len(SpecialTokens))
     if do_sample:
         sample_freq = Sources.get_sampling_frequency(key)
     buffer = []
-    tokenizer_fn, vocab_size = tokenizer
     try:
         file_type = get_raw_filetype(key)
         if file_type == RawFileType.UNKNOWN:
@@ -193,7 +177,6 @@ def preprocess(
         pbar.set_description(key)
         for string in pbar:
             tokens = tokenizer_fn(string)
-            EOT = SpecialTokens.END_OF_TEXT.value % (vocab_size + len(SpecialTokens))
             tokens.append(EOT)
             buffer += tokens
             while len(buffer) >= seqlen:
@@ -212,6 +195,8 @@ def preprocess(
                 else:
                     yield buffer[:seqlen]
                     buffer = buffer[seqlen:]
+            if len(buffer) > 0:
+                yield buffer + [PAD] * (seqlen - len(buffer))
 
     except (IncompleteReadError, ReadTimeoutError, ResponseStreamingError) as e:
         logger.error(f"There was an incomplete read error: {e} for key {key}")
@@ -243,38 +228,6 @@ class SpecialTokens(Enum):
     END_OF_DOCUMENT = -2
 
 
-class PadType(Enum):
-    CIRCULAR = 0
-    PAD_TOKEN = 1
-
-
-def download_to_memory_with_progress(bucket_name, key):
-    s3 = boto3.client("s3")
-
-    # Use the head_object call to get the total size of the object
-    meta_data = s3.head_object(Bucket=bucket_name, Key=key)
-    total_size = int(meta_data.get("ContentLength", 0))
-
-    # Create a progress bar with tqdm
-    progress = tqdm(total=total_size, unit="B", unit_scale=True)
-
-    # Callback to update the progress bar
-    def progress_callback(bytes_transferred):
-        progress.update(bytes_transferred)
-
-    # Use BytesIO to store the downloaded bytes in memory
-    buffer = BytesIO()
-    s3.download_fileobj(bucket_name, key, buffer, Callback=progress_callback)
-
-    progress.close()
-
-    # Reset the buffer's position to the beginning
-    buffer.seek(0)
-
-    # Return the in-memory buffer
-    return buffer.read()
-
-
 def parse_s3_path(s3_path):
     """
     Extract the bucket and key from an S3 path.
@@ -296,63 +249,6 @@ def parse_s3_path(s3_path):
     else:
         key = ""
     return bucket, key
-
-
-def dl_parse_s3(data, creds=None):
-    worker_id = ray.get_runtime_context().get_worker_id()
-    if creds is not None:
-        client = boto3.client(
-            "s3",
-            aws_access_key_id=creds["AWS_ACCESS_KEY_ID"],
-            aws_secret_access_key=creds["AWS_SECRET_ACCESS_KEY"],
-            aws_session_token=creds["AWS_SESSION_TOKEN"],
-        )
-    else:
-        client = boto3.client("s3")
-    out_dicts = []
-    # TODO make this more streaming friendly to use less mem
-    for path in data["path"]:
-        bucket, key = parse_s3_path(path)
-        data_bytes = download_to_memory_with_progress(bucket, key)
-        if path.endswith("jsonl"):
-            json_lines = data_bytes.decode().splitlines()
-            jsons = [json.loads(x) for x in json_lines]
-        elif path.endswith("zst"):
-            bio = io.BytesIO(data_bytes)
-            dctx = zstd.ZstdDecompressor()
-            with dctx.stream_reader(bio) as reader:
-                with io.TextIOWrapper(reader, encoding="utf-8") as text_reader:
-                    with jsonlines.Reader(text_reader) as jsonl_reader:
-                        jsons = [x for x in jsonl_reader]
-        else:
-            raise ValueError(f"Unknown suffix: {path.split('.')[-1]}")
-        out_dicts += jsons
-    return pd.DataFrame(out_dicts)
-
-
-def dist_tokenize(data, tokenizer, content_key):
-    out_dicts = []
-    tokenizer_fn, vocab_size = tokenizer
-    for tokens in data[content_key]:
-        # handle special tokens by adding slack tokens
-        tokens = tokenizer_fn(tokens) + [SpecialTokens.END_OF_TEXT.value % (vocab_size + len(SpecialTokens))]
-        out_dict = {}
-        out_dict["tokens"] = tokens
-        out_dicts.append(out_dict)
-    return pd.DataFrame(out_dicts)
-
-
-def cut_to_context(jsonl_batch, seqlen=1024, pad_type=PadType.CIRCULAR):
-    tokens_list = jsonl_batch["tokens"]
-    flat_token_list = [item for sublist in tokens_list for item in sublist]
-    repartioned_lists = [flat_token_list[i : i + seqlen] for i in range(0, len(flat_token_list), seqlen)]
-    end_len = len(repartioned_lists[-1])
-    if len(repartioned_lists[-1]) < seqlen:
-        if pad_type == PadType.CIRCULAR:
-            repartioned_lists[-1] = repartioned_lists[-1] + repartioned_lists[0][: (seqlen - end_len)]
-        else:
-            repartioned_lists[-1] = repartioned_lists[-1] + [SpecialTokens.PAD.value] * (seqlen - end_len)
-    return {"tokens": repartioned_lists}
 
 
 def add_hash(item, column="tokens"):
@@ -455,27 +351,6 @@ def glob_files(path, suffix=".jsonl"):
     return matching_files
 
 
-def get_filesystem(environment):
-    """
-    Create a pyarrow.fs.FileSystem based on provided AWS credentials.
-
-    :param environment: Dictionary containing AWS credentials.
-    :return: pyarrow.fs.S3FileSystem
-    """
-    # Extract the AWS credentials from the environment dictionary
-    access_key = environment.get("AWS_ACCESS_KEY_ID")
-    secret_key = environment.get("AWS_SECRET_ACCESS_KEY")
-    session_token = environment.get("AWS_SESSION_TOKEN", None)  # Session token might be optional
-
-    # Create and return the S3FileSystem
-    return fs.S3FileSystem(
-        access_key=access_key,
-        secret_key=secret_key,
-        session_token=session_token,
-        region="us-west-2",
-    )
-
-
 @ray.remote
 class GlobalCounter:
     def __init__(self):
@@ -497,42 +372,6 @@ class GlobalCounter:
         return self.token_count
 
 
-def human_to_bytes(s):
-    """
-    Convert human-readable byte size strings to actual number of bytes.
-
-    Supports:
-        B: bytes
-        KB, kB, Kb, kB: kilobytes
-        MB, mB, Mb, mB: megabytes
-        GB, gB, Gb, gB: gigabytes
-        TB, tB, Tb, tB: terabytes
-        PB, pB, Pb, pB: petabytes
-
-    Example:
-        human_to_bytes('5.2 GB') -> 5.2 * 1024^3
-    """
-
-    symbols = ("B", "K", "M", "G", "T", "P")
-    letter = s[-2:].strip().upper() if s[-2:].strip().upper()[:-1] in symbols else s[-1:].upper()
-    number = float(s[: -len(letter)].strip())
-
-    if letter == "B":
-        return int(number)
-    elif "K" in letter:
-        return int(number * 1024)
-    elif "M" in letter:
-        return int(number * 1024**2)
-    elif "G" in letter:
-        return int(number * 1024**3)
-    elif "T" in letter:
-        return int(number * 1024**4)
-    elif "P" in letter:
-        return int(number * 1024**5)
-    else:
-        raise ValueError(f"Unsupported format: {s}")
-
-
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--input", help="input path", type=str, required=True)
@@ -545,16 +384,13 @@ if __name__ == "__main__":
     )
     parser.add_argument("--content_key", type=str, default="text")
     parser.add_argument("--seqlen", type=int, default=2048)
-    parser.add_argument("--pad_type", type=str, default="circular")
     parser.add_argument("--tokenizer", type=str, default="EleutherAI/gpt-neox-20b")
-    parser.add_argument("--initial_batch_size", type=int, default=2048)
     parser.add_argument("--wds_chunk_size", type=int, default=8192)
     parser.add_argument("--seed", type=int, default=42)
-    parser.add_argument("--per_node_parallelism", type=int, default=8)
     parser.add_argument("--subset", type=int, default=None)
-    parser.add_argument("--materialize", action="store_true")
     parser.add_argument("--ray_address", type=str, default=None)
     parser.add_argument("--block_size", type=str, default="10MB")
+    parser.add_argument("--force_parallelism", type=int, default=None)
     parser.add_argument("--no_shuffle", action="store_true")
     parser.add_argument("--ray_spill_location", type=str, default="/tmp/ray_spill")
 
@@ -562,18 +398,12 @@ if __name__ == "__main__":
     # configure remote spilling
     creds = {k: v for k, v in os.environ.items() if k.startswith("AWS")}
     runtime_env = {"env_vars": creds}
-    block_size = human_to_bytes(args.block_size)
 
-    if "AWS_ACCESS_KEY_ID" in creds:
-        fs = get_filesystem(creds)
-    else:
-        fs = None
     if args.ray_address is None:
         ray.init(runtime_env=runtime_env, _temp_dir=args.ray_spill_location)
     else:
         ray.init(args.ray_address, runtime_env=runtime_env, _temp_dir=args.ray_spill_location)
     num_nodes = len(ray.nodes())
-    # TODO  support multiple inputs
     input_folders = args.input.split(",")
     input_paths = []
     for inp_folder in input_folders:
@@ -588,17 +418,12 @@ if __name__ == "__main__":
     num_cores = os.cpu_count()
     output_path = args.output
     seqlen = args.seqlen + 1
-    cores_to_use = args.per_node_parallelism
-    batch_size = args.initial_batch_size
     wds_chunk_size = args.wds_chunk_size
     content_key = args.content_key
-    if args.pad_type == "circular":
-        pad_type = PadType.CIRCULAR
-    elif args.pad_type == "pad_token":
-        pad_type = PadType.PAD_TOKEN
+    if args.force_parallelism is not None:
+        parallelism = args.force_parallelism
     else:
-        raise ValueError(f"Unknown pad_type = {args.pad_type}")
-
+        parallelism = num_cores * num_nodes
     ctx = DataContext.get_current()
     ctx.use_push_based_shuffle = True
     ray.data.DataContext.get_current().execution_options.verbose_progress = True
@@ -606,7 +431,7 @@ if __name__ == "__main__":
     tokenizer = load_tokenizer(args.tokenizer)
     logger.info(f"Total number of keys = {len(input_paths)}")
     df = pd.DataFrame(input_paths, columns=["path"])
-    ds = ray.data.from_pandas(pd.DataFrame(input_paths, columns=["path"])).repartition(num_cores * num_nodes)
+    ds = ray.data.from_pandas(pd.DataFrame(input_paths, columns=["path"])).repartition(parallelism)
     ds = ds.flat_map(
         lambda x: process_keys(
             x,
