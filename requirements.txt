@@ -17,3 +17,7 @@ apache_beam
 datasets
 huggingface_hub
 pre-commit
+ray[all]
+loguru
+jsonlines
+transformers
