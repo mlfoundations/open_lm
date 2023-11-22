@@ -2,7 +2,7 @@ from open_lm.main import main
 
 
 def test_train_simple():
-    seq_len = 2048
+    seq_len = 16
     num_batches = 5
     batch_size = 1
     # fmt: off
