@@ -440,9 +440,7 @@ def main(args):
                 # retrive the user specified block class for fsdp
                 for _, target_cls in model.named_modules():
                     if args.hf_fsdp_block in type(target_cls).__name__:
-                        transformer_layer_cls = {
-                            type(target_cls),
-                        }
+                        transformer_layer_cls = {type(target_cls)}
                         break
 
                 if transformer_layer_cls is None:
@@ -450,9 +448,7 @@ def main(args):
                     return -1
 
             else:
-                transformer_layer_cls = {
-                    Block,
-                }
+                transformer_layer_cls = {Block}
             # from https://pytorch.org/blog/efficient-large-scale-training-with-pytorch/
             transformer_auto_wrapper_policy = functools.partial(
                 transformer_auto_wrap_policy,
