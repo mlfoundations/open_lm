@@ -257,8 +257,7 @@ def main(args):
         log_filename = f"out-{args.rank}" if args.log_local else "out.log"
         args.log_path = os.path.join(log_base_path, log_filename)
         if os.path.exists(args.log_path) and not resume_latest:
-            print("Error. Experiment already exists. Use --name {} to specify a new experiment.")
-            return -1
+            raise ValueError(f"Experiment {args.log_path} already exists. Use --name to specify a new experiment.")
 
     # Setup text logger
     args.log_level = logging.DEBUG if args.debug else logging.INFO
@@ -283,11 +282,9 @@ def main(args):
         if args.remote_sync is not None:
             checkpoint_path = os.path.join(args.remote_sync, args.name, "checkpoints")
             if args.save_most_recent:
-                print("Error. Cannot use save-most-recent with remote_sync and resume latest.")
-                return -1
+                raise ValueError("Cannot use save-most-recent with remote_sync and resume latest.")
             if args.remote_sync_protocol != "s3":
-                print("Error. Sync protocol not supported when using resume latest.")
-                return -1
+                raise ValueError("Sync protocol not supported when using resume latest.")
         if is_master(args):
             # Checking for existing checkpoint via master rank only. It is possible for
             # different rank processes to see different files if a shared file-system is under
@@ -325,8 +322,7 @@ def main(args):
         if result:
             logging.info("remote sync successful.")
         else:
-            logging.info("Error: remote sync failed. Exiting.")
-            return -1
+            raise ValueError("Remote sync failed.")
         # if all looks good, start a process to do this every args.remote_sync_frequency seconds
         remote_sync_process = start_sync_process(
             args.remote_sync_frequency,
@@ -485,7 +481,7 @@ def main(args):
     optimizer = None
     scaler = None
 
-    if args.train_data or (args.dataset_manifest is not None):
+    if args.train_data or args.dataset_type == "synthetic" or args.dataset_manifest is not None:
         named_parameters = list(model.named_parameters())
         no_decay_params = []  # to be potentially used later
         params = [p for n, p in named_parameters if p.requires_grad]
