@@ -50,8 +50,8 @@ def preprocess_txt(text, vocab_size):
     return [proc_token(x, vocab_size) for x in ast.literal_eval(text.decode())]
 
 
+# Decoding done in webdataset
 def preprocess_json(text, vocab_size):
-    text = json.loads(text.decode())
     text = [proc_token(x, vocab_size) for x in text]
     return text
 
@@ -388,16 +388,18 @@ def get_wds_dataset(
             )
 
         map_dict_handler = {"handler": log_and_continue} if args.ignore_parse_errors else {}
-        if data_key == "json":
+        if data_key == "json" or data_key == "json.gz":
             pipeline.extend(
                 [
+                    wds.decode(),
+                    wds.rename(json=data_key),
                     wds.map_dict(json=partial(preprocess_json, vocab_size=args.vocab_size), **map_dict_handler),
                     wds.to_tuple("json"),
                     wds.select(partial(filter_lt_seqlen, args.seq_len)),
                     wds.batched(args.batch_size, partial=not is_train),
                 ]
-            )
-        else:
+            )  
+        elif data_key == "txt":
             pipeline.extend(
                 [
                     wds.map_dict(txt=partial(preprocess_txt, vocab_size=args.vocab_size), **map_dict_handler),
@@ -405,7 +407,9 @@ def get_wds_dataset(
                     wds.select(partial(filter_lt_seqlen, args.seq_len)),
                     wds.batched(args.batch_size, partial=not is_train),
                 ]
-            )
+            )  
+        else:
+            raise ValueError(f"Unrecognized data key: {data_key}")
 
         dataset = wds.DataPipeline(*pipeline)
         datasets.append(dataset)
