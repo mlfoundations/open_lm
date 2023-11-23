@@ -52,6 +52,7 @@ def add_model_args(parser):
     parser.add_argument(
         "--positional-embedding-type",
         type=str,
+        choices=["rotary", "head_rotary", "llama_rotary"],
         default="rotary",
         help="Type of positional embedding to use. This might be overridden by the model config.",
     )

@@ -81,6 +81,15 @@ class Params:
     ffn_type: str = "swiglu"
 
 
+def get_rectangular_mask(shape, q_seq_len, k_seq_len, device, dtype):
+    next_multiple_8 = (k_seq_len + 7) // 8 * 8  #
+    mask = torch.ones((q_seq_len, next_multiple_8), device=device, dtype=bool)
+    mask[:, -q_seq_len:] = torch.tril(mask[:, -q_seq_len:], diagonal=0)
+    return torch.zeros((*shape, q_seq_len, next_multiple_8), device=device, dtype=dtype).masked_fill(
+        ~mask, float("-inf")
+    )[:, :, :, :k_seq_len]
+
+
 def xformers_attn(queries, keys, values, is_causal):
     # xformers assumes q, k, v are [batch, seq_len, heads, embed_dim]
     mask = None
@@ -88,8 +97,13 @@ def xformers_attn(queries, keys, values, is_causal):
     # If queries have shape [batch, 1, heads, dim] it means there is only one query in the sequence.
     # In this case, there is no notion of causal masking, so we can just set the mask to None.
     # This is actually needed to get the desired behavior with seq_len=1.
-    if is_causal and queries.shape[1] > 1:
+    if is_causal and queries.shape[1] == keys.shape[1]:
         mask = xops.LowerTriangularMask()
+    elif is_causal and queries.shape[1] > 1:
+        # Build causal mask that assumes queries are in the end of the sequence.
+        batch, q_seq_len, heads, _ = queries.shape
+        k_seq_len = keys.shape[1]
+        mask = get_rectangular_mask((batch, heads), q_seq_len, k_seq_len, queries.device, queries.dtype)
     return xops.memory_efficient_attention(queries, keys, values, attn_bias=mask)
 
 
@@ -97,7 +111,31 @@ def torch_attn(queries, keys, values, is_causal):
     # Need to call contiguous in torch >=2.1, otherwise later calls to .view() fail.
     # Possibly related: https://github.com/pytorch/pytorch/issues/110213 - behavior of scaled_dot_product_attention
     # changed between 2.0 and 2.1
-    return F.scaled_dot_product_attention(queries, keys, values, is_causal=is_causal).contiguous()
+    if is_causal and keys.shape[1] > queries.shape[1] > 1:
+        q_seq_len = queries.shape[1]
+        k_seq_len = keys.shape[1]
+        mask = get_rectangular_mask((1, 1), q_seq_len, k_seq_len, queries.device, queries.dtype)
+        return (
+            F.scaled_dot_product_attention(
+                queries.transpose(1, 2), keys.transpose(1, 2), values.transpose(1, 2), attn_mask=mask
+            )
+            .transpose(1, 2)
+            .contiguous()
+        )
+    elif queries.shape[1] == 1:
+        return (
+            F.scaled_dot_product_attention(queries.transpose(1, 2), keys.transpose(1, 2), values.transpose(1, 2))
+            .transpose(1, 2)
+            .contiguous()
+        )
+    else:
+        return (
+            F.scaled_dot_product_attention(
+                queries.transpose(1, 2), keys.transpose(1, 2), values.transpose(1, 2), is_causal=is_causal
+            )
+            .transpose(1, 2)
+            .contiguous()
+        )
 
 
 def get_pos_embed(args: Params):
@@ -172,7 +210,7 @@ class CustomAttn(nn.Module):
             vals = torch.cat([past_key_value[1], vals], dim=1)
 
         if use_cache:
-            past_key_value = (keys, vals)
+            past_key_value = [keys, vals]
 
         output = self.attn_fn(
             queries,
@@ -300,6 +338,8 @@ class Transformer(nn.Module, PyTorchModelHubMixin):
 
         if past_key_values is None:
             past_key_values = [None] * self.n_layers
+        elif isinstance(past_key_values, tuple):
+            past_key_values = list(past_key_values)
         for i, layer in enumerate(self.layers):
             if self.grad_checkpointing:
                 x, past_key_values[i] = checkpoint(layer, x, past_key_values[i], use_cache)

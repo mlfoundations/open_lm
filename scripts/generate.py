@@ -31,6 +31,7 @@ def run_model(open_lm: OpenLMforCausalLM, tokenizer, args):
         "pad_token_id": 50282,
         "max_new_tokens": args.max_gen_len,
         "use_cache": args.use_cache,
+        "num_beams": args.num_beams,
     }
     # If these are set when temperature is 0, they will trigger a warning and be ignored
     if args.temperature > 0:
@@ -59,6 +60,7 @@ def main():
     parser.add_argument("--top-p", default=0.95, type=float)
     parser.add_argument("--use-cache", default=False, action="store_true")
     parser.add_argument("--tokenizer", default="EleutherAI/gpt-neox-20b", type=str)
+    parser.add_argument("--num-beams", default=1, type=int)
 
     add_model_args(parser)
     args = parser.parse_args()

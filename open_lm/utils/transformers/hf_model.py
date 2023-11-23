@@ -76,6 +76,7 @@ class OpenLMforCausalLM(OpenLMModel):
         >>> tokenizer.batch_decode(generate_ids, skip_special_tokens=True, clean_up_tokenization_spaces=False)[0]
         "Hey, are you consciours? Can you talk to me?\nI'm not consciours, but I can talk to you."
         ```"""
+        assert position_ids is None, "Position IDs are not supported"
         # decoder outputs consists of (dec_features, layer_state, dec_hidden, dec_attn)
         logits, _, past_key_values = self.model(input_ids, past_key_values=past_key_values, use_cache=use_cache)
         output = CausalLMOutputWithPast(
@@ -88,16 +89,16 @@ class OpenLMforCausalLM(OpenLMModel):
         self, input_ids, past_key_values=None, attention_mask=None, inputs_embeds=None, **kwargs
     ):
         if past_key_values is not None:
-            # If past_key_values are defined they should match the expected shape that matches with `input_ids`
-            assert (
-                past_key_values[0][0].shape[0] == input_ids.shape[0]
-            ), "Input shape and past_key_values shape mismatch"
-            assert (
-                past_key_values[0][0].shape[1] == input_ids.shape[1] - 1
-            ), "Input shape and past_key_values shape mismatch"
+            past_length = past_key_values[0][0].shape[1]
 
-            # keep only the last token because others are represented in past_key_values
-            input_ids = input_ids[:, -1:]
+            # Some generation methods already pass only the last input ID
+            if input_ids.shape[1] > past_length:
+                remove_prefix_length = past_length
+            else:
+                # Default to old behavior: keep only final ID
+                remove_prefix_length = input_ids.shape[1] - 1
+
+            input_ids = input_ids[:, remove_prefix_length:]
 
         # if `inputs_embeds` are passed, we only want to use them in the 1st generation step
         if inputs_embeds is not None and past_key_values is None:
@@ -118,7 +119,7 @@ class OpenLMforCausalLM(OpenLMModel):
     def _reorder_cache(past_key_values, beam_idx):
         reordered_past = ()
         for layer_past in past_key_values:
-            reordered_past += (tuple(past_state.index_select(0, beam_idx) for past_state in layer_past),)
+            reordered_past += (tuple(past_state.index_select(1, beam_idx) for past_state in layer_past),)
         return reordered_past
 
 

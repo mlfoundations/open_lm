@@ -30,7 +30,7 @@ class HeadRotaryEmbedding(RotaryEmbedding):
         self._has_warned = False
 
     def forward(self, q: torch.Tensor, k: torch.Tensor, offset: int = 0) -> Tuple[torch.Tensor, torch.Tensor]:
-        self._cos_cached, self._sin_cached = self._update_cos_sin_tables(k.shape[2], device=k.device, dtype=k.dtype)
+        self._update_cos_sin_tables(k.shape[2], device=k.device, dtype=k.dtype)
 
         if not self._has_warned and (offset != 0):
             print("Warning. HeadRotaryEmbedding does not support offset, I am not applying it.")

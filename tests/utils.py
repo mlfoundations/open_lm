@@ -8,6 +8,7 @@ import json
 
 from pathlib import Path
 from huggingface_hub import snapshot_download
+import torch
 
 from open_lm.utils import make_wds_manifest as mwm
 
