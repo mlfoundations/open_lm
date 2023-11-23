@@ -88,7 +88,13 @@ def torch_attn(queries, keys, values, is_causal):
     # Need to call contiguous in torch >=2.1, otherwise later calls to .view() fail.
     # Possibly related: https://github.com/pytorch/pytorch/issues/110213 - behavior of scaled_dot_product_attention
     # changed between 2.0 and 2.1
-    return F.scaled_dot_product_attention(queries, keys, values, is_causal=is_causal).contiguous()
+    return (
+        F.scaled_dot_product_attention(
+            queries.transpose(1, 2), keys.transpose(1, 2), values.transpose(1, 2), is_causal=is_causal
+        )
+        .transpose(1, 2)
+        .contiguous()
+    )
 
 
 def get_pos_embed(args: Params):
