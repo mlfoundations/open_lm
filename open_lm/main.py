@@ -51,13 +51,7 @@ from .logger import setup_logging
 from .params import parse_args
 from .scheduler import cosine_lr
 from .train import train_one_epoch, evaluate
-from .file_utils import (
-    pt_load,
-    check_exists,
-    start_sync_process,
-    remote_sync,
-    get_string_for_epoch,
-)
+from .file_utils import pt_load, check_exists, start_sync_process, remote_sync, get_string_for_epoch, count_checkpoints
 
 
 LATEST_CHECKPOINT_NAME = "epoch_latest.pt"
@@ -634,6 +628,8 @@ def main(args):
         if is_master(args):
             logging.info("Using CrossEntropyLossWithZLoss.")
         loss = CrossEntropyLossWithZLoss(args.z_loss_coefficient)
+
+    count_checkpoints(total_steps, args)
 
     done_training = False
     epoch = start_epoch

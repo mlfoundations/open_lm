@@ -16,6 +16,8 @@ import torch
 from tqdm import tqdm
 from itertools import cycle
 
+from .main import is_master
+
 
 def remote_sync_s3(local_dir, remote_dir):
     # skip epoch_latest which can change during sync.
@@ -198,6 +200,46 @@ def adjust_samples(shard_list, manifest, starting_index, num_workers, world_size
                 samples_per_worker[gpu * num_workers + worker] += s
 
     return min(samples_per_worker) * num_workers * world_size
+
+
+def count_checkpoints(total_steps, args):
+    """Count checkpoints that will be made.
+
+    This function counts the number of checkpoints to be made, and logs that number, printing out a warning if that
+    number is different than expected.
+    """
+
+    steps_done = 0
+    next_shard_per_source = 0
+    checkpoints_made = 1
+    while steps_done < total_steps:
+        _, num_samples_per_source, next_shard_per_source = get_string_for_epoch(
+            args.train_num_samples,
+            next_shard_per_source,
+            args.dataset_manifest,
+            args.train_data_mix_weights,
+            args.workers,
+            args.world_size,
+        )
+        global_batch_size = args.world_size * args.batch_size
+        steps_epoch = sum([n // (args.workers * global_batch_size) for n in num_samples_per_source])
+        steps_done += steps_epoch
+        checkpoints_made += 1
+
+    if is_master(args):
+        logging.info(
+            f"Number of checkpoints to be made: {checkpoints_made}. "
+            f"Number will be greater in case of unexpected failures leading to the use of more shards"
+        )
+
+        if checkpoints_made != args.epochs:
+            logging.warning(
+                f"{args.epochs} were requested, but {checkpoints_made} will be made. This behavior is a best effort in "
+                f"checkpointing for the desired amount of epochs, and depends on the number of workers and gpus used, "
+                f"as well as the size of the shards themselves."
+            )
+
+    return
 
 
 def get_string_for_epoch(num_samples, starting_points, paths, weights, num_workers, world_size, multi_epoch=False):
