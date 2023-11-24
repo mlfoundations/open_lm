@@ -569,7 +569,9 @@ def main(args):
     if "train" in data and optimizer is not None:
         if args.dataset_manifest is not None:
             # Account for workers when counting total_steps.
-            total_steps = ((args.train_num_samples * args.epochs) // (args.batch_size * args.world_size * args.workers)) * args.workers 
+            total_steps = (
+                (args.train_num_samples * args.epochs) // (args.batch_size * args.world_size * args.workers)
+            ) * args.workers
         else:
             total_steps = (data["train"].dataloader.num_batches) * args.epochs
 
@@ -651,7 +653,7 @@ def main(args):
                 args.dataset_manifest,
                 args.train_data_mix_weights,
                 args.workers,
-                args.world_size
+                args.world_size,
             )
 
             if data["train"] is not None:
@@ -717,7 +719,6 @@ def main(args):
         if is_master(args) and done_training:
             logging.info("Model has seen the desired number of tokens. Ending training.")
             break
-
 
     if args.wandb and is_master(args):
         wandb.finish()

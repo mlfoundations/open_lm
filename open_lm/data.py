@@ -37,7 +37,6 @@ from webdataset.tariterators import (
 from webdataset.mix import RandomMix
 
 
-
 def proc_token(x, vocab_size):
     if type(x) is int:
         return x % vocab_size if x < 0 else x
@@ -58,16 +57,13 @@ def preprocess_json(text, vocab_size):
     return text
 
 
-def _batched_fulldata(data, 
-                      batchsize=20, 
-                      collation_fn=wds.filters.default_collation_fn,
-                      partial=True):
+def _batched_fulldata(data, batchsize=20, collation_fn=wds.filters.default_collation_fn, partial=True):
     batch = []
     first_batch = None
     for sample in data:
         if len(batch) >= batchsize:
             if first_batch == None:
-                first_batch = batch            
+                first_batch = batch
             if collation_fn is not None:
                 batch = collation_fn(batch)
             yield batch
@@ -89,6 +85,7 @@ def _batched_fulldata(data,
                     batch = collation_fn(batch)
                 yield batch
                 return
+
 
 batched_fulldata = wds.pipelinefilter(_batched_fulldata)
 
@@ -336,28 +333,20 @@ def filter_lt_seqlen(seq_len, x):
 
 
 class FiniteDataPipeline(wds.DataPipeline):
-
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
     def __iter__(self):
         """Create an iterator through the pipeline, repeating and slicing as requested.
-        
+
         This differs from wds.DataPipeline since it allows for slicing even if self.repetitions = 1.
         """
         return islice(self.iterator(), self.nsamples)
 
 
 def get_wds_dataset(
-    args,
-    is_train,
-    epoch=0,
-    floor=True,
-    tokenizer=None,
-    data_key="json",
-    force_num_samples=None,
-    multi_epoch=False
-):  
+    args, is_train, epoch=0, floor=True, tokenizer=None, data_key="json", force_num_samples=None, multi_epoch=False
+):
     input_shards_ = args.train_data if is_train else args.val_data
 
     assert input_shards_ is not None
@@ -498,7 +487,7 @@ def get_wds_dataset(
             # Note that this internally sets num_repetitions = sys.maxsize, therefore allowing repeats. We are
             # safeguarded by the fact that num_worker_batches is the number of minimum worker batches.
             datasets[ii] = datasets[ii].with_epoch(num_worker_batches)
-            
+
             total_num_batches += num_batches
             total_num_samples += num_samples
     else:

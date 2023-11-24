@@ -236,9 +236,7 @@ def train_one_epoch(model, data, loss, epoch, step, optimizer, scaler, scheduler
         batch_count = i + 1
 
         if is_master(args) and (
-            i % args.log_every_n_steps == 0 or
-            batch_count == num_batches_per_epoch or
-            step == total_steps - 1
+            i % args.log_every_n_steps == 0 or batch_count == num_batches_per_epoch or step == total_steps - 1
         ):
             batch_size = len(inputs)
             num_samples = batch_count * batch_size * args.world_size
@@ -296,7 +294,7 @@ def train_one_epoch(model, data, loss, epoch, step, optimizer, scaler, scheduler
     if not other_proc_ran_out_of_data:
         procs_with_data = torch.tensor(0, dtype=torch.long, device=device)
         dist.all_reduce(procs_with_data, op=ReduceOp.SUM)
-    
+
     # end for
     return True, step
 

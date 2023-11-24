@@ -200,8 +200,7 @@ def adjust_samples(shard_list, manifest, starting_index, num_workers, world_size
     return min(samples_per_worker) * num_workers * world_size
 
 
-
-def get_string_for_epoch(num_samples, starting_points, paths, weights, num_workers, world_size, multi_epoch = False):
+def get_string_for_epoch(num_samples, starting_points, paths, weights, num_workers, world_size, multi_epoch=False):
     if multi_epoch:
         logging.warning("Multiple passes over the dataset not fully supported yet.")
         return _multi_epoch_string(num_samples, starting_points, paths, weights, num_workers * world_size)
@@ -267,9 +266,8 @@ def _single_epoch_string(num_samples, starting_shard_per_source, paths, weights,
     num_samples_per_source = [0 for _ in range(len(paths))]
 
     total_num_workers = num_workers * world_size
-    while (
-        not enough_shards(shard_list_per_source, total_num_workers) or
-        not enough_samples(num_samples_per_source, needed_samples_per_source)
+    while not enough_shards(shard_list_per_source, total_num_workers) or not enough_samples(
+        num_samples_per_source, needed_samples_per_source
     ):
         try:
             for i in range(len(paths)):
@@ -287,7 +285,7 @@ def _single_epoch_string(num_samples, starting_shard_per_source, paths, weights,
     for i in range(len(paths)):
         # Have the number of shards be a multiple of the total workers.
         num_multiples = len(shard_list_per_source[i]) // total_num_workers
-        shard_list_per_source[i] = shard_list_per_source[i][:num_multiples * total_num_workers]
+        shard_list_per_source[i] = shard_list_per_source[i][: num_multiples * total_num_workers]
 
         # Put back unused shards.
         next_shard_per_source[i] = starting_shard_per_source[i] + len(shard_list_per_source[i])
@@ -296,7 +294,6 @@ def _single_epoch_string(num_samples, starting_shard_per_source, paths, weights,
         num_samples_per_source[i] = adjust_samples(
             shard_list_per_source[i], manifests[i], starting_shard_per_source[i], num_workers, world_size
         )
-
 
     for i, source_path in enumerate(paths):
         # Combine into a single shard string for training
