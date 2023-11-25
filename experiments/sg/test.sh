@@ -54,34 +54,34 @@ EXP_NAME="mix-$MODEL-$BATCHSIZE-$LR-$WD-$BATCHSIZE-$TOTAL_TOKENS-$WARM-$CD"
 
 echo "node-list: $SLURM_JOB_NODELIST"
 
-srun --account laion --cpu_bind=v --accel-bind=gn python -m open_lm.main \
-    --train-num-samples $TOKENS \
+torchrun --nproc-per-node 1 -m open_lm.main \
+    --train-num-samples 1000000 \
     --workers 2 \
     --dataset-manifest "s3://laion-west/rpj_tokenized_upsampled_eleutherai/manifest.jsonl" "s3://laion-west/2T_no_rpj_tokenized_upsampled_25k_shards/manifest.jsonl" \
     --train-data-mix-weights 0.725 0.275 \
     --precision amp_bfloat16 \
-    --batch-size $BATCHSIZE \
+    --batch-size 16 \
     --log-every-n-steps 20 \
     --grad-clip-norm 1 \
-    --lr $LR \
-    --warmup $WARM \
-    --model $MODEL \
-    --wd $WD \
+    --lr 1e-3 \
+    --warmup 200 \
+    --model aphid_neox \
+    --wd 0.1 \
     --beta2 0.95 \
-    --epochs $SAVES \
+    --epochs 4 \
     --ffn-type moe \
     --report-to wandb \
     --wandb-project-name moe \
-    --name $EXP_NAME \
+    --name test$RANDOM \
     --logs /fsx/home-$USER/experiments/mix_wo \
     --resume latest \
     --seed 124 \
     --data-key 'json' \
-    --accum-freq $ACC \
+    --accum-freq 4 \
     --model-norm gain_only_layer_norm \
     --delete-previous-checkpoint \
     --fsdp --fsdp-amp \
-    --lr-cooldown-end $CD \
+    --lr-cooldown-end 1e-5 \
     --no-skip-tokens \
     --accurate-total-tokens
     # --qk-norm \

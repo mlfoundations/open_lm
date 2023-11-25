@@ -43,7 +43,7 @@ def add_model_args(parser):
     )
     parser.add_argument(
         "--ffn-type",
-        choices=["swiglu", "gelu"],
+        choices=["swiglu", "gelu", "moe"],
         default="swiglu",
         help="Type of feedforward layer to use. This might be overridden by the model config.",
     )

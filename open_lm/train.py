@@ -146,6 +146,7 @@ def train_one_epoch(model, data, loss, epoch, optimizer, scaler, scheduler, tota
         if args.accum_freq == 1:
             with autocast():
                 inputs, targets = sample_chunk(texts, args)
+                
                 out, _ = model(inputs)
 
                 if args.log_logit_mean:
@@ -183,12 +184,12 @@ def train_one_epoch(model, data, loss, epoch, optimizer, scaler, scheduler, tota
                             * inputs_ii.shape[0]
                             / inputs.shape[0]
                         )
+                        
                     backward(local_loss, scaler)
                 if ii == 0:
                     total_loss = local_loss
                 else:
                     total_loss += local_loss
-
         if scaler is not None:
             if args.grad_clip_norm is not None:
                 scaler.unscale_(optimizer)

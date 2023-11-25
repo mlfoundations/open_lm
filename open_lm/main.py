@@ -11,6 +11,7 @@ import numpy as np
 from functools import partial
 from pathlib import Path
 import json
+from open_lm import moe_checkpoint_utils
 
 import torch
 from torch import optim
@@ -19,7 +20,6 @@ from torch.cuda.amp import GradScaler
 import torch.distributed as dist
 
 from torch.distributed.fsdp import (
-    FullyShardedDataParallel as FSDP,
     MixedPrecision,
     BackwardPrefetch,
     ShardingStrategy,
@@ -27,6 +27,8 @@ from torch.distributed.fsdp import (
     StateDictType,
     CPUOffload,
 )
+
+from open_lm.distributed import FullyShardedDataParallel as FSDP
 from torch.distributed.fsdp.wrap import transformer_auto_wrap_policy
 
 from .data import proc_token
@@ -149,6 +151,54 @@ def load_data_chunks(args):
         return 0, 0
 
 
+def saver(args, cpu_state, optimizer_state, scaler, completed_epoch, evaluation_loss, add_rank=False, next_chunk=None, samples_seen=None):
+    checkpoint_dict_model = {
+            "epoch": completed_epoch,
+            "name": args.name,
+            "state_dict": cpu_state,
+            "evaluation_loss": evaluation_loss,
+    }
+    if next_chunk is not None:
+        checkpoint_dict_model["next_chunk"] = next_chunk
+
+    if samples_seen is not None:
+        checkpoint_dict_model["samples_seen"] = samples_seen
+
+    checkpoint_dict_opt = {
+        "epoch": completed_epoch,
+        "name": args.name,
+        "optimizer": optimizer_state,
+        "evaluation_loss": evaluation_loss,
+    }
+    if scaler is not None:
+        checkpoint_dict_opt["scaler"] = scaler.state_dict()
+
+    if completed_epoch == args.epochs or (args.save_frequency > 0 and (completed_epoch % args.save_frequency) == 0):
+        save_path_model = f"epoch_{completed_epoch}_rank-{torch.distributed.get_rank()}.pt" if add_rank else f"epoch_{completed_epoch}.pt"
+        save_path_opt = f"optimizer_{completed_epoch}_rank-{torch.distributed.get_rank()}.pt" if add_rank else f"optimizer_{completed_epoch}.pt"
+        torch.save(
+            checkpoint_dict_model,
+            os.path.join(args.checkpoint_path, save_path_model),
+
+        )
+        torch.save(
+            checkpoint_dict_opt,
+            os.path.join(args.checkpoint_path, save_path_opt),
+
+        )
+    if args.delete_previous_checkpoint:
+
+        save_path_model_prev = f"epoch_{completed_epoch - 1}_rank-{torch.distributed.get_rank()}.pt" if add_rank else f"epoch_{completed_epoch - 1}.pt"
+        save_path_opt_prev = f"optimizer_{completed_epoch - 1}_rank-{torch.distributed.get_rank()}.pt" if add_rank else f"optimizer_{completed_epoch - 1}.pt"
+
+        previous_checkpoint = os.path.join(args.checkpoint_path, save_path_model_prev)
+        if os.path.exists(previous_checkpoint):
+            os.remove(previous_checkpoint)
+        previous_checkpoint = os.path.join(args.checkpoint_path, save_path_opt_prev)
+        if os.path.exists(previous_checkpoint):
+            os.remove(previous_checkpoint)
+
+
 def save_checkpoint(
     args,
     model,
@@ -160,51 +210,33 @@ def save_checkpoint(
     samples_seen=None,
 ):
     cpu_state, optim_state = None, None
-    if args.logs and args.logs.lower() != "none" and args.fsdp:
+
+
+    if args.ffn_type == "moe":
+        (
+            (shared_cpu_state, shared_optim_state),
+            (expert_cpu_state, expert_optim_state),
+        ) = moe_checkpoint_utils.split_shared_and_expert_states(
+            model,
+            optimizer,
+        )
+
+    elif args.logs and args.logs.lower() != "none" and args.fsdp:
         save_policy = FullStateDictConfig(offload_to_cpu=True, rank0_only=True)
         with FSDP.state_dict_type(model, StateDictType.FULL_STATE_DICT, save_policy):
             cpu_state = model.state_dict()
             optim_state = FSDP.optim_state_dict(model, optimizer)
 
-    if args.save_logs:
-        checkpoint_dict_model = {
-            "epoch": completed_epoch,
-            "name": args.name,
-            "state_dict": cpu_state if args.fsdp else model.state_dict(),
-            "evaluation_loss": evaluation_loss,
-        }
-        if next_chunk is not None:
-            checkpoint_dict_model["next_chunk"] = next_chunk
+    if args.ffn_type == "moe":
+        saver(args, shared_cpu_state, shared_optim_state, scaler, completed_epoch, evaluation_loss, next_chunk=next_chunk, samples_seen=samples_seen)
+        saver(args, expert_cpu_state, expert_optim_state, scaler, completed_epoch, evaluation_loss, add_rank = True, next_chunk=next_chunk, samples_seen=samples_seen)
+    elif args.fsdp and is_master(args):
+        saver(args, cpu_state, optim_state, scaler, completed_epoch, evaluation_loss, next_chunk=next_chunk, samples_seen=samples_seen)
+    else:
+        if is_master(args):
+            saver(args, model.state_dict(), optimizer.state_dict(), scaler, completed_epoch, evaluation_loss, next_chunk=next_chunk, samples_seen=samples_seen)
 
-        if samples_seen is not None:
-            checkpoint_dict_model["samples_seen"] = samples_seen
-
-        checkpoint_dict_opt = {
-            "epoch": completed_epoch,
-            "name": args.name,
-            "optimizer": optim_state if args.fsdp else optimizer.state_dict(),
-            "evaluation_loss": evaluation_loss,
-        }
-        if scaler is not None:
-            checkpoint_dict_opt["scaler"] = scaler.state_dict()
-
-        if completed_epoch == args.epochs or (args.save_frequency > 0 and (completed_epoch % args.save_frequency) == 0):
-            torch.save(
-                checkpoint_dict_model,
-                os.path.join(args.checkpoint_path, f"epoch_{completed_epoch}.pt"),
-            )
-            torch.save(
-                checkpoint_dict_opt,
-                os.path.join(args.checkpoint_path, f"optimizer_{completed_epoch}.pt"),
-            )
-
-        if args.delete_previous_checkpoint:
-            previous_checkpoint = os.path.join(args.checkpoint_path, f"epoch_{completed_epoch - 1}.pt")
-            if os.path.exists(previous_checkpoint):
-                os.remove(previous_checkpoint)
-            previous_checkpoint = os.path.join(args.checkpoint_path, f"optimizer_{completed_epoch - 1}.pt")
-            if os.path.exists(previous_checkpoint):
-                os.remove(previous_checkpoint)
+        
 
 
 def main(args):

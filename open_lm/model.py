@@ -17,6 +17,8 @@ from open_lm.norms import get_norm_class
 from open_lm.positional_embedding.head_rotary import HeadRotaryWithCast
 from open_lm.positional_embedding.rotary import RotaryWithCast
 from open_lm.positional_embedding.llama_rotary import LLaMARotaryWithCast
+from xformers.components.feedforward.mixture_of_experts import MixtureOfExperts
+
 
 # from openclip
 _MODEL_CONFIG_PATHS = [Path(__file__).parent / f"model_configs/"]
@@ -169,6 +171,14 @@ class Block(nn.Module):
             self._ff_w1 = nn.Linear(args.dim, hidden_dim, bias=False)
             self._ff_w2 = nn.Linear(hidden_dim, args.dim, bias=False)
             self.feed_forward = nn.Sequential(self._ff_w1, nn.GELU(approximate="none"), self._ff_w2)
+        elif args.ffn_type == "moe":
+            self.feed_forward = MixtureOfExperts(dim_model=args.dim,
+                                                 dropout=0.0,
+                                                 activation='relu',
+                                                 number_of_experts=4,
+                                                 gate="top_2")
+            for expert in self.feed_forward.moe.experts:
+                expert.expert = True
         self.layer_id = layer_id
         self.attention_norm = args.norm_type(
             args.dim,

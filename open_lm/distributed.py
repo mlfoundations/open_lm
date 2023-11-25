@@ -3,8 +3,8 @@ import os
 
 import torch
 import torch.distributed as dist
-
-
+from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
+has_FSDP = True
 def is_global_master(args):
     return args.rank == 0
 
@@ -19,10 +19,81 @@ def is_master(args, local=False):
 
 def is_using_distributed():
     if "WORLD_SIZE" in os.environ:
-        return int(os.environ["WORLD_SIZE"]) > 1
+        return int(os.environ["WORLD_SIZE"]) >= 1
     if "SLURM_NTASKS" in os.environ:
-        return int(os.environ["SLURM_NTASKS"]) > 1
+        return int(os.environ["SLURM_NTASKS"]) >= 1
     return False
+
+
+class FullyShardedDataParallel(FSDP):
+    """
+    A small wrapper around fairscale's FullyShardedDataParallel (FSDP) with some
+    fairseq-specific checkpoint saving/loading logic.
+
+    Args:
+        is_moe (bool): if True, use MoE-specific checkpointing logic
+        use_sharded_state (bool): if True, then ``state_dict`` will return
+            ``FSDP.local_state_dict`` and ``load_state_dict`` will call
+            ``FSDP.load_local_state_dict``. Otherwise, ``state_dict`` will
+            return the full model weights on data parallel rank 0 (empty on
+            other ranks) and ``load_state_dict`` will broadcast model weights
+            from rank 0 to other ranks.
+    """
+
+    def __init__(self, *args, is_moe: bool = True, use_sharded_state: bool = False, **kwargs):
+        if not has_FSDP:
+            raise ImportError(
+                "Cannot find FullyShardedDataParallel. "
+                "Please install fairscale with: pip install fairscale"
+            )
+        if is_moe is None:
+            if torch.distributed.get_rank() == 0:
+                from fairseq import pdb; pdb.set_trace()
+            else:
+                import time; time.sleep(1000)
+        assert is_moe is not None
+        super().__init__(*args, **kwargs)
+        self.is_moe = is_moe
+        self.use_sharded_state = use_sharded_state
+
+    @property
+    def unwrapped_module(self) -> torch.nn.Module:
+        if self.flatten_parameters:
+            return self.module.module
+        else:
+            return self.module
+
+    def state_dict(self, destination=None, prefix='', keep_vars=False):
+        
+        if self.use_sharded_state:
+            return super().local_state_dict(
+                destination=destination, prefix=prefix, keep_vars=keep_vars
+            )
+        elif self.is_moe:
+            return super().state_dict(
+                destination=destination, prefix=prefix, keep_vars=keep_vars
+            )
+        else:
+            if self.rank == 0:
+                return super().state_dict(
+                    destination=destination, prefix=prefix, keep_vars=keep_vars
+                )
+            else:
+                # We must call state_dict() due to use of communication
+                # primitives. But we don't use the result.
+                super().state_dict()
+                return destination or {}
+
+    def load_state_dict(self, state_dict, strict=True, model_cfg=None):
+        if self.use_sharded_state:
+            return super().load_local_state_dict(state_dict, strict=strict)
+        elif self.is_moe:
+            return super().load_state_dict(state_dict, strict=strict)
+        else:
+            state_dict = dist_utils.broadcast_object(
+                state_dict, src_rank=0, group=self.process_group
+            )
+            return super().load_state_dict(state_dict, strict=strict)
 
 
 def world_info_from_env():
