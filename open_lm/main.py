@@ -1,3 +1,4 @@
+import atexit
 import glob
 import logging
 import os
@@ -8,10 +9,10 @@ import random
 from datetime import datetime
 import functools
 import numpy as np
-from functools import partial
 from pathlib import Path
 import json
 
+import fsspec
 import torch
 from torch import optim
 from torch.cuda.amp import GradScaler
@@ -57,6 +58,7 @@ from .file_utils import (
     start_sync_process,
     remote_sync,
     get_string_for_epoch,
+    terminate_sync_process,
 )
 
 
@@ -74,23 +76,14 @@ def natural_key(string_):
     return [int(s) if s.isdigit() else s for s in re.split(r"(\d+)", string_.lower())]
 
 
-def get_latest_checkpoint(path: str, remote: bool):
-    # as writen, this glob recurses, so can pick up checkpoints across multiple sub-folders
-    if remote:
-        result = subprocess.run(
-            ["aws", "s3", "ls", path + "/"],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-        )
-        print(result)
-        if result.returncode == 1:
-            return None
-        checkpoints = [os.path.join(path, x.split(" ")[-1]) for x in result.stdout.decode().split("\n")[:-1]]
-    else:
-        checkpoints = glob.glob(path + "**/epoch_*.pt", recursive=True)
+def get_latest_checkpoint(path: str):
+    is_s3 = path.startswith("s3")
+    fs, root_path = fsspec.core.url_to_fs(path)
+    checkpoints = fs.glob(os.path.join(root_path, "**/epoch_*.pt"))
     if checkpoints:
         checkpoints = sorted(checkpoints, key=natural_key)
-        return checkpoints[-1]
+        return f"s3://{checkpoints[-1]}" if is_s3 else checkpoints[-1]
+
     return None
 
 
@@ -328,7 +321,7 @@ def main(args):
                     resume_from = None
             else:
                 # otherwise, list checkpoint dir contents and pick the newest checkpoint
-                resume_from = get_latest_checkpoint(checkpoint_path, remote=args.remote_sync is not None)
+                resume_from = get_latest_checkpoint(checkpoint_path)
             if resume_from:
                 logging.info(f"Found latest resume checkpoint at {resume_from}.")
             else:
@@ -362,6 +355,9 @@ def main(args):
             args.remote_sync_protocol,
         )
         remote_sync_process.start()
+
+        # make sure that if open_lm throws the remote process is still killed to prevent hanging
+        atexit.register(terminate_sync_process, p=remote_sync_process)
 
     if args.precision == "fp16":
         logging.warning(
@@ -765,7 +761,7 @@ def main(args):
     # run a final sync.
     if remote_sync_process is not None:
         logging.info("Final remote sync.")
-        remote_sync_process.terminate()
+        terminate_sync_process(remote_sync_process)
         result = remote_sync(
             os.path.join(args.logs, args.name),
             os.path.join(args.remote_sync, args.name),
