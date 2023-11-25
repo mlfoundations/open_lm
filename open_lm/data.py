@@ -11,13 +11,14 @@ import braceexpand
 from dataclasses import dataclass
 from multiprocessing import Value
 from functools import partial
+from itertools import islice
+
 import json
 import numpy as np
 import pandas as pd
 import torch
 import webdataset as wds
 from PIL import Image
-from itertools import islice
 
 from torch.utils.data import (
     Dataset,
@@ -337,16 +338,30 @@ class FiniteDataPipeline(wds.DataPipeline):
         super().__init__(*args, **kwargs)
 
     def __iter__(self):
-        """Create an iterator through the pipeline, repeating and slicing as requested.
+        """Iterate through up to self.nsamples steps.
 
-        This differs from wds.DataPipeline since it allows for slicing even if self.repetitions = 1.
+        Note: wds.DataPipeline.__iter__ inexplicably only limits the number of samples with self.nsamples if
+        self.repetitions != 1. Here, we always slice using self.nsamples, if self.nsamples > 0.
         """
-        return islice(self.iterator(), self.nsamples)
+
+        if self.nsamples > 0:
+            return islice(self.iterator(), self.nsamples)
+        else:
+            return self.iterator()
 
 
-def get_wds_dataset(
-    args, is_train, epoch=0, floor=True, tokenizer=None, data_key="json", force_num_samples=None, multi_epoch=False
-):
+def get_wds_dataset(args, is_train, epoch=0, floor=True, tokenizer=None, data_key="json", force_num_samples=None):
+    """Create a dataloader for a dataset in webdataset format.
+
+    Args:
+        args: Object created by the parser defined in open_lm/params.py.
+        is_train: Whether the dataset is for training or not.
+        epoch: Epoch for which the dataset is created.
+        floor: If True, round down samples for the dataloader based on batch size. If False, round up. Defaults to True.
+        tokenizer: The tokenizer used in preprocessing (currently unused due to the dataset being already tokenized.)
+        data_key: Extension for items in the webdataset tarfiles.
+        force_num_samples: If not None, this is a list with the desired number of samples per source.
+    """
     input_shards_ = args.train_data if is_train else args.val_data
 
     assert input_shards_ is not None
@@ -394,14 +409,14 @@ def get_wds_dataset(
 
         # at this point we have an iterator over all the shards
         # disable shuffling if sampling w/o replacement to ensure no repeat
-        not_use_shuffle = args.disable_buffer or not resampled
+        do_shuffle = resampled and not args.disable_buffer
         if is_train:
             if not resampled:
                 pipeline.extend(
                     [
                         detshuffle2(
-                            bufsize=0 if not_use_shuffle else _SHARD_SHUFFLE_SIZE,
-                            initial=0 if not_use_shuffle else _SHARD_SHUFFLE_INITIAL,
+                            bufsize=_SHARD_SHUFFLE_SIZE if do_shuffle else 0,
+                            initial=_SHARD_SHUFFLE_INITIAL if do_shuffle else 0,
                             seed=args.seed,
                             epoch=shared_epoch,
                         ),
@@ -414,8 +429,8 @@ def get_wds_dataset(
                     # at this point, we have an iterator over the shards assigned to each worker at each node
                     tarfile_to_samples_nothrow,  # wds.tarfile_to_samples(handler=log_and_continue),
                     wds.shuffle(
-                        bufsize=0 if not_use_shuffle else _SAMPLE_SHUFFLE_SIZE,
-                        initial=0 if not_use_shuffle else _SAMPLE_SHUFFLE_INITIAL,
+                        bufsize=_SAMPLE_SHUFFLE_SIZE if do_shuffle else 0,
+                        initial=_SAMPLE_SHUFFLE_INITIAL if do_shuffle else 0,
                         rng=random.Random(args.seed + shared_epoch.get_value()) if args.seed is not None else None,
                     ),
                 ]
