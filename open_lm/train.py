@@ -134,13 +134,6 @@ def train_one_epoch(model, data, loss, epoch, step, optimizer, scaler, scheduler
 
     end = time.time()
 
-    try:
-        starting_step = int(optimizer.state_dict()["state"][0]["step"].item())
-    except KeyError:
-        # Throws keyerror if it is the first step
-        starting_step = 0
-    done_training = False
-
     other_proc_ran_out_of_data = False
     for i, batch in enumerate(dataloader):
         if not args.skip_scheduler:
@@ -156,9 +149,6 @@ def train_one_epoch(model, data, loss, epoch, step, optimizer, scaler, scheduler
         if procs_with_data < args.world_size:
             other_proc_ran_out_of_data = True
             break
-
-        if not args.skip_scheduler:
-            scheduler(step)
 
         (texts,) = batch
         texts = torch.LongTensor(texts).to(device)

@@ -51,7 +51,14 @@ from .logger import setup_logging
 from .params import parse_args
 from .scheduler import cosine_lr
 from .train import train_one_epoch, evaluate
-from .file_utils import pt_load, check_exists, start_sync_process, remote_sync, get_string_for_epoch, count_checkpoints
+from .file_utils import (
+    pt_load,
+    check_exists,
+    start_sync_process,
+    remote_sync,
+    get_string_for_epoch,
+    log_num_checkpoints,
+)
 
 
 LATEST_CHECKPOINT_NAME = "epoch_latest.pt"
@@ -143,7 +150,8 @@ def load_data_chunks(args):
         return checkpoint["next_shard_per_source"], checkpoint["samples_seen"]
     else:
         logging.info(
-            f"=> WARNING: tried to resume a checkpoint without data chunk info. Assuming next_shard_per_source = 0."
+            "=> WARNING: tried to resume a checkpoint without data loading info. Re-starting data loading from the "
+            "first shard."
         )
         return [0 for _ in range(len(args.dataset_manifest))], 0
 
@@ -629,7 +637,7 @@ def main(args):
             logging.info("Using CrossEntropyLossWithZLoss.")
         loss = CrossEntropyLossWithZLoss(args.z_loss_coefficient)
 
-    count_checkpoints(total_steps, args)
+    log_num_checkpoints(total_steps, args)
 
     done_training = False
     epoch = start_epoch
@@ -712,8 +720,9 @@ def main(args):
             samples_seen=samples_seen if args.dataset_manifest is not None else None,
         )
 
-        if is_master(args) and done_training:
-            logging.info("Model has seen the desired number of tokens. Ending training.")
+        if done_training:
+            if is_master(args):
+                logging.info("Model has seen the desired number of tokens. Ending training.")
             break
 
     if args.wandb and is_master(args):

@@ -493,15 +493,16 @@ def get_wds_dataset(args, is_train, epoch=0, floor=True, tokenizer=None, data_ke
         total_num_samples = 0
         for ii in range(len(datasets)):
             # Calculate batches per worker, round as little as possible.
-            num_workers = max(1, args.workers)
-            num_worker_batches = round_fn(all_num_samples[ii] / (global_batch_size * num_workers))
-            num_batches = num_worker_batches * num_workers
+            num_workers_per_gpu = max(1, args.workers)
+            num_worker_batches = round_fn(all_num_samples[ii] / (global_batch_size * num_workers_per_gpu))
+            num_batches = num_worker_batches * num_workers_per_gpu
             num_samples = num_batches * global_batch_size
 
             # This forces the dataloader to take num_worker_batches steps per worker, so num_batches total.
             # Note that this internally sets num_repetitions = sys.maxsize, therefore allowing repeats. We are
             # safeguarded by the fact that num_worker_batches is the number of minimum worker batches.
             datasets[ii] = datasets[ii].with_epoch(num_worker_batches)
+            datasets[ii].repetitions = 1
 
             total_num_batches += num_batches
             total_num_samples += num_samples
@@ -525,8 +526,8 @@ def get_wds_dataset(args, is_train, epoch=0, floor=True, tokenizer=None, data_ke
     #     # roll over and repeat a few samples to get same number of full batches on each node
     #     global_batch_size = args.batch_size * args.world_size
     #     num_batches = math.ceil(num_samples / global_batch_size)
-    #     num_workers = max(1, args.workers)
-    #     num_batches = math.ceil(num_batches / num_workers) * num_workers
+    #     num_workers_per_gpu = max(1, args.workers)
+    #     num_batches = math.ceil(num_batches / num_workers_per_gpu) * num_workers_per_gpu
     #     num_samples = num_batches * global_batch_size
     #     dataloader = dataloader.with_epoch(num_batches)
     # else:
