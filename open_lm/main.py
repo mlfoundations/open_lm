@@ -160,6 +160,7 @@ def save_checkpoint(
     completed_epoch,
     evaluation_loss,
     step,
+    is_final_checkpoint,
     next_chunk=None,
     samples_seen=None,
 ):
@@ -195,7 +196,18 @@ def save_checkpoint(
         if scaler is not None:
             checkpoint_dict_opt["scaler"] = scaler.state_dict()
 
-        if completed_epoch == args.epochs or (args.save_frequency > 0 and (completed_epoch % args.save_frequency) == 0):
+        checkpoint_dict_stats = {
+            "epoch": completed_epoch,
+            "name": args.name,
+            "is_final_checkpoint": is_final_checkpoint,
+            "evaluation_loss": evaluation_loss,
+        }
+
+        if (
+            completed_epoch == args.epochs
+            or is_final_checkpoint
+            or (args.save_frequency > 0 and (completed_epoch % args.save_frequency) == 0)
+        ):
             torch.save(
                 checkpoint_dict_model,
                 os.path.join(args.checkpoint_path, f"epoch_{completed_epoch}.pt"),
@@ -204,12 +216,19 @@ def save_checkpoint(
                 checkpoint_dict_opt,
                 os.path.join(args.checkpoint_path, f"optimizer_{completed_epoch}.pt"),
             )
+            torch.save(
+                checkpoint_dict_stats,
+                os.path.join(args.checkpoint_path, f"stats_{completed_epoch}.pt"),
+            )
 
         if args.delete_previous_checkpoint:
             previous_checkpoint = os.path.join(args.checkpoint_path, f"epoch_{completed_epoch - 1}.pt")
             if os.path.exists(previous_checkpoint):
                 os.remove(previous_checkpoint)
             previous_checkpoint = os.path.join(args.checkpoint_path, f"optimizer_{completed_epoch - 1}.pt")
+            if os.path.exists(previous_checkpoint):
+                os.remove(previous_checkpoint)
+            previous_checkpoint = os.path.join(args.checkpoint_path, f"stats_{completed_epoch - 1}.pt")
             if os.path.exists(previous_checkpoint):
                 os.remove(previous_checkpoint)
 
@@ -716,7 +735,9 @@ def main(args):
 
         completed_epoch = epoch + 1
         evaluation_loss = -1
-        if "val" in data and (completed_epoch % args.val_frequency == 0 or completed_epoch == args.epochs):
+        if "val" in data and (
+            (completed_epoch % args.val_frequency == 0) or (completed_epoch == args.epochs) or final_epoch
+        ):
             # validate based on frequency and always validate the last checkpoint
             evaluation_loss = evaluate(model, data, completed_epoch, args, writer)["loss"]
 
@@ -729,12 +750,13 @@ def main(args):
             completed_epoch,
             evaluation_loss,
             step=global_step,
+            is_final_checkpoint=final_epoch or (completed_epoch == args.epochs),
             next_chunk=next_chunk if args.dataset_manifest is not None else None,
             samples_seen=samples_seen if args.dataset_manifest is not None else None,
         )
 
         if final_epoch:
-            logging.info("Ending training due to data exhaustion.")
+            logging.info("Ending training early as enough tokens seen with sampled shards.")
             break
 
     if args.wandb and is_master(args):
