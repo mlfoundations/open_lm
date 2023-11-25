@@ -80,6 +80,7 @@ def start_sync_process(sync_every, local_dir, remote_dir, protocol):
 
 def terminate_sync_process(p: multiprocessing.Process):
     if p is not None and p.is_alive():
+        logging.info(f"Terminating remote sync process.")
         p.terminate()
 
 
