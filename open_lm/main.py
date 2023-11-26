@@ -625,7 +625,7 @@ def main(args):
         logging.debug("Finished loading wandb.")
 
     if "train" not in data:
-        checkpoint_root = Path(args.resume).parent
+        checkpoint_root = os.path.dirname(args.resume)
 
         metrics = evaluate(model, data, start_epoch, args, writer)
         metrics["checkpoint_path"] = args.resume
@@ -633,7 +633,7 @@ def main(args):
         metrics["model"] = args.hf_model if args.hf_model else args.model
 
         if is_master(args):
-            with open(os.path.join(checkpoint_root, "results.jsonl"), "a+") as f:
+            with fsspec.open(os.path.join(checkpoint_root, "results.jsonl"), "a") as f:
                 f.write(json.dumps(metrics))
                 f.write("\n")
 
