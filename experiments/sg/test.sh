@@ -54,7 +54,7 @@ EXP_NAME="mix-$MODEL-$BATCHSIZE-$LR-$WD-$BATCHSIZE-$TOTAL_TOKENS-$WARM-$CD"
 
 echo "node-list: $SLURM_JOB_NODELIST"
 
-torchrun --nproc-per-node 1 -m open_lm.main \
+torchrun --nproc-per-node 8 -m open_lm.main \
     --train-num-samples 1000000 \
     --workers 2 \
     --dataset-manifest "s3://laion-west/rpj_tokenized_upsampled_eleutherai/manifest.jsonl" "s3://laion-west/2T_no_rpj_tokenized_upsampled_25k_shards/manifest.jsonl" \

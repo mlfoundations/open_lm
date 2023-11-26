@@ -418,6 +418,39 @@ def parse_args(args):
         help="Log every n steps to tensorboard/console/wandb.",
     )
     parser.add_argument(
+        "--moe-activation",
+        type=str,
+        default="relu",
+        help="Activation for MoE experts",
+    )
+    parser.add_argument(
+        "--moe-dropout",
+        type=int,
+        default=0.0,
+        help="Dropout for MoE experts",
+    )
+    parser.add_argument(
+        "--moe-num-experts",
+        type=int,
+        default=None,
+        help="Number of experts for MoE. You probably want to set this to be the total number of GPUs, since by default, we will put one expert per GPU",
+    )
+
+    parser.add_argument(
+        "--moe-gate",
+        type=str,
+        default="top_2",
+        help="MoE gating algorithm",
+    )
+    
+    parser.add_argument(
+        "--log-every-n-steps",
+        type=int,
+        default=100,
+        help="Log every n steps to tensorboard/console/wandb.",
+    )
+
+    parser.add_argument(
         "--remote-sync",
         type=str,
         default=None,

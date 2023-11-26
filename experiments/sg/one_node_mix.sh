@@ -2,8 +2,8 @@
 #SBATCH --partition=g40x
 #SBATCH --job-name=moe
 #SBATCH --nodes 1
-#SBATCH --ntasks-per-node=8
-#SBATCH --gres=gpu:8
+#SBATCH --ntasks-per-node=1
+#SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=12
 #SBATCH --output=logs/%x_%j.out
 #SBATCH --comment=laion

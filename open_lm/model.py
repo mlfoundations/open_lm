@@ -173,10 +173,10 @@ class Block(nn.Module):
             self.feed_forward = nn.Sequential(self._ff_w1, nn.GELU(approximate="none"), self._ff_w2)
         elif args.ffn_type == "moe":
             self.feed_forward = MixtureOfExperts(dim_model=args.dim,
-                                                 dropout=0.0,
-                                                 activation='relu',
-                                                 number_of_experts=4,
-                                                 gate="top_2")
+                                                 dropout=args.moe_dropout,
+                                                 activation=args.moe_activation,
+                                                 number_of_experts=args.moe_num_experts,
+                                                 gate=args.moe_gate)
             for expert in self.feed_forward.moe.experts:
                 expert.expert = True
         self.layer_id = layer_id
