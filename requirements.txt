@@ -21,3 +21,4 @@ ray[all]
 loguru
 jsonlines
 transformers
+s3fs
