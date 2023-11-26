@@ -117,7 +117,7 @@ def parse_args(args):
     )
     parser.add_argument(
         "--dataset-type",
-        choices=["webdataset", "auto"],
+        choices=["webdataset", "auto", "synthetic"],
         default="auto",
         help="Which type of dataset to process.",
     )
@@ -239,7 +239,7 @@ def parse_args(args):
         "--val-frequency",
         type=int,
         default=1,
-        help="How often to run evaluation with val data.",
+        help="How often to run evaluation with val-data (in epochs). Last epoch validated if val-data provided.",
     )
     parser.add_argument(
         "--resume",
@@ -258,6 +258,24 @@ def parse_args(args):
         type=str,
         default="open_lm_1b",
         help="Name of the model_config to use. Can also pass a custom json config.",
+    )
+    parser.add_argument(
+        "--hf-model",
+        type=str,
+        default=None,
+        help="Huggingface model/tokenizer name for AutoModelForCausalLM.",
+    )
+    parser.add_argument(
+        "--hf-seq-len",
+        type=int,
+        default=None,
+        help="Sequence length for use with a --hf-model.",
+    )
+    parser.add_argument(
+        "--hf-fsdp-block",
+        type=str,
+        default=None,
+        help="transformer_layer_cls name in a --hf-model used for fsdp's transformer_auto_wrap_policy.",
     )
     parser.add_argument(
         "--pretrained",
@@ -472,7 +490,7 @@ def parse_args(args):
         "--ignore-parse-errors",
         action="store_true",
         default=False,
-        help="If true, ignore parse errors in data loading. This should ideally be False, as errors in dataloading can point to bigger issues in your dataset. However, this can be useful when training on a large dataset which has a couple errors."
+        help="If true, ignore parse errors in data loading. This should ideally be False, as errors in dataloading can point to bigger issues in your dataset. However, this can be useful when training on a large dataset which has a couple errors.",
     )
 
     add_model_args(parser)
@@ -484,5 +502,9 @@ def parse_args(args):
     for name, val in default_params.items():
         if getattr(args, name) is None:
             setattr(args, name, val)
+
+    if args.dataset_type == "synthetic":
+        assert args.train_data is None, "--train-data must not be specified if --dataset-type='synthetic'"
+        assert args.dataset_manifest is None, "--dataset-manifest must not be specified if --dataset-type='synthetic'"
 
     return args

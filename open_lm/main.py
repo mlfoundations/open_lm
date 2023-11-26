@@ -44,6 +44,7 @@ except ImportError:
     tensorboard = None
 
 from open_lm.model import create_model
+from open_lm.utils.transformers.hf_wrapper import create_wrapped_hf_model
 from .data import get_data, get_wds_dataset
 from .distributed import is_master, init_distributed_device, broadcast_object
 from .logger import setup_logging
@@ -56,6 +57,7 @@ from .file_utils import (
     start_sync_process,
     remote_sync,
     get_string_for_epoch,
+    log_num_checkpoints,
 )
 
 
@@ -110,15 +112,17 @@ def load_model(args, model):
         # resuming a train checkpoint w/ epoch and optimizer state
         start_epoch = checkpoint["epoch"]
         sd = checkpoint["state_dict"]
+        global_step = checkpoint["step"]
         if next(iter(sd.items()))[0].startswith("module"):
             sd = {k[len("module.") :]: v for k, v in sd.items()}
         model.load_state_dict(sd)
         logging.info(f"=> resuming checkpoint '{args.resume}' (epoch {start_epoch})")
     else:
         # loading a bare (model only) checkpoint for fine-tune or evaluation
+        start_epoch, global_step = 0, 0
         model.load_state_dict(checkpoint)
         logging.info(f"=> loaded checkpoint '{args.resume}' (epoch {start_epoch})")
-    return start_epoch
+    return start_epoch, global_step
 
 
 def load_optimizer(args, model, optimizer, scaler):
@@ -146,7 +150,9 @@ def load_data_chunks(args):
         return checkpoint["next_shard_per_source"], checkpoint["samples_seen"]
     else:
         logging.info(
-            f"=> WARNING: tried to resume a checkpoint without data chunk info. Assuming next_shard_per_source = 0."
+
+            "=> WARNING: tried to resume a checkpoint without data loading info. Re-starting data loading from the "
+            "first shard."
         )
         return [0 for _ in range(len(args.dataset_manifest))], 0
 
@@ -158,6 +164,7 @@ def save_checkpoint(
     scaler,
     completed_epoch,
     evaluation_loss,
+    step,
     next_shard_per_source=None,
     samples_seen=None,
 ):
@@ -180,6 +187,9 @@ def save_checkpoint(
 
         if samples_seen is not None:
             checkpoint_dict_model["samples_seen"] = samples_seen
+
+        if step is not None:
+            checkpoint_dict_model["step"] = step
 
         checkpoint_dict_opt = {
             "epoch": completed_epoch,
@@ -223,14 +233,25 @@ def main(args):
     # fully initialize distributed device environment
     device = init_distributed_device(args)
 
+    if args.hf_model is not None and args.hf_seq_len is None:
+        print("If passing --hf-model, must also pass --hf-seq-len to be used for training/fine-tuning.")
+        return -1
+
+    if args.hf_model is not None and args.fsdp and args.hf_fsdp_block is None:
+        print("If passing --hf-model and --fsdp, must also pass --hf-fspd-block.")
+        return -1
+
     # get the name of the experiments
     if args.name is None:
         # sanitize model name for filesystem / uri use, easier if we don't use / in name as a rule?
         model_name_safe = None
-        if Path(args.model).is_file():
-            model_name_safe = Path(args.model).stem.replace("/", "-")
+        if args.hf_model is not None:
+            model_name_safe = args.hf_model.replace("/", "-")
         else:
-            model_name_safe = args.model.replace("/", "-")
+            if Path(args.model).is_file():
+                model_name_safe = Path(args.model).stem.replace("/", "-")
+            else:
+                model_name_safe = args.model.replace("/", "-")
 
         date_str = datetime.now().strftime("%Y_%m_%d-%H_%M_%S")
         if args.distributed:
@@ -253,8 +274,7 @@ def main(args):
         log_filename = f"out-{args.rank}" if args.log_local else "out.log"
         args.log_path = os.path.join(log_base_path, log_filename)
         if os.path.exists(args.log_path) and not resume_latest:
-            print("Error. Experiment already exists. Use --name {} to specify a new experiment.")
-            return -1
+            raise ValueError(f"Experiment {args.log_path} already exists. Use --name to specify a new experiment.")
 
     # Setup text logger
     args.log_level = logging.DEBUG if args.debug else logging.INFO
@@ -279,11 +299,9 @@ def main(args):
         if args.remote_sync is not None:
             checkpoint_path = os.path.join(args.remote_sync, args.name, "checkpoints")
             if args.save_most_recent:
-                print("Error. Cannot use save-most-recent with remote_sync and resume latest.")
-                return -1
+                raise ValueError("Cannot use save-most-recent with remote_sync and resume latest.")
             if args.remote_sync_protocol != "s3":
-                print("Error. Sync protocol not supported when using resume latest.")
-                return -1
+                raise ValueError("Sync protocol not supported when using resume latest.")
         if is_master(args):
             # Checking for existing checkpoint via master rank only. It is possible for
             # different rank processes to see different files if a shared file-system is under
@@ -321,8 +339,7 @@ def main(args):
         if result:
             logging.info("remote sync successful.")
         else:
-            logging.info("Error: remote sync failed. Exiting.")
-            return -1
+            raise ValueError("Remote sync failed.")
         # if all looks good, start a process to do this every args.remote_sync_frequency seconds
         remote_sync_process = start_sync_process(
             args.remote_sync_frequency,
@@ -347,7 +364,13 @@ def main(args):
         logging.info(f"Running with a single process. Device {args.device}.")
 
     random_seed(args.seed, 0)
-    model = create_model(args)
+
+    model = None
+    if args.hf_model is not None:
+        model = create_wrapped_hf_model(args)
+    else:
+        model = create_model(args)
+
     args.vocab_size = model.vocab_size
     args.seq_len = model.seq_len
     if args.train_num_samples is not None:
@@ -363,7 +386,7 @@ def main(args):
         model.set_grad_checkpointing()
 
     if is_master(args):
-        logging.info("Model:")
+        logging.info(f"Model (has {sum(p.numel() for p in model.parameters() if p.requires_grad)} parameters):")
         logging.info(f"{str(model)}")
         logging.info("Params:")
         params_file = os.path.join(args.logs, args.name, "params.txt")
@@ -374,16 +397,16 @@ def main(args):
                 f.write(f"{name}: {val}\n")
 
     # optionally resume model from a checkpoint
-    start_epoch = 0
+    start_epoch, global_step = 0, 0
     if args.resume is not None:
-        start_epoch = load_model(args, model)
+        start_epoch, global_step = load_model(args, model)
     elif args.pretrained is not None:
         print("=> loading from a pre-trained model.")
         args.resume = args.pretrained
-        ep = load_model(args, model)
+        _epoch, _step = load_model(args, model)
         # this flag continues training from the pre-trained model.
         if args.load_pretrained_state:
-            start_epoch = ep
+            start_epoch, global_step = _epoch, _step
         else:
             args.resume = None
     elif args.average is not None:
@@ -416,12 +439,25 @@ def main(args):
 
     if args.distributed:
         if args.fsdp:
+            transformer_layer_cls = None
+
+            if args.hf_model is not None:
+                # retrive the user specified block class for fsdp
+                for _, target_cls in model.named_modules():
+                    if args.hf_fsdp_block in type(target_cls).__name__:
+                        transformer_layer_cls = {type(target_cls)}
+                        break
+
+                if transformer_layer_cls is None:
+                    print(f"--hf-fsdp-block {args.hf_fsdp_block} not found in --hf-model {args.hf_model}")
+                    return -1
+
+            else:
+                transformer_layer_cls = {Block}
             # from https://pytorch.org/blog/efficient-large-scale-training-with-pytorch/
             transformer_auto_wrapper_policy = functools.partial(
                 transformer_auto_wrap_policy,
-                transformer_layer_cls={
-                    Block,
-                },
+                transformer_layer_cls=transformer_layer_cls,
             )
             # tries to follow gopher...
             mp_policy = None
@@ -481,7 +517,7 @@ def main(args):
     optimizer = None
     scaler = None
 
-    if args.train_data or (args.dataset_manifest is not None):
+    if args.train_data or args.dataset_type == "synthetic" or args.dataset_manifest is not None:
         named_parameters = list(model.named_parameters())
         no_decay_params = []  # to be potentially used later
         params = [p for n, p in named_parameters if p.requires_grad]
@@ -536,7 +572,9 @@ def main(args):
     if "train" in data and optimizer is not None:
         if args.dataset_manifest is not None:
             # Account for workers when counting total_steps.
-            total_steps = ((args.train_num_samples * args.epochs) // (args.batch_size * args.world_size * args.workers)) * args.workers 
+            total_steps = (
+                (args.train_num_samples * args.epochs) // (args.batch_size * args.world_size * args.workers)
+            ) * args.workers
         else:
             total_steps = (data["train"].dataloader.num_batches) * args.epochs
 
@@ -585,7 +623,7 @@ def main(args):
         metrics = evaluate(model, data, start_epoch, args, writer)
         metrics["checkpoint_path"] = args.resume
         metrics["val_data"] = args.val_data
-        metrics["model"] = args.model
+        metrics["model"] = args.hf_model if args.hf_model else args.model
 
         if is_master(args):
             with open(os.path.join(checkpoint_root, "results.jsonl"), "a+") as f:
@@ -599,6 +637,8 @@ def main(args):
         if is_master(args):
             logging.info("Using CrossEntropyLossWithZLoss.")
         loss = CrossEntropyLossWithZLoss(args.z_loss_coefficient)
+
+    log_num_checkpoints(total_steps, args)
 
     done_training = False
     epoch = start_epoch
@@ -618,7 +658,7 @@ def main(args):
                 args.dataset_manifest,
                 args.train_data_mix_weights,
                 args.workers,
-                args.world_size
+                args.world_size,
             )
 
             if data["train"] is not None:
@@ -630,42 +670,45 @@ def main(args):
                 args, True, epoch, force_num_samples=num_samples_per_source, data_key=args.data_key, floor=True
             )
 
+        prev_step = global_step
         if is_master(args):
             logging.info(f"=> epoch {epoch}, training on {args.train_data}")
 
         if args.distributed:
             dist.barrier()
 
-        success, training_stats = train_one_epoch(
+        success, global_step = train_one_epoch(
             model,
             data,
             loss,
-            epoch,
-            optimizer,
-            scaler,
-            scheduler,
-            total_steps,
-            args,
+            epoch=epoch,
+            step=global_step,
+            optimizer=optimizer,
+            scaler=scaler,
+            scheduler=scheduler,
+            total_steps=total_steps,
+            args=args,
             tb_writer=writer,
         )
 
         if args.distributed:
             dist.barrier()
 
-        if not success:
-            logging.info(f"Training exiting due to NaN value")
-            break
 
-        done_training = training_stats["done_training"]
-        steps_done_epoch = training_stats["steps_done_epoch"]
-        samples_seen = training_stats["samples_seen"]
+        done_training = global_step >= total_steps
+        steps_done_epoch = global_step - prev_step
+        samples_seen = samples_seen + steps_done_epoch * args.batch_size * args.world_size
+
+        if not success:
+            logging.info("Training exiting due to NaN value")
+            break
 
         epoch = epoch + 1
         evaluation_loss = -1
-        if "val" in data:
+        if "val" in data and (epoch % args.val_frequency == 0 or done_training):
+            # validate based on frequency and always validate the last checkpoint
             evaluation_loss = evaluate(model, data, epoch, args, writer)["loss"]
 
-        # 613 - 610 at halfway
         # Saving checkpoints.
         save_checkpoint(
             args,
@@ -674,12 +717,16 @@ def main(args):
             scaler,
             epoch,
             evaluation_loss,
+
+            step=global_step,
             next_shard_per_source=next_shard_per_source if args.dataset_manifest is not None else None,
             samples_seen=samples_seen if args.dataset_manifest is not None else None,
         )
 
-        if is_master(args) and done_training:
-            logging.info("Model has seen the desired number of tokens. Ending training.")
+
+        if done_training:
+            if is_master(args):
+                logging.info("Model has seen the desired number of tokens. Ending training.")
             break
 
 

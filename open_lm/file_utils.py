@@ -1,3 +1,4 @@
+import copy
 import io
 import json
 import logging
@@ -15,6 +16,8 @@ import numpy as np
 import torch
 from tqdm import tqdm
 from itertools import cycle
+
+from .distributed import is_master
 
 
 def remote_sync_s3(local_dir, remote_dir):
@@ -179,34 +182,85 @@ def source_exhausted(paths, shard_list_per_source):
     return False
 
 
-def adjust_samples(shard_list, manifest, starting_index, num_workers, world_size):
+
+def adjust_samples(shard_list, manifest, starting_index, num_workers_per_gpu, world_size):
     """Adjust the number of samples to train on.
 
     This function returns the number of samples that we will train on, so that no worker will keep going
     while the others have stopped. This is calculated via the same assignment of nodes that wds.split_by_node
     and wds.split_by_worker does.
+
+
+    Args:
+        shard_list: The list of shards to train on per source.
+        manifest: The list of manifests per source, containing info for the shards as dictionary objects. See the
+            README for the manifest format.
+        starting_index: The list of starting shard indices per source. Every shard before this index has already been
+            consumed for previous checkpoints.
+        num_workers_per_gpu: Number of workers per GPU.
+        world_size: Total number of GPUs.
     """
     num_samples = [manifest[j]["num_chunks"] for j in range(starting_index, starting_index + len(shard_list))]
-    samples_per_worker = [0 for _ in range(num_workers * world_size)]
+    samples_per_worker = [0 for _ in range(num_workers_per_gpu * world_size)]
     for gpu in range(world_size):
         samples_gpu = []
-        for n in islice(num_samples, gpu, None, world_size):
+        for n in num_samples[gpu::world_size]:
             samples_gpu.append(n)
 
-        for worker in range(num_workers):
-            for s in islice(samples_gpu, worker, None, num_workers):
-                samples_per_worker[gpu * num_workers + worker] += s
+        for worker in range(num_workers_per_gpu):
+            for s in samples_gpu[worker::num_workers_per_gpu]:
+                samples_per_worker[gpu * num_workers_per_gpu + worker] += s
 
-    return min(samples_per_worker) * num_workers * world_size
+    return min(samples_per_worker) * num_workers_per_gpu * world_size
 
 
+def log_num_checkpoints(total_steps, args):
+    """Log the number of checkpoints that will be made.
 
-def get_string_for_epoch(num_samples, starting_points, paths, weights, num_workers, world_size, multi_epoch = False):
+    This function counts the number of checkpoints to be made, and logs that number, printing out a warning if that
+    number is different than expected.
+    """
+
+    steps_done = 0
+    next_shard_per_source = 0
+    checkpoints_made = 1
+    while steps_done < total_steps:
+        _, num_samples_per_source, next_shard_per_source = get_string_for_epoch(
+            args.train_num_samples,
+            next_shard_per_source,
+            args.dataset_manifest,
+            args.train_data_mix_weights,
+            args.workers,
+            args.world_size,
+        )
+        global_batch_size = args.world_size * args.batch_size
+        steps_epoch = sum([n // (args.workers * global_batch_size) for n in num_samples_per_source])
+        steps_done += steps_epoch
+        checkpoints_made += 1
+
+    if is_master(args):
+        logging.info(
+            f"Number of checkpoints to be made: {checkpoints_made}. "
+            f"Number will be greater in case of unexpected failures leading to the use of more shards"
+        )
+
+        if checkpoints_made != args.epochs:
+            logging.warning(
+                f"{args.epochs} were requested, but {checkpoints_made} will be made. This behavior is a best effort in "
+                f"checkpointing for the desired amount of epochs, and depends on the number of workers and gpus used, "
+                f"as well as the size of the shards themselves."
+            )
+
+    return
+
+
+def get_string_for_epoch(
+    num_samples, starting_points, paths, weights, num_workers_per_gpu, world_size, multi_epoch=False
+):
     if multi_epoch:
-        logging.warning("Multiple passes over the dataset not fully supported yet.")
-        return _multi_epoch_string(num_samples, starting_points, paths, weights, num_workers * world_size)
+        raise NotImplementedError("Multiple passes over the dataset not fully supported yet.")
     else:
-        return _single_epoch_string(num_samples, starting_points, paths, weights, num_workers, world_size)
+        return _single_epoch_string(num_samples, starting_points, paths, weights, num_workers_per_gpu, world_size)
 
 
 def _multi_epoch_string(num_samples, starting_chunk, paths, weights, min_shards_needed):
@@ -249,18 +303,14 @@ def _multi_epoch_string(num_samples, starting_chunk, paths, weights, min_shards_
     return shard_strings_per_source, num_samples_per_source, next_chunk
 
 
-
-
-def _single_epoch_string(num_samples, starting_shard_per_source, paths, weights, num_workers, world_size):
+def _single_epoch_string(num_samples, starting_shard_per_source, paths, weights, num_workers_per_gpu, world_size):
     if len(paths) > 1:
-        logging.warning(
-            "Multiple sources are not supported fully as of now. Best effort will be done to mix the sources with "
-            "the desired ratio."
-        )
+        raise ValueError("Multiple sources are not supported fully as of now")
 
     if weights is None:
         weights = [1.0 / len(paths) for _ in range(len(paths))]
     needed_samples_per_source = [int(np.ceil(weights[i] * num_samples / sum(weights))) for i in range(len(weights))]
+
 
     manifests = [get_metadata_file(path) for path in paths]
     shard_strings_per_source = []
@@ -268,10 +318,10 @@ def _single_epoch_string(num_samples, starting_shard_per_source, paths, weights,
     shard_list_per_source = [[] for _ in range(len(paths))]
     num_samples_per_source = [0 for _ in range(len(paths))]
 
-    total_num_workers = num_workers * world_size
-    while (
-        not enough_shards(shard_list_per_source, total_num_workers) or
-        not enough_samples(num_samples_per_source, needed_samples_per_source)
+
+    total_num_workers = num_workers_per_gpu * world_size
+    while not enough_shards(shard_list_per_source, total_num_workers) or not enough_samples(
+        num_samples_per_source, needed_samples_per_source
     ):
         try:
             for i in range(len(paths)):
@@ -289,16 +339,17 @@ def _single_epoch_string(num_samples, starting_shard_per_source, paths, weights,
     for i in range(len(paths)):
         # Have the number of shards be a multiple of the total workers.
         num_multiples = len(shard_list_per_source[i]) // total_num_workers
-        shard_list_per_source[i] = shard_list_per_source[i][:num_multiples * total_num_workers]
+
+        shard_list_per_source[i] = shard_list_per_source[i][: num_multiples * total_num_workers]
 
         # Put back unused shards.
         next_shard_per_source[i] = starting_shard_per_source[i] + len(shard_list_per_source[i])
 
         # Fix the number of samples to be num_workers * samples of the worker with the minimum amount of samples
         num_samples_per_source[i] = adjust_samples(
-            shard_list_per_source[i], manifests[i], starting_shard_per_source[i], num_workers, world_size
-        )
 
+            shard_list_per_source[i], manifests[i], starting_shard_per_source[i], num_workers_per_gpu, world_size
+        )
 
     for i, source_path in enumerate(paths):
         # Combine into a single shard string for training
@@ -313,6 +364,7 @@ def _single_epoch_string(num_samples, starting_shard_per_source, paths, weights,
         shard_strings_per_source.append(shard_string_source)
 
     return shard_strings_per_source, num_samples_per_source, next_shard_per_source
+
 
 
 
