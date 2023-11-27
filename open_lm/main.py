@@ -11,7 +11,6 @@ import numpy as np
 from functools import partial
 from pathlib import Path
 import json
-from open_lm import moe_checkpoint_utils
 
 import torch
 from torch import optim
