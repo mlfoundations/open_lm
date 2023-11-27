@@ -149,55 +149,6 @@ def load_data_chunks(args):
         logging.info(f"=> WARNING: tried to resume a checkpoint without data chunk info. Assuming next_chunk = 0.")
         return 0, 0
 
-
-def saver(args, cpu_state, optimizer_state, scaler, completed_epoch, evaluation_loss, add_rank=False, next_chunk=None, samples_seen=None):
-    checkpoint_dict_model = {
-            "epoch": completed_epoch,
-            "name": args.name,
-            "state_dict": cpu_state,
-            "evaluation_loss": evaluation_loss,
-    }
-    if next_chunk is not None:
-        checkpoint_dict_model["next_chunk"] = next_chunk
-
-    if samples_seen is not None:
-        checkpoint_dict_model["samples_seen"] = samples_seen
-
-    checkpoint_dict_opt = {
-        "epoch": completed_epoch,
-        "name": args.name,
-        "optimizer": optimizer_state,
-        "evaluation_loss": evaluation_loss,
-    }
-    if scaler is not None:
-        checkpoint_dict_opt["scaler"] = scaler.state_dict()
-
-    if completed_epoch == args.epochs or (args.save_frequency > 0 and (completed_epoch % args.save_frequency) == 0):
-        save_path_model = f"epoch_{completed_epoch}_rank-{torch.distributed.get_rank()}.pt" if add_rank else f"epoch_{completed_epoch}.pt"
-        save_path_opt = f"optimizer_{completed_epoch}_rank-{torch.distributed.get_rank()}.pt" if add_rank else f"optimizer_{completed_epoch}.pt"
-        torch.save(
-            checkpoint_dict_model,
-            os.path.join(args.checkpoint_path, save_path_model),
-
-        )
-        torch.save(
-            checkpoint_dict_opt,
-            os.path.join(args.checkpoint_path, save_path_opt),
-
-        )
-    if args.delete_previous_checkpoint:
-
-        save_path_model_prev = f"epoch_{completed_epoch - 1}_rank-{torch.distributed.get_rank()}.pt" if add_rank else f"epoch_{completed_epoch - 1}.pt"
-        save_path_opt_prev = f"optimizer_{completed_epoch - 1}_rank-{torch.distributed.get_rank()}.pt" if add_rank else f"optimizer_{completed_epoch - 1}.pt"
-
-        previous_checkpoint = os.path.join(args.checkpoint_path, save_path_model_prev)
-        if os.path.exists(previous_checkpoint):
-            os.remove(previous_checkpoint)
-        previous_checkpoint = os.path.join(args.checkpoint_path, save_path_opt_prev)
-        if os.path.exists(previous_checkpoint):
-            os.remove(previous_checkpoint)
-
-
 def save_checkpoint(
     args,
     model,

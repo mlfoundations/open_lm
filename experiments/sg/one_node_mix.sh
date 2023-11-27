@@ -80,7 +80,6 @@ srun --account laion --cpu_bind=v --accel-bind=gn python -m open_lm.main \
     --data-key 'json' \
     --accum-freq $ACC \
     --model-norm gain_only_layer_norm \
-    --delete-previous-checkpoint \
     --fsdp --fsdp-amp \
     --lr-cooldown-end $CD \
     --no-skip-tokens \

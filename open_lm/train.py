@@ -146,9 +146,7 @@ def train_one_epoch(model, data, loss, epoch, optimizer, scaler, scheduler, tota
         if args.accum_freq == 1:
             with autocast():
                 inputs, targets = sample_chunk(texts, args)
-                
                 out, _ = model(inputs)
-                
                 if args.log_logit_mean:
                     logit_m.update(torch.mean(out).item())
 
@@ -175,11 +173,6 @@ def train_one_epoch(model, data, loss, epoch, optimizer, scaler, scheduler, tota
                             break
                         targets_ii = targets[ii * per_batch : (ii + 1) * per_batch]
                         out, _ = model(inputs_ii)
-                        # with FSDP.summon_full_params(model):
-                        #     expert_params = {x:y for x, y in model.named_parameters() if "expert" in x}
-                        #     if args.rank == 1:
-                        #         import pdb; pdb.set_trace()
-                        
                             
                         if args.log_logit_mean:
                             logit_m.update(torch.mean(out).item())
@@ -189,12 +182,12 @@ def train_one_epoch(model, data, loss, epoch, optimizer, scaler, scheduler, tota
                             * inputs_ii.shape[0]
                             / inputs.shape[0]
                         )
-                        
                     backward(local_loss, scaler)
                 if ii == 0:
                     total_loss = local_loss
                 else:
                     total_loss += local_loss
+
         if scaler is not None:
             if args.grad_clip_norm is not None:
                 scaler.unscale_(optimizer)

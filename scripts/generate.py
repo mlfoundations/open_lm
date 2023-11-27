@@ -54,7 +54,6 @@ def main():
     args = parser.parse_args()
     print("Loading checkpoint from disk...")
     checkpoint = torch.load(args.checkpoint)
-    dist.initialize_dist(get_device(None), timeout=600)
     print("Loading model into the right classes...")
     open_lm = OpenLMforCausalLM(OpenLMConfig(create_params(args)))
     tokenizer = GPTNeoXTokenizerFast.from_pretrained("EleutherAI/gpt-neox-20b")

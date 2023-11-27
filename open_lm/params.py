@@ -448,10 +448,6 @@ def parse_args(args):
         default=100,
         help="Log every n steps to tensorboard/console/wandb.",
     )
-    
-
-   
-
     parser.add_argument(
         "--remote-sync",
         type=str,
