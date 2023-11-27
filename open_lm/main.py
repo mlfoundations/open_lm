@@ -19,6 +19,7 @@ from torch.cuda.amp import GradScaler
 import torch.distributed as dist
 
 from torch.distributed.fsdp import (
+    FullyShardedDataParallel as FSDP,
     MixedPrecision,
     BackwardPrefetch,
     ShardingStrategy,
@@ -27,7 +28,6 @@ from torch.distributed.fsdp import (
     CPUOffload,
 )
 
-from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
 from torch.distributed.fsdp.wrap import transformer_auto_wrap_policy
 
 from .data import proc_token
@@ -228,6 +228,7 @@ def save_checkpoint(
             previous_checkpoint = os.path.join(args.checkpoint_path, f"stats_{completed_epoch - 1}.pt")
             if os.path.exists(previous_checkpoint):
                 os.remove(previous_checkpoint)
+
 
 
 
