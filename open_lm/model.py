@@ -157,9 +157,6 @@ class CustomAttn(nn.Module):
 
         return self.out_proj(output)
 
-def rename_attribute(obj, old_name, new_name):
-    obj.__dict__[new_name] = obj.__dict__.pop(old_name)
-
 class Block(nn.Module):
     def __init__(self, layer_id, args: Params):
         super().__init__()
