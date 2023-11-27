@@ -1,3 +1,6 @@
+# This code is copied from Fairscale, with minor changes to make it work with FSDP
+# and with new feedforward types
+
 # Copyright (c) Facebook, Inc. and its affiliates. All rights reserved.
 #
 # This source code is licensed under the BSD license found in the

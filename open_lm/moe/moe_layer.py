@@ -1,3 +1,5 @@
+# This code is copied from Fairscale, with minor changes to make it work with FSDP
+
 from typing import TYPE_CHECKING, Any, Optional, Tuple, Union, cast
 
 import torch
