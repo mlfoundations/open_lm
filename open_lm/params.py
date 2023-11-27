@@ -43,7 +43,7 @@ def add_model_args(parser):
     )
     parser.add_argument(
         "--ffn-type",
-        choices=["swiglu", "gelu", "moe"],
+        choices=["swiglu", "gelu"],
         default="swiglu",
         help="Type of feedforward layer to use. This might be overridden by the model config.",
     )
@@ -58,6 +58,37 @@ def add_model_args(parser):
         type=str,
         default="rotary",
         help="Type of positional embedding to use. This might be overridden by the model config.",
+    )
+    parser.add_argument(
+        "--moe-freq",
+        type=int,
+        default=0,
+        help="if set > 0, we will add MoE layer to every moe_freq layer.",
+    )
+    parser.add_argument(
+        "--moe-activation",
+        type=str,
+        default="relu",
+        help="Activation for MoE experts",
+    )
+    parser.add_argument(
+        "--moe-dropout",
+        type=int,
+        default=0.0,
+        help="Dropout for MoE experts",
+    )
+    parser.add_argument(
+        "--moe-num-experts",
+        type=int,
+        default=None,
+        help="Number of experts for MoE",
+    )
+
+    parser.add_argument(
+        "--moe-gate",
+        type=str,
+        default="top_2",
+        help="MoE gating algorithm",
     )
 
 
@@ -417,38 +448,9 @@ def parse_args(args):
         default=100,
         help="Log every n steps to tensorboard/console/wandb.",
     )
-    parser.add_argument(
-        "--moe-activation",
-        type=str,
-        default="relu",
-        help="Activation for MoE experts",
-    )
-    parser.add_argument(
-        "--moe-dropout",
-        type=int,
-        default=0.0,
-        help="Dropout for MoE experts",
-    )
-    parser.add_argument(
-        "--moe-num-experts",
-        type=int,
-        default=None,
-        help="Number of experts for MoE. You probably want to set this to be the total number of GPUs, since by default, we will put one expert per GPU",
-    )
-
-    parser.add_argument(
-        "--moe-gate",
-        type=str,
-        default="top_2",
-        help="MoE gating algorithm",
-    )
     
-    parser.add_argument(
-        "--log-every-n-steps",
-        type=int,
-        default=100,
-        help="Log every n steps to tensorboard/console/wandb.",
-    )
+
+   
 
     parser.add_argument(
         "--remote-sync",

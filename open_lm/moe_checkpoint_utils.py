@@ -25,7 +25,6 @@ def merge_expert_and_shared_state(expert_state, shared_state):
     for key in ['cfg', 'args', 'extra_state', 'optimizer_history']:
         state[key] = expert_state[key]
     state['model'] = {**expert_state['model'], **shared_state['model']}
-
     if OPT_KEY in expert_state:
         state[OPT_KEY] = {}
         for key in ['loss_scale', 'param_groups']:

@@ -17,7 +17,7 @@ from open_lm.norms import get_norm_class
 from open_lm.positional_embedding.head_rotary import HeadRotaryWithCast
 from open_lm.positional_embedding.rotary import RotaryWithCast
 from open_lm.positional_embedding.llama_rotary import LLaMARotaryWithCast
-from xformers.components.feedforward.mixture_of_experts import MixtureOfExperts
+from open_lm.mixture_of_experts import MoE
 
 
 # from openclip
@@ -73,6 +73,11 @@ class Params:
     weight_tying: bool = False
     norm_type: nn.Module = nn.LayerNorm
     apply_qk_norm: bool = False
+    moe_dropout: float = 0.0
+    moe_gate: str = "top_2"
+    moe_activation: str = "relu"
+    moe_num_experts: int = 8
+    moe_freq : int = 0
     positional_embedding_type: str = "rotary"
     ffn_type: str = "swiglu"
 
@@ -105,6 +110,7 @@ class CustomAttn(nn.Module):
         self.in_proj = nn.Linear(args.dim, 3 * args.n_heads * self.head_dim, bias=False)
         self.out_proj = nn.Linear(args.n_heads * self.head_dim, args.dim, bias=False)
         self.pos_embed = get_pos_embed(args)
+        
         self.attn_fn = xformers_attn
         self.apply_qk_norm = args.apply_qk_norm
 
@@ -152,6 +158,8 @@ class CustomAttn(nn.Module):
 
         return self.out_proj(output)
 
+def rename_attribute(obj, old_name, new_name):
+    obj.__dict__[new_name] = obj.__dict__.pop(old_name)
 
 class Block(nn.Module):
     def __init__(self, layer_id, args: Params):
@@ -160,7 +168,10 @@ class Block(nn.Module):
         self.dim = args.dim
         self.head_dim = args.dim // args.n_heads
         self.attention = CustomAttn(layer_id, args)
-
+        self.moe_num_experts = args.moe_num_experts
+        self.moe_dropout = args.moe_dropout
+        self.moe_activation = args.moe_activation
+        self.moe_gate = args.moe_gate
         if args.ffn_type == "swiglu":
             # this follows llama / lit llama -- go to multiple of 256
             hidden_dim = 256 * ((int(2 * 4 * args.dim / 3) + 256 - 1) // 256)
@@ -172,13 +183,12 @@ class Block(nn.Module):
             self._ff_w2 = nn.Linear(hidden_dim, args.dim, bias=False)
             self.feed_forward = nn.Sequential(self._ff_w1, nn.GELU(approximate="none"), self._ff_w2)
         elif args.ffn_type == "moe":
-            self.feed_forward = MixtureOfExperts(dim_model=args.dim,
-                                                 dropout=args.moe_dropout,
-                                                 activation=args.moe_activation,
-                                                 number_of_experts=args.moe_num_experts,
-                                                 gate=args.moe_gate)
-            for expert in self.feed_forward.moe.experts:
-                expert.expert = True
+            self.feed_forward = MoE(dim_model=args.dim,
+                                                 dropout=self.moe_dropout,
+                                                 activation=self.moe_activation,
+                                                 number_of_experts=self.moe_num_experts,
+                                                 gate=self.moe_gate)
+            
         self.layer_id = layer_id
         self.attention_norm = args.norm_type(
             args.dim,
@@ -233,7 +243,12 @@ class Transformer(nn.Module, PyTorchModelHubMixin):
         self.tok_embeddings = nn.Embedding(params.vocab_size, params.dim)
 
         self.layers = torch.nn.ModuleList()
+        ffn_type_ = params.ffn_type
         for layer_id in range(params.n_layers):
+            if params.moe_freq > 0 and layer_id % params.moe_freq == 0:
+                params.ffn_type = "moe"
+            else:
+                params.ffn_type = ffn_type_
             self.layers.append(Block(layer_id, params))
 
         # get class for normalization layers
@@ -308,6 +323,12 @@ def create_params(args):
         apply_qk_norm=cfg.get("qk_norm", args.qk_norm),
         positional_embedding_type=cfg.get("positional_embedding_type", args.positional_embedding_type),
         ffn_type=cfg.get("ffn_type", args.ffn_type),
+        moe_dropout=cfg.get("moe_dropout", args.moe_dropout),
+        moe_num_experts=cfg.get("moe_num_experts", args.moe_num_experts),
+        moe_activation=cfg.get("moe_activation", args.moe_activation),
+        moe_gate=cfg.get("moe_gate", args.moe_gate),
+
+        moe_freq=cfg.get("moe_freq", args.moe_freq),
     )
 
 

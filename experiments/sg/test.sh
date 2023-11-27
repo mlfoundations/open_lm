@@ -54,13 +54,13 @@ EXP_NAME="mix-$MODEL-$BATCHSIZE-$LR-$WD-$BATCHSIZE-$TOTAL_TOKENS-$WARM-$CD"
 
 echo "node-list: $SLURM_JOB_NODELIST"
 
-torchrun --nproc-per-node 8 -m open_lm.main \
+torchrun --nproc-per-node 2 -m open_lm.main \
     --train-num-samples 1000000 \
     --workers 2 \
     --dataset-manifest "s3://laion-west/rpj_tokenized_upsampled_eleutherai/manifest.jsonl" "s3://laion-west/2T_no_rpj_tokenized_upsampled_25k_shards/manifest.jsonl" \
     --train-data-mix-weights 0.725 0.275 \
     --precision amp_bfloat16 \
-    --batch-size 16 \
+    --batch-size 8 \
     --log-every-n-steps 20 \
     --grad-clip-norm 1 \
     --lr 1e-3 \
@@ -69,8 +69,9 @@ torchrun --nproc-per-node 8 -m open_lm.main \
     --wd 0.1 \
     --beta2 0.95 \
     --epochs 4 \
-    --ffn-type moe \
     --report-to wandb \
+    --moe-freq 2 \
+    --moe-num-experts 8 \
     --wandb-project-name moe \
     --name test$RANDOM \
     --logs /fsx/home-$USER/experiments/mix_wo \

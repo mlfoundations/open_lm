@@ -40,7 +40,7 @@ class FullyShardedDataParallel(FSDP):
             from rank 0 to other ranks.
     """
 
-    def __init__(self, *args, is_moe: bool = True, use_sharded_state: bool = False, **kwargs):
+    def __init__(self, *args, is_moe: bool = False, use_sharded_state: bool = False, **kwargs):
         if not has_FSDP:
             raise ImportError(
                 "Cannot find FullyShardedDataParallel. "
@@ -48,7 +48,7 @@ class FullyShardedDataParallel(FSDP):
             )
         if is_moe is None:
             if torch.distributed.get_rank() == 0:
-                from fairseq import pdb; pdb.set_trace()
+                from openlm import pdb; pdb.set_trace()
             else:
                 import time; time.sleep(1000)
         assert is_moe is not None

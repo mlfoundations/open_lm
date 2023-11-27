@@ -76,6 +76,7 @@ srun --account laion --cpu_bind=v --accel-bind=gn python -m open_lm.main \
     --logs /fsx/home-$USER/experiments/mix_wo \
     --resume latest \
     --seed 124 \
+    --moe-num-experts 4 \
     --data-key 'json' \
     --accum-freq $ACC \
     --model-norm gain_only_layer_norm \

@@ -28,7 +28,7 @@ from torch.distributed.fsdp import (
     CPUOffload,
 )
 
-from open_lm.distributed import FullyShardedDataParallel as FSDP
+from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
 from torch.distributed.fsdp.wrap import transformer_auto_wrap_policy
 
 from .data import proc_token
@@ -206,37 +206,79 @@ def save_checkpoint(
     scaler,
     completed_epoch,
     evaluation_loss,
+    step,
+    is_final_checkpoint,
     next_chunk=None,
     samples_seen=None,
 ):
     cpu_state, optim_state = None, None
-
-
-    if args.ffn_type == "moe":
-        (
-            (shared_cpu_state, shared_optim_state),
-            (expert_cpu_state, expert_optim_state),
-        ) = moe_checkpoint_utils.split_shared_and_expert_states(
-            model,
-            optimizer,
-        )
-
-    elif args.logs and args.logs.lower() != "none" and args.fsdp:
+    if args.logs and args.logs.lower() != "none" and args.fsdp:
         save_policy = FullStateDictConfig(offload_to_cpu=True, rank0_only=True)
         with FSDP.state_dict_type(model, StateDictType.FULL_STATE_DICT, save_policy):
             cpu_state = model.state_dict()
             optim_state = FSDP.optim_state_dict(model, optimizer)
 
-    if args.ffn_type == "moe":
-        saver(args, shared_cpu_state, shared_optim_state, scaler, completed_epoch, evaluation_loss, next_chunk=next_chunk, samples_seen=samples_seen)
-        saver(args, expert_cpu_state, expert_optim_state, scaler, completed_epoch, evaluation_loss, add_rank = True, next_chunk=next_chunk, samples_seen=samples_seen)
-    elif args.fsdp and is_master(args):
-        saver(args, cpu_state, optim_state, scaler, completed_epoch, evaluation_loss, next_chunk=next_chunk, samples_seen=samples_seen)
-    else:
-        if is_master(args):
-            saver(args, model.state_dict(), optimizer.state_dict(), scaler, completed_epoch, evaluation_loss, next_chunk=next_chunk, samples_seen=samples_seen)
+    if args.save_logs:
+        checkpoint_dict_model = {
+            "epoch": completed_epoch,
+            "name": args.name,
+            "state_dict": cpu_state if args.fsdp else model.state_dict(),
+            "evaluation_loss": evaluation_loss,
+        }
+        if next_chunk is not None:
+            checkpoint_dict_model["next_chunk"] = next_chunk
 
-        
+        if samples_seen is not None:
+            checkpoint_dict_model["samples_seen"] = samples_seen
+
+        if step is not None:
+            checkpoint_dict_model["step"] = step
+
+        checkpoint_dict_opt = {
+            "epoch": completed_epoch,
+            "name": args.name,
+            "optimizer": optim_state if args.fsdp else optimizer.state_dict(),
+            "evaluation_loss": evaluation_loss,
+        }
+        if scaler is not None:
+            checkpoint_dict_opt["scaler"] = scaler.state_dict()
+
+        checkpoint_dict_stats = {
+            "epoch": completed_epoch,
+            "name": args.name,
+            "is_final_checkpoint": is_final_checkpoint,
+            "evaluation_loss": evaluation_loss,
+        }
+
+        if (
+            completed_epoch == args.epochs
+            or is_final_checkpoint
+            or (args.save_frequency > 0 and (completed_epoch % args.save_frequency) == 0)
+        ):
+            torch.save(
+                checkpoint_dict_model,
+                os.path.join(args.checkpoint_path, f"epoch_{completed_epoch}.pt"),
+            )
+            torch.save(
+                checkpoint_dict_opt,
+                os.path.join(args.checkpoint_path, f"optimizer_{completed_epoch}.pt"),
+            )
+            torch.save(
+                checkpoint_dict_stats,
+                os.path.join(args.checkpoint_path, f"stats_{completed_epoch}.pt"),
+            )
+
+        if args.delete_previous_checkpoint:
+            previous_checkpoint = os.path.join(args.checkpoint_path, f"epoch_{completed_epoch - 1}.pt")
+            if os.path.exists(previous_checkpoint):
+                os.remove(previous_checkpoint)
+            previous_checkpoint = os.path.join(args.checkpoint_path, f"optimizer_{completed_epoch - 1}.pt")
+            if os.path.exists(previous_checkpoint):
+                os.remove(previous_checkpoint)
+            previous_checkpoint = os.path.join(args.checkpoint_path, f"stats_{completed_epoch - 1}.pt")
+            if os.path.exists(previous_checkpoint):
+                os.remove(previous_checkpoint)
+
 
 
 def main(args):
@@ -486,6 +528,10 @@ def main(args):
                 fsdp_kwargs["sharding_strategy"] = ShardingStrategy._HYBRID_SHARD_ZERO2
             print("=> FSDP kwargs: ", fsdp_kwargs)
 
+            if args.moe_freq > 0:
+                fsdp_kwargs["ignored_parameters"] = [y for y in model.parameters() if hasattr(y, 'expert')]
+            else:
+                fsdp_kwargs["ignored_parameters"] = None
             # init FSDP
             model = FSDP(
                 model,
@@ -505,7 +551,16 @@ def main(args):
             if args.ddp_static_graph:
                 # this doesn't exist in older PyTorch, arg only added if enabled
                 ddp_args["static_graph"] = True
+
             model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[device], **ddp_args)
+
+            if args.moe_freq > 0:
+                expert_params = [x for x, y in model.named_parameters() if hasattr(y, 'expert')]
+                print(f"MoE detected; ignoring DDP syncs on the following parameters: {expert_params}")
+                torch.nn.parallel.DistributedDataParallel._set_params_and_buffers_to_ignore_for_model(model, expert_params)
+            
+            print(f"After DDP parameter num: {sum(p.numel() for p in model.parameters())} on rank {args.rank}")
+            print(f"After DDP {torch.cuda.memory_allocated()/1024**3:.3} GB on rank {args.rank}")
 
     # create optimizer and scaler
     optimizer = None
@@ -729,6 +784,8 @@ def main(args):
             scaler,
             completed_epoch,
             evaluation_loss,
+            step=prev_step,
+            is_final_checkpoint=final_epoch or (completed_epoch == args.epochs),
             next_chunk=next_chunk if args.dataset_manifest is not None else None,
             samples_seen=samples_seen if args.dataset_manifest is not None else None,
         )

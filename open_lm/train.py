@@ -148,7 +148,7 @@ def train_one_epoch(model, data, loss, epoch, optimizer, scaler, scheduler, tota
                 inputs, targets = sample_chunk(texts, args)
                 
                 out, _ = model(inputs)
-
+                
                 if args.log_logit_mean:
                     logit_m.update(torch.mean(out).item())
 
@@ -175,7 +175,12 @@ def train_one_epoch(model, data, loss, epoch, optimizer, scaler, scheduler, tota
                             break
                         targets_ii = targets[ii * per_batch : (ii + 1) * per_batch]
                         out, _ = model(inputs_ii)
-
+                        # with FSDP.summon_full_params(model):
+                        #     expert_params = {x:y for x, y in model.named_parameters() if "expert" in x}
+                        #     if args.rank == 1:
+                        #         import pdb; pdb.set_trace()
+                        
+                            
                         if args.log_logit_mean:
                             logit_m.update(torch.mean(out).item())
 
@@ -213,8 +218,7 @@ def train_one_epoch(model, data, loss, epoch, optimizer, scaler, scheduler, tota
             samples_per_epoch = dataloader.num_samples
             percent_complete = 100.0 * batch_count / num_batches_per_epoch
 
-            # gathered_loss = [torch.zeros_like(total_loss) for _ in range(args.world_size)]
-            # torch.distributed.all_gather(gathered_loss, total_loss)
+            
             # losses_m.update(sum(gathered_loss).item() / args.world_size, batch_size * args.world_size)
             losses_m.update(total_loss.item(), batch_size)
             samples_per_second = inputs.numel() * args.world_size / batch_time_m.val
