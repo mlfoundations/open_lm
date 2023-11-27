@@ -10,8 +10,9 @@ from enum import Enum
 from typing import Any, Callable, Optional, Union
 
 import torch
+import xformers.ops as xops
 
-from xformers.components import Activation
+
 from xformers.components.feedforward import (
     Feedforward,
     FeedforwardConfig,
@@ -24,8 +25,6 @@ logger = logging.getLogger("openlm")
 import torch.distributed as dist
 from open_lm.moe.moe_layer import MOELayer
 from open_lm.moe.top2gate import Top2Gate  # type: ignore
-
-from xformers.components.feedforward import MLP
 
 # Credits: initially implemented in FairScale for sanity checking
 class RoundRobinGate(torch.nn.Module):
@@ -75,7 +74,7 @@ class MoE(Feedforward):
         self,
         dim_model: int,
         dropout: float,
-        activation: Activation,
+        ffn_type: str,
         number_of_experts: int,
         gate: Union[GateConfig, torch.nn.Module],
         number_of_local_experts: Optional[int] = None,
@@ -122,13 +121,21 @@ class MoE(Feedforward):
                 else 4
             )
 
-            def expert_constructor() -> torch.nn.Module:
-                return MLP(dim_model, dropout, activation, multiplier)
+            def expert_constructor(ffn_type) -> torch.nn.Module:
+                if ffn_type == "swiglu":
+                    hidden_dim = 256 * ((int(2 * 4 * dim_model / 3) + 256 - 1) // 256)
+                    return xops.SwiGLU(dim_model, hidden_dim, dim_model, bias=False)
+                elif ffn_type == "gelu":
+                    hidden_dim = dim_model * 4
+                    _ff_w1 = nn.Linear(dim_model, hidden_dim, bias=False)
+                    _ff_w2 = nn.Linear(hidden_dim, dim_model, bias=False)
+                    return nn.Sequential(_ff_w1, nn.GELU(approximate="none"), _ff_w2)
+                    
 
             assert expert_constructor is not None
 
         local_experts = torch.nn.ModuleList(
-            [expert_constructor() for _ in range(number_of_experts)]
+            [expert_constructor(ffn_type) for _ in range(number_of_experts)]
         )
 
         self.moe = MOELayer(gate=self.gate, experts=local_experts, group=group)

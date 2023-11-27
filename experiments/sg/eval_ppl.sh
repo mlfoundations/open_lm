@@ -29,7 +29,7 @@ do
         elif [[ $save_path == *"latest"* ]]; then
             echo "pass on latest"
         else
-            torchrun --nproc-per-node 8 -m open_lm.main \
+            torchrun --nproc-per-node 2 -m open_lm.main \
                 --val-data "pipe:aws s3 cp s3://laion-west/lmdata/validation_data_tokenized/open_lm//shard_00000000.tar -" \
                 --workers 6 \
                 --precision amp_bfloat16 \

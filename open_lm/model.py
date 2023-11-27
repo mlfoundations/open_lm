@@ -75,7 +75,6 @@ class Params:
     apply_qk_norm: bool = False
     moe_dropout: float = 0.0
     moe_gate: str = "top_2"
-    moe_activation: str = "relu"
     moe_num_experts: int = 8
     moe_freq : int = 0
     positional_embedding_type: str = "rotary"
@@ -170,7 +169,6 @@ class Block(nn.Module):
         self.attention = CustomAttn(layer_id, args)
         self.moe_num_experts = args.moe_num_experts
         self.moe_dropout = args.moe_dropout
-        self.moe_activation = args.moe_activation
         self.moe_gate = args.moe_gate
         if args.ffn_type == "swiglu":
             # this follows llama / lit llama -- go to multiple of 256
@@ -184,10 +182,10 @@ class Block(nn.Module):
             self.feed_forward = nn.Sequential(self._ff_w1, nn.GELU(approximate="none"), self._ff_w2)
         elif args.ffn_type == "moe":
             self.feed_forward = MoE(dim_model=args.dim,
-                                                 dropout=self.moe_dropout,
-                                                 activation=self.moe_activation,
-                                                 number_of_experts=self.moe_num_experts,
-                                                 gate=self.moe_gate)
+                                    dropout=self.moe_dropout,
+                                    ffn_type="swiglu",
+                                    number_of_experts=self.moe_num_experts,
+                                    gate=self.moe_gate)
             
         self.layer_id = layer_id
         self.attention_norm = args.norm_type(
@@ -325,9 +323,7 @@ def create_params(args):
         ffn_type=cfg.get("ffn_type", args.ffn_type),
         moe_dropout=cfg.get("moe_dropout", args.moe_dropout),
         moe_num_experts=cfg.get("moe_num_experts", args.moe_num_experts),
-        moe_activation=cfg.get("moe_activation", args.moe_activation),
         moe_gate=cfg.get("moe_gate", args.moe_gate),
-
         moe_freq=cfg.get("moe_freq", args.moe_freq),
     )
 

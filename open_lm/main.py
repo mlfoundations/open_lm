@@ -526,11 +526,6 @@ def main(args):
             if args.fsdp_hybrid_o2:
                 fsdp_kwargs["sharding_strategy"] = ShardingStrategy._HYBRID_SHARD_ZERO2
             print("=> FSDP kwargs: ", fsdp_kwargs)
-
-            if args.moe_freq > 0:
-                fsdp_kwargs["ignored_parameters"] = [y for y in model.parameters() if hasattr(y, 'expert')]
-            else:
-                fsdp_kwargs["ignored_parameters"] = None
             # init FSDP
             model = FSDP(
                 model,
@@ -552,14 +547,6 @@ def main(args):
                 ddp_args["static_graph"] = True
 
             model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[device], **ddp_args)
-
-            if args.moe_freq > 0:
-                expert_params = [x for x, y in model.named_parameters() if hasattr(y, 'expert')]
-                print(f"MoE detected; ignoring DDP syncs on the following parameters: {expert_params}")
-                torch.nn.parallel.DistributedDataParallel._set_params_and_buffers_to_ignore_for_model(model, expert_params)
-            
-            print(f"After DDP parameter num: {sum(p.numel() for p in model.parameters())} on rank {args.rank}")
-            print(f"After DDP {torch.cuda.memory_allocated()/1024**3:.3} GB on rank {args.rank}")
 
     # create optimizer and scaler
     optimizer = None

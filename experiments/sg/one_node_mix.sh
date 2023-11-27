@@ -37,7 +37,7 @@ source /fsx/home-$USER/miniconda3/bin/activate open_lm
 cd /fsx/home-$USER/open_lm_new
 export PYTHONPATH="$PYTHONPATH:/fsx/home-$USER/open_lm_new"
 
-# sbatch one_node_mix.sh 1e-3 1 1000000 64 200 aphid_neox_moe 0.1 4 1e-5 8
+# sbatch one_node_mix.sh 6e-4 1 1000000 64 200 aphid_neox_moe 0.1 4 1e-5 8
 LR=$1 #1e-3
 SAVES=$2 # 1, 4
 TOKENS=$3
@@ -72,6 +72,7 @@ srun --account laion --cpu_bind=v --accel-bind=gn python -m open_lm.main \
     --epochs $SAVES \
     --report-to wandb \
     --wandb-project-name moe \
+    --moe-num-experts $NUM_EXPERTS \
     --name $EXP_NAME \
     --logs /fsx/home-$USER/experiments/mix_wo \
     --resume latest \
