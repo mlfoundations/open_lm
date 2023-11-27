@@ -1,6 +1,6 @@
-# Training Mixture of Experts Language Models
+# Mixture of Experts Language Models
 
-To train, simply add the `--moe-freq` and `--moe-num-experts` to the training command:
+To train an MoE, simply add the `--moe-freq` and `--moe-num-experts` to the training command:
 
 ```
 torchrun --nproc-per-node 8 -m open_lm.main \
