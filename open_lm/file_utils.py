@@ -141,7 +141,11 @@ def get_shards_for_chunk(num_samples, chunk, path):
     chunk_count_list = []
     curr_chunk_count = 0
     for m in metadata:
-        curr_chunk_count += m["num_chunks"]
+        try:
+            curr_chunk_count += m["num_sequences"]
+        except KeyError:
+            curr_chunk_count += m["num_chunks"]
+
         curr_shard_list.append(m["shard"])
         if curr_chunk_count >= num_samples:
             shard_list.append(curr_shard_list)
@@ -200,7 +204,13 @@ def adjust_samples(shard_list, manifest, starting_index, num_workers_per_gpu, wo
         num_workers_per_gpu: Number of workers per GPU.
         world_size: Total number of GPUs.
     """
-    num_samples = [manifest[j]["num_chunks"] for j in range(starting_index, starting_index + len(shard_list))]
+
+    assert len(shard_list) % (num_workers_per_gpu * world_size) == 0, "We need even number of shards per worker for now"
+    try:
+        num_samples = [manifest[j]["num_sequences"] for j in range(starting_index, starting_index + len(shard_list))]
+    except KeyError:
+        num_samples = [manifest[j]["num_chunks"] for j in range(starting_index, starting_index + len(shard_list))]
+
     samples_per_worker = [0 for _ in range(num_workers_per_gpu * world_size)]
     for gpu in range(world_size):
         samples_gpu = []
@@ -327,7 +337,11 @@ def _single_epoch_string(num_samples, starting_shard_per_source, paths, weights,
             for i in range(len(paths)):
                 # Add shards incrementally
                 shard_list_per_source[i].append(manifests[i][next_shard_per_source[i]]["shard"])
-                num_samples_per_source[i] += manifests[i][next_shard_per_source[i]]["num_chunks"]
+                try:
+                    num_samples_per_source[i] += manifests[i][next_shard_per_source[i]]["num_sequences"]
+                except KeyError:
+                    num_samples_per_source[i] += manifests[i][next_shard_per_source[i]]["num_chunks"]
+
                 next_shard_per_source[i] += 1
         except IndexError as e:
             logging.error(
@@ -364,92 +378,4 @@ def _single_epoch_string(num_samples, starting_shard_per_source, paths, weights,
         shard_strings_per_source.append(shard_string_source)
 
     return shard_strings_per_source, num_samples_per_source, next_shard_per_source
-
-
-
-
-
-
-def get_string_for_epoch2(num_samples, starting_chunk, paths, weights, min_shards_needed):
-    if weights is None:
-        weights = [1.0 / len(paths) for _ in range(len(paths))]
-
-    needed_samples_per_source = [int(np.ceil(weights[i] * num_samples / sum(weights))) for i in range(len(weights))]
-
-    
-    outputs = []
-    for samples_needed, path in zip(needed_samples_per_source, paths):
-        outputs.append(get_strings_for_epoch_single_source(samples_needed, starting_chunk, 
-                                                           path, min_shards_needed=min_shards_needed))
-
-    shard_list_per_source = [_[0] for _ in outputs]
-    shard_strings_per_source = []
-    num_samples_per_source = [_[1] for _ in outputs]
-
-    for i, source_path in enumerate(paths):
-        shard_list_source = shard_list_per_source[i]
-        num_samples_source = num_samples_per_source[i]
-        shard_root_source = "/".join(source_path.split("/")[:-1]) + "/"
-        if len(shard_list_source) == 1:
-            shard_string_source = shard_root_source + shard_list_source[0] + ".tar"
-        else:
-            shard_string_source = shard_root_source + "{" + ",".join(shard_list_source) + "}.tar"
-
-
-
-def get_strings_for_epoch_single_source(samples_needed, starting_chunk, path, min_shards_needed):
-    """
-    Gets the starting_chunk'th collection of shards that meets the following criteria:
-    - at least min_shards_needed shards
-    - total number of samples >= samples_needed
-
-    With the edge case that if:
-        number of samples needed > all samples 
-    OR 
-        number of shards < min_shards_needed
-
-    We log a warning and return the whole collection of shards
-    """
-    metadata = get_metadata_file(path)
-    return_all = False
-
-
-    # Handle edge case
-    if len(metadata) < min_shards_needed:
-        logging.warning(       
-                "Number of shards requested for a single epoch is more than the number of shards available. "
-                "Consider lowering the number of workers and / or the number of GPUs, to avoid continuous "
-                "reuse of samples."
-                )
-        return_all = True
-    elif sum(_['num_chunks'] for _ in metadata) < samples_needed:
-        logging.warning(
-            "Number of samples requested for a single epoch is less than the number of samples available. "
-            "Consider adding another source or requesting fewer samples")
-        return_all = True
-    if return_all:
-        return [_['shard'] for _ in metadata], sum(_['num_chunks'] for _ in metadata)
-
-
-    # Standard flow (kinda inefficient, but who cares?)
-    # Create chunks that pass the checks, and just loop until we get to the 'starting_chunk'th one
-    passes_check = lambda files, total: len(files) >= min_shards_needed and total >= samples_needed
-    metadata_looped = cycle([(_['shard'], _['num_chunks']) for _ in metadata])
-
-    cur_files = []
-    cur_samples = 0
-    cur_chunk = 0
-
-    while True: 
-        if passes_check(cur_files, cur_samples):
-            if cur_chunk == starting_chunk:
-                return cur_files, cur_samples
-            else:
-                cur_files, cur_samples = [], 0
-                cur_chunk += 1
-        else:
-            next_file, next_count = next(metadata_looped)
-            cur_files.append(next_file)
-            cur_samples += next_count
-
 

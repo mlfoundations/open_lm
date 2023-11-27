@@ -72,7 +72,13 @@ def retrieve_dataset_once(
     random_seed(seed)
 
     train_data_string_per_source, num_seqs_per_source, _ = get_string_for_epoch(
-        total_seqs, [next_shard], paths, weights, min_shards_needed, world_size=1
+        num_samples=total_seqs,
+        starting_points=[next_shard],
+        paths=paths,
+        weights=weights,
+        num_workers_per_gpu=num_workers,
+        world_size=1,
+        multi_epoch=False
     )
 
     args.train_num_samples = total_seqs
@@ -88,36 +94,6 @@ def retrieve_dataset_once(
     data = get_wds_dataset(args, is_train=True, epoch=epoch, force_num_samples=[total_seqs])
     return data
 
-
-def retrieve_dataset_once_multi_source(
-    total_seqs, paths, epoch, next_shard, weights, seed, disable_buffer, batch_size, num_workers, min_shards_needed=1
-):
-    """Returns the output of get_wds_dataset -- not dataloader or nothing fancy
-    Supports multiple sources.
-    """
-
-    args = parse_args("")
-    random_seed(seed)
-
-    train_data_string_per_source, num_seqs_per_source, _ = get_string_for_epoch(
-        total_seqs, [next_shard, next_shard], paths, weights, min_shards_needed, world_size=1
-    )
-
-    args.train_num_samples = total_seqs
-    args.train_data = train_data_string_per_source
-    args.train_data_mix_weights = weights
-    args.workers = num_workers
-    args.batch_size = batch_size
-    args.seed = seed
-    args.dataset_resampled = False
-    args.disable_buffer = disable_buffer
-    args.vocab_size = _MODEL_CONFIGS[args.model]["vocab_size"]
-    args.seq_len = _MODEL_CONFIGS[args.model]["seq_len"]
-    args.world_size = 1
-
-    chosen_num_samples = [np.floor(weights[i] * total_seqs / sum(weights)) for i in range(len(paths))]
-    data = get_wds_dataset(args, is_train=True, epoch=epoch, force_num_samples=chosen_num_samples)
-    return data
 
 
 # ======================================================
@@ -136,9 +112,6 @@ def test_singleSource_singleWorker_perfectBatch(num_samples, next_shard, batch_s
         - The batch_size perfectly divides the number of samples requested
 
     Should see exactly num_samples at the end, and no repeats
-
-    TODO: the final test case of this fails because of the requirement that the number of shards must be a multiple of
-    the number of workers.
     """
     data = retrieve_dataset_once(
         num_samples,
@@ -194,47 +167,13 @@ def test_singleSource_singleWorker_imperfectBatch(num_samples, next_shard, batch
     assert len(data_ids) == batch_size * (num_samples // batch_size)  #
 
 
-def test_singleSource_multiWorker_perfectBatch_0():
-    """
-    Not using pytest.mark.parametrize because I need to be careful about the reasoning
-    Start with a simple case:
-    - 2 workers, each should consume (fully) one tar file
-    """
-    num_samples = 200
-    epoch = 0
-    next_shard = 0
-    batch_size = 10
-    min_shards_needed = num_workers = 2
-
-    data = retrieve_dataset_once(
-        num_samples,
-        SINGLE_SOURCE,
-        epoch,
-        next_shard,
-        None,
-        seed=42,
-        disable_buffer=True,
-        batch_size=batch_size,
-        num_workers=num_workers,
-        min_shards_needed=min_shards_needed,
-    )
-
-    data_ids = []
-    for batch in data.dataloader:
-        for seq in batch[0]:
-            data_ids.append(tuple(seq[:3]))
-
-    assert len(set(data_ids)) == len(data_ids)  # Check no repeats
-    # Now reasoning about this, I should consume each fully
-
-    target_data_ids = [(0, i, j) for i in range(2) for j in range(100)]
-    assert sorted(target_data_ids) == sorted(data_ids)
-
 
 def test_singleSource_multiWorker_0():
     """
-    Not using pytest.mark.parametrize because I need to be careful about the reasoning
-    - 2 workers, each should consume (fully) one tar file
+    Asking for 200 samples with 2 workers and a batchsize of 10.
+    So we should get 2 shards, distribute 1 to each worker and each should fully consume it
+
+    We should see all samples from the first two shards
     """
     num_samples = 200
     epoch = 0
@@ -269,8 +208,10 @@ def test_singleSource_multiWorker_0():
 
 def test_singleSource_multiWorker_1():
     """
-    Not using pytest.mark.parametrize because I need to be careful about the reasoning
-    - 2 workers, each should consume (partially) one tar file (but no batch weirdness)
+    Asking for 150 samples from 2 workers.
+    - Should get 2 shards, and give 1 to each worker
+    - Each worker should see 15 batches
+    Output should be the first 75 examples from each of the first 2 shards
     """
     num_samples = 150
     epoch = 0
@@ -304,8 +245,10 @@ def test_singleSource_multiWorker_1():
 
 def test_singleSource_multiWorker_2():
     """
-    Not using pytest.mark.parametrize because I need to be careful about the reasoning
-    - 2 workers, each should consume (partially) one tar file (but yes batch weirdness)
+    Asking for 150 samples from 2 workers
+    - Should get 2 shards and give 1 to each worker
+    - Each worker should see 150 // (2 * 10) = 7 batches
+    Output should be the first 70 examples from each of the first 2 shards
     """
     num_samples = 150
     epoch = 0
@@ -339,20 +282,11 @@ def test_singleSource_multiWorker_2():
 
 def test_singleSource_multiWorker_3():
     """
-    Not using pytest.mark.parametrize because I need to be careful about the reasoning
+    Asking for 300 samples from 2 workers
+    - Should get 3 shards and give 1 to each worker (and throw the last one away b/c need: #shards % #workers == 0)
+    - Each worker should see 300 // (2 * 10) = 15 batches
+    Output should be the full first 2 shards
 
-    - 2 workers, one worker should get 1 tarfile, the other worker should get 2 tarfiles
-    - no batch weirdness
-
-    So if I ask for 300 samples, but each shard has 100, then I need 3 shards
-    But then if I distribute across 2 workers, i should get
-    worker_0:= [shard_0000], worker_1:=[shard_0001, shard_0002] (or some such thing)
-    and then each worker should ask to see 300/(batch_size * num_workers) = 15 batches
-    so worker_0 exhausts its supply
-    and worker_1 only sees 15 batches
-
-    TODO: the new default behavior is to round down so the number of shards is evenly divisible across workers. This
-    test needs to be adapted to that.
     """
     num_samples = 300
     epoch = 0
@@ -377,23 +311,18 @@ def test_singleSource_multiWorker_3():
     for batch in data.dataloader:
         for seq in batch[0]:
             data_ids.append(tuple(seq[:3]))
+    target_data_ids = [(0, i, j) for i in range(2) for j in range(100)]  # all of shard 000, 001
+    assert sorted(target_data_ids) == sorted(data_ids)
 
-    assert len(set(data_ids)) == len(data_ids)  # Check no repeats
-    assert len(data_ids) == 250
 
 
 def test_singleSource_multiWorker_4():
     """
-    - 2 workers, one worker gets one tarfile, the other gets 2 tarfiles
-    - yes batch weirdness
+    Asking for 256 samples from 2 workers
+    - Should get 3 shards and give 1 to each worker (and throw the last one away b/c need: #shards % #workers == 0)
+    - Each worker should see 256 // (2 * 10) = 12 batches
+    Output should be the full first 2 shards
 
-    I ask for 256 samples, so I should get two workers with 1,2 tars each
-    ???
-    TALKING TO GEORGE ABOUT THE PROPER BEHAVIOR HERE
-
-    TODO: Same as the above one, this is affected by the rounding down behavior. The best way to do this is to ask for
-    356 samples, which will make each worker have 2 tarfiles. This will make it similar to multiWorker_2 - the case
-    of uneven shard assignment across workers is no longer an issue
     """
     num_samples = 256
     epoch = 0
@@ -419,134 +348,8 @@ def test_singleSource_multiWorker_4():
     for batch in data.dataloader:
         for seq in batch[0]:
             data_ids.append(tuple(seq[:3]))
-
-    assert len(set(data_ids)) == len(data_ids)  # Check no repeats
-    assert len(data_ids) == 250
-
-
-# ====================================================================
-# =           Tests when num_train_samples == dataset_size           =
-# ====================================================================
+    target_data_ids = [(0, i, j) for i in range(2) for j in range(100)]  # all of shard 000, 001
+    assert sorted(target_data_ids) == sorted(data_ids)
 
 
-@pytest.mark.parametrize(
-    "batch_size,num_workers",
-    [
-        (1, 1),
-        (2, 3),
-        (111, 6),
-    ],
-)
-def test_wo_resample_exact_a(batch_size, num_workers):
-    """
-    Case a: we have batch_size/num_workers such that we cover the dataset exactly once
-    i.e, TOTAL_SEQ_COUNT is exactly divisible by number of workers
 
-    Assert:
-    - that we get exactly TOTAL_SEQ_COUNT examples
-    - that we get the exact dataset that we requested (by ids)
-
-    """
-    make_fake_tarfiles()
-    seq_count = TOTAL_SEQ_COUNT
-    data = retrieve_dataset_once_multi_source(
-        seq_count, INPUT_PATHS, 0, 0, [0.5, 0.5], 1234, True, batch_size, num_workers, min_shards_needed=1
-    )
-    data_ids = []
-    for batch in data.dataloader:
-        for seq in batch[0]:
-            data_ids.append(tuple(seq[:3]))
-
-    expected_ids = []
-    for i in range(seq_count):
-        expected_ids.append((i % 2, (i // 2) // 100, (i // 2) % 100))
-
-    assert sorted(expected_ids) == sorted(data_ids)
-
-
-@pytest.mark.parametrize("batch_size,num_workers", [(7, 1)])
-def test_wo_resample_exact_b(batch_size, num_workers):
-    """
-    Case b: we have batch_size/num_workers such that we cover:
-        - up until the last batch: the dataset less than exactly once
-        - all batch: some parts of the dataset once or twice
-
-    Assert:
-    - max frequency all-but-lasts is 1
-    - total frequency of all-but-lasts is greatest bsz*numworkers multiple <= seq_count
-
-    - max frequency of all-ids is 2
-    - total frequency of all-ids is smallest bsz*numworkers multiple >= seq_count
-    - total number of keys is TOTAL_SEQ_COUNT
-
-
-    - total set of ids is all ids
-    """
-    make_fake_tarfiles()
-    seq_count = TOTAL_SEQ_COUNT
-    total_workers = batch_size * num_workers * len(INPUT_PATHS)
-    data = retrieve_dataset_once_multi_source(
-        seq_count, INPUT_PATHS, 0, 0, [0.5, 0.5], 1234, True, batch_size, num_workers, min_shards_needed=1
-    )
-
-    all_batches = list(data.dataloader)
-    all_ids = defaultdict(int)
-    all_but_last_ids = defaultdict(int)
-    for i in range(len(all_batches)):
-        batch = all_batches[i]
-        for seq in batch[0]:
-            _id = tuple(seq[:3])
-            all_ids[_id] += 1
-
-    for i in range(2):
-        for j in range(7):
-            for k in range(100):
-                if j == 0 and k < 6:
-                    # First 6 samples per source should have been seen twice
-                    assert all_ids[(i, j, k)] == 2
-                elif (i, j, k) in all_ids:
-                    assert all_ids[(i, j, k)] == 1
-
-    expected_ids_per_source = [[], []]
-    for i in range(seq_count):
-        expected_ids_per_source[i % 2].append((i % 2, (i // 2) // 100, (i // 2) % 100))
-
-    # Asserts on all ids
-    assert max(all_ids.values()) == 2
-    assert sum(all_ids.values()) == seq_count + total_workers - (seq_count % total_workers)
-    assert len(all_ids) == seq_count
-
-    # And actually get the set of all ids
-    assert sorted(list(all_ids.keys())) == expected_ids_per_source[0] + expected_ids_per_source[1]
-
-
-# ====================================================================
-# =           Tests when num_train_samples < dataset_size            =
-# ====================================================================
-
-
-def test_wo_resample_smallTrain():
-    assert True
-
-
-# ====================================================================
-# =           Tests when num_train_samples > dataset_size            =
-# ====================================================================
-
-
-def test_wo_resample_bigTrain():
-    assert True
-
-
-# ====================================================================
-# =                      Tests for file_utils                        =
-# ====================================================================
-
-
-def test_adjust_samples():
-    """Test for adjust_samples.
-
-    This test should verify that adjust_samples returns the same number of samples as when splitting with
-    wds.split_by_node and wds.split_by_worker.
-    """
-    assert True

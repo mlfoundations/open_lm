@@ -511,10 +511,6 @@ def get_wds_dataset(args, is_train, epoch=0, floor=True, tokenizer=None, data_ke
             datasets[ii] = datasets[ii].with_epoch(num_worker_batches)
             datasets[ii].repetitions = 1
 
-            # This forces the dataloader to take num_worker_batches steps per worker, so num_batches total.
-            # Note that this internally sets num_repetitions = sys.maxsize, therefore allowing repeats. We are
-            # safeguarded by the fact that num_worker_batches is the number of minimum worker batches.
-            datasets[ii] = datasets[ii].with_epoch(num_worker_batches)
             
             total_num_batches += num_batches
             total_num_samples += num_samples
