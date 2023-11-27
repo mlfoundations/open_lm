@@ -2,8 +2,8 @@
 #SBATCH --partition=g40x
 #SBATCH --job-name=moe
 #SBATCH --nodes 1
-#SBATCH --ntasks-per-node=1
-#SBATCH --gres=gpu:1
+#SBATCH --ntasks-per-node=8
+#SBATCH --gres=gpu:8
 #SBATCH --cpus-per-task=12
 #SBATCH --output=logs/%x_%j.out
 #SBATCH --comment=laion
@@ -37,7 +37,7 @@ source /fsx/home-$USER/miniconda3/bin/activate open_lm
 cd /fsx/home-$USER/open_lm_new
 export PYTHONPATH="$PYTHONPATH:/fsx/home-$USER/open_lm_new"
 
-# sbatch one_node_mix.sh 1e-3 1 1000000 64 200 aphid_neox 0.1 4 1e-5
+# sbatch one_node_mix.sh 1e-3 1 1000000 64 200 aphid_neox_moe 0.1 4 1e-5 8
 LR=$1 #1e-3
 SAVES=$2 # 1, 4
 TOKENS=$3
@@ -47,10 +47,11 @@ MODEL=$6 # aphid_neox, ant_neox, potato_neox,
 WD=$7
 ACC=$8 # 4, 8
 CD=$9 # 4, 8
+NUM_EXPERTS=${10}
 
 TOTAL_TOKENS=`expr $TOKENS \* $SAVES`
 
-EXP_NAME="mix-$MODEL-$BATCHSIZE-$LR-$WD-$BATCHSIZE-$TOTAL_TOKENS-$WARM-$CD"
+EXP_NAME="mix-$MODEL-$NUM_EXPERTS-$BATCHSIZE-$LR-$WD-$BATCHSIZE-$TOTAL_TOKENS-$WARM-$CD"
 
 echo "node-list: $SLURM_JOB_NODELIST"
 
@@ -69,14 +70,12 @@ srun --account laion --cpu_bind=v --accel-bind=gn python -m open_lm.main \
     --wd $WD \
     --beta2 0.95 \
     --epochs $SAVES \
-    --ffn-type moe \
     --report-to wandb \
     --wandb-project-name moe \
     --name $EXP_NAME \
     --logs /fsx/home-$USER/experiments/mix_wo \
     --resume latest \
     --seed 124 \
-    --moe-num-experts 4 \
     --data-key 'json' \
     --accum-freq $ACC \
     --model-norm gain_only_layer_norm \

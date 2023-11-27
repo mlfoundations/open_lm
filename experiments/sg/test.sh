@@ -47,7 +47,7 @@ MODEL=$6 # aphid_neox, ant_neox, potato_neox,
 WD=$7
 ACC=$8 # 4, 8
 CD=$9 # 4, 8
-NUM_EXPERTS=$10
+NUM_EXPERTS=${10}
 
 TOTAL_TOKENS=`expr $TOKENS \* $SAVES`
 
@@ -55,7 +55,7 @@ EXP_NAME="mix-$MODEL-$BATCHSIZE-$LR-$WD-$BATCHSIZE-$TOTAL_TOKENS-$WARM-$CD-$NUM_
 
 echo "node-list: $SLURM_JOB_NODELIST"
 
-torchrun --nproc-per-node 2 -m open_lm.main \
+torchrun --nproc-per-node 8 -m open_lm.main \
     --train-num-samples 1000000 \
     --workers 2 \
     --dataset-manifest "s3://laion-west/rpj_tokenized_upsampled_eleutherai/manifest.jsonl" "s3://laion-west/2T_no_rpj_tokenized_upsampled_25k_shards/manifest.jsonl" \
@@ -72,7 +72,7 @@ torchrun --nproc-per-node 2 -m open_lm.main \
     --epochs 4 \
     --report-to wandb \
     --moe-freq 2 \
-    --moe-num-experts $NUM_EXPERTS \
+    --moe-num-experts 8 \
     --wandb-project-name moe \
     --name test$RANDOM \
     --logs /fsx/home-$USER/experiments/mix_wo \
