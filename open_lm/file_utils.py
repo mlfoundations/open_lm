@@ -209,7 +209,7 @@ def adjust_samples(shard_list, manifest, starting_index, num_workers_per_gpu, wo
     except KeyError:
         num_samples = [manifest[j]["num_chunks"] for j in range(starting_index, starting_index + len(shard_list))]
 
-    return num_samples
+    return sum(num_samples)
 
 
 def log_num_checkpoints(total_steps, args):
@@ -332,7 +332,7 @@ def _single_epoch_string(num_samples: int, starting_shard_per_source: List[int],
     num_sources = len(paths)
 
     if num_sources > 1:
-        raise ValueError("Multiple sources are not supported fully as of now")
+        logging.warning("Multiple sources are not supported fully as of now")
 
     if weights is None:
         weights = [1.0 / num_sources for _ in range(num_sources)]
