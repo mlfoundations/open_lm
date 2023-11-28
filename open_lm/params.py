@@ -505,6 +505,13 @@ def parse_args(args):
         help="If true, ignore parse errors in data loading. This should ideally be False, as errors in dataloading can point to bigger issues in your dataset. However, this can be useful when training on a large dataset which has a couple errors.",
     )
 
+    parser.add_argument(
+        '--finegrain-debug',
+        action='store_true',
+        default=False,
+        help='If true, we return a bunch of stuff in main.main() INSTEAD of training'
+    )
+
     add_model_args(parser)
 
     args = parser.parse_args(args)
