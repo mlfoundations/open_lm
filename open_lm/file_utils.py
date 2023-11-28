@@ -7,15 +7,15 @@ import os
 import subprocess
 import sys
 import time
-import logging
 import copy
-from itertools import islice
+from itertools import cycle, islice
 
 import fsspec
 import numpy as np
 import torch
+
+from typing import List, Optional
 from tqdm import tqdm
-from itertools import cycle
 
 from .distributed import is_master
 
@@ -273,12 +273,14 @@ def log_num_checkpoints(total_steps, args):
 
 
 def get_string_for_epoch(
-    num_samples, starting_points, paths, weights, num_workers_per_gpu, world_size, multi_epoch=False
+    num_samples, starting_points, paths, weights, num_workers_per_gpu, world_size, multi_epoch=False, factor_drop_lower_average = 0.9
 ):
+    """See _single_epoch_string for full docstring.
+    """
     if multi_epoch:
         raise NotImplementedError("Multiple passes over the dataset not fully supported yet.")
     else:
-        return _single_epoch_string(num_samples, starting_points, paths, weights, num_workers_per_gpu, world_size)
+        return _single_epoch_string(num_samples, starting_points, paths, weights, num_workers_per_gpu, world_size, factor_drop_lower_avg=factor_drop_lower_average)
 
 
 def _multi_epoch_string(num_samples, starting_chunk, paths, weights, min_shards_needed):
@@ -321,36 +323,60 @@ def _multi_epoch_string(num_samples, starting_chunk, paths, weights, min_shards_
     return shard_strings_per_source, num_samples_per_source, next_chunk
 
 
-def _single_epoch_string(num_samples, starting_shard_per_source, paths, weights, num_workers_per_gpu, world_size):
-    if len(paths) > 1:
+def _single_epoch_string(num_samples: int, starting_shard_per_source: List[int], paths: List[str], weights: Optional[List[float]], num_workers_per_gpu: int, world_size: int, factor_drop_lower_avg: float = 0.9):
+    """Retrieve shards to train on for a particular checkpoint.
+
+    Currently only a single source is fully supported yet.
+    
+    Args:
+        num_samples: Total number of samples required.
+        starting_shard_per_source: First shard per source that has not been consumed yet.
+        paths: Paths to source manifests.
+        weights: Weighting between sources. If None, it is assumed to be uniform.
+        num_workers_per_gpu: Number of workers per gpu process.
+        world_size: Total number of gpus used for training.
+        factor_drop_lower_avg: While creating the shard list, shards that contain fewer samples than this factor times a
+            running average of samples are skipped. This is done to keep the number of samples per worker uniform, to
+            decrease the amount of elements discarded.
+    """
+
+
+    num_sources = len(paths)
+
+    if num_sources > 1:
         raise ValueError("Multiple sources are not supported fully as of now")
 
     if weights is None:
-        weights = [1.0 / len(paths) for _ in range(len(paths))]
+        weights = [1.0 / num_sources for _ in range(num_sources)]
     needed_samples_per_source = [int(np.ceil(weights[i] * num_samples / sum(weights))) for i in range(len(weights))]
 
 
     manifests = [get_metadata_file(path) for path in paths]
     shard_strings_per_source = []
     next_shard_per_source = copy.deepcopy(starting_shard_per_source)
-    shard_list_per_source = [[] for _ in range(len(paths))]
-    num_samples_per_source = [0 for _ in range(len(paths))]
-
+    shard_list_per_source = [[] for _ in range(num_sources)]
+    num_samples_per_source = [0 for _ in range(num_sources)]
+    avg_num_samples_per_source = [0 for _ in range(num_sources)]
 
     total_num_workers = num_workers_per_gpu * world_size
     while not enough_shards(shard_list_per_source, total_num_workers) or not enough_samples(
         num_samples_per_source, needed_samples_per_source
     ):
         try:
-            for i in range(len(paths)):
+            for i in range(num_sources):
                 # Add shards incrementally
-                shard_list_per_source[i].append(manifests[i][next_shard_per_source[i]]["shard"])
+                shard_name = manifests[i][next_shard_per_source[i]]["shard"]
                 try:
-                    num_samples_per_source[i] += manifests[i][next_shard_per_source[i]]["num_sequences"]
+                    num_samples_shard = manifests[i][next_shard_per_source[i]]["num_sequences"]
                 except KeyError:
-                    num_samples_per_source[i] += manifests[i][next_shard_per_source[i]]["num_chunks"]
+                    num_samples_shard = manifests[i][next_shard_per_source[i]]["num_chunks"]
+
+                if num_samples_shard >= factor_drop_lower_avg * avg_num_samples_per_source[i]:
+                    shard_list_per_source[i].append(shard_name)
+                    num_samples_per_source[i] += num_samples_shard
 
                 next_shard_per_source[i] += 1
+        
         except IndexError as e:
             logging.error(
                 "Number of shards requested for a single epoch is more than the number of shards available. "
@@ -358,7 +384,7 @@ def _single_epoch_string(num_samples, starting_shard_per_source, paths, weights,
             )
             raise e
 
-    for i in range(len(paths)):
+    for i in range(num_sources):
         # Have the number of shards be a multiple of the total workers.
         num_multiples = len(shard_list_per_source[i]) // total_num_workers
 
