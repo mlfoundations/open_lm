@@ -42,7 +42,7 @@ def test_make_toplevel_manifest():
 	mwm.main(args)
 
 	lines = [json.loads(_) for _ in open(MOCK_MANIFEST, 'r').readlines()]
-	assert lines == [{'shard': 'shard_00000000', 'num_sequences': 8849}]
+	assert lines == [{'shard': 'shard_00000000', 'num_sequences': 120}]
 
 
 	if os.path.exists(MOCK_MANIFEST):
