@@ -190,10 +190,8 @@ def source_exhausted(paths, shard_list_per_source):
 def adjust_samples(shard_list, manifest, starting_index, num_workers_per_gpu, world_size):
     """Adjust the number of samples to train on.
 
-    This function returns the number of samples that we will train on, so that no worker will keep going
-    while the others have stopped. This is calculated via the same assignment of nodes that wds.split_by_node
-    and wds.split_by_worker does.
-
+    This function returns the number of samples that we will train on, given that we have adjusted the number of shards
+    to be a multiple of num_workers_per_gpu * world_size
 
     Args:
         shard_list: The list of shards to train on per source.
@@ -211,17 +209,7 @@ def adjust_samples(shard_list, manifest, starting_index, num_workers_per_gpu, wo
     except KeyError:
         num_samples = [manifest[j]["num_chunks"] for j in range(starting_index, starting_index + len(shard_list))]
 
-    samples_per_worker = [0 for _ in range(num_workers_per_gpu * world_size)]
-    for gpu in range(world_size):
-        samples_gpu = []
-        for n in num_samples[gpu::world_size]:
-            samples_gpu.append(n)
-
-        for worker in range(num_workers_per_gpu):
-            for s in samples_gpu[worker::num_workers_per_gpu]:
-                samples_per_worker[gpu * num_workers_per_gpu + worker] += s
-
-    return min(samples_per_worker) * num_workers_per_gpu * world_size
+    return num_samples
 
 
 def log_num_checkpoints(total_steps, args):
@@ -273,7 +261,7 @@ def log_num_checkpoints(total_steps, args):
 
 
 def get_string_for_epoch(
-    num_samples, starting_points, paths, weights, num_workers_per_gpu, world_size, multi_epoch=False, factor_drop_lower_average = 0.9
+    num_samples, starting_points, paths, weights, num_workers_per_gpu, world_size, multi_epoch=False, factor_drop_lower_average = 0.0
 ):
     """See _single_epoch_string for full docstring.
     """
@@ -323,7 +311,7 @@ def _multi_epoch_string(num_samples, starting_chunk, paths, weights, min_shards_
     return shard_strings_per_source, num_samples_per_source, next_chunk
 
 
-def _single_epoch_string(num_samples: int, starting_shard_per_source: List[int], paths: List[str], weights: Optional[List[float]], num_workers_per_gpu: int, world_size: int, factor_drop_lower_avg: float = 0.9):
+def _single_epoch_string(num_samples: int, starting_shard_per_source: List[int], paths: List[str], weights: Optional[List[float]], num_workers_per_gpu: int, world_size: int, factor_drop_lower_avg: float = 0.0):
     """Retrieve shards to train on for a particular checkpoint.
 
     Currently only a single source is fully supported yet.
@@ -385,7 +373,12 @@ def _single_epoch_string(num_samples: int, starting_shard_per_source: List[int],
             raise e
 
     for i in range(num_sources):
-        # Have the number of shards be a multiple of the total workers.
+        # Ensure the number of shards is a multiple of number of workers, so each worker has the same
+        # number of shards.
+        #
+        # This is a heuristic to minimize how much data we discard when trying to ensure each worker has
+        # the same number of samples. Shards tend to have similar number of samples, so an extra shard
+        # in a worker will likely get discarded.
         num_multiples = len(shard_list_per_source[i]) // total_num_workers
 
         shard_list_per_source[i] = shard_list_per_source[i][: num_multiples * total_num_workers]
