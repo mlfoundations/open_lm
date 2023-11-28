@@ -141,14 +141,15 @@ def train_one_epoch(model, data, loss, epoch, step, optimizer, scaler, scheduler
     for i in itertools.count():
 
         if step >= total_steps:
-            done_training = True
             break
 
-        # If some process no longer has data, stop training - for this epoch
-        procs_with_data = torch.tensor(1, dtype=torch.long, device=device)
-        dist.all_reduce(procs_with_data, op=ReduceOp.SUM)
-        if procs_with_data < args.world_size:
-            other_proc_ran_out_of_data = True
+        try:
+            batch = next(dataloader)
+            has_data = torch.tensor(1, dtype=torch.long, device=device)
+        except StopIteration:
+            has_data = torch.tensor(0, dtype=torch.long, device=device)
+        dist.all_reduce(has_data, op=ReduceOp.SUM)
+        if has_data < args.world_size:
             break
 
         if not args.skip_scheduler:
@@ -241,11 +242,6 @@ def train_one_epoch(model, data, loss, epoch, step, optimizer, scaler, scheduler
         batch_count = i + 1
         step += 1
 
-        global_loss_tensor = total_loss.detach().clone()
-        dist.all_reduce(global_loss_tensor, op=ReduceOp.AVG)
-
-        batch_count = i + 1
-
         if is_master(args) and (
             i % args.log_every_n_steps == 0 or batch_count == num_batches_per_epoch or step == total_steps - 1
         ):
@@ -300,11 +296,6 @@ def train_one_epoch(model, data, loss, epoch, step, optimizer, scaler, scheduler
                 # e.g., saving checkpoints and optmization states that may lead to skipped
                 # training on restarts.
                 return False, step
-
-    # If training stopped because we ran out of data, communicate that to the other procs.
-    if not other_proc_ran_out_of_data:
-        procs_with_data = torch.tensor(0, dtype=torch.long, device=device)
-        dist.all_reduce(procs_with_data, op=ReduceOp.SUM)
     
     # end for
     return True, step
