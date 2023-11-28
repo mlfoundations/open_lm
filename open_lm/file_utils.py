@@ -232,8 +232,13 @@ def log_num_checkpoints(total_steps, args):
     """
 
     steps_done = 0
+    tokens_seen = 0
     next_shard_per_source = 0
     checkpoints_made = 1
+
+    if is_master(args):
+        logging.info("Precounting number of steps / tokens seen per checkpoint:")
+
     while steps_done < total_steps:
         _, num_samples_per_source, next_shard_per_source = get_string_for_epoch(
             args.train_num_samples,
@@ -244,13 +249,16 @@ def log_num_checkpoints(total_steps, args):
             args.world_size,
         )
         global_batch_size = args.world_size * args.batch_size
-        steps_epoch = sum([n // (args.workers * global_batch_size) for n in num_samples_per_source])
+        steps_epoch = sum([(n // (args.workers * global_batch_size)) * args.workers for n in num_samples_per_source])
         steps_done += steps_epoch
+        tokens_seen += (steps_epoch * global_batch_size * args.seq_len)
         checkpoints_made += 1
+
+        logging.info(f"==> Checkpoint {checkpoints_made}, steps {steps_done}, tokens seen {tokens_seen}")
 
     if is_master(args):
         logging.info(
-            f"Number of checkpoints to be made: {checkpoints_made}. "
+            f"Number of checkpoints to be made: {checkpoints_made}."
             f"Number will be greater in case of unexpected failures leading to the use of more shards"
         )
 
