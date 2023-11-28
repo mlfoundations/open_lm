@@ -140,18 +140,6 @@ def train_one_epoch(model, data, loss, epoch, step, optimizer, scaler, scheduler
     data_iterator = iter(dataloader)
     for i in itertools.count():
 
-        if step >= total_steps:
-            break
-
-        try:
-            batch = next(dataloader)
-            has_data = torch.tensor(1, dtype=torch.long, device=device)
-        except StopIteration:
-            has_data = torch.tensor(0, dtype=torch.long, device=device)
-        dist.all_reduce(has_data, op=ReduceOp.SUM)
-        if has_data < args.world_size:
-            break
-
         if not args.skip_scheduler:
             scheduler(step)
 
