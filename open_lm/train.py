@@ -152,7 +152,9 @@ def train_one_epoch(model, data, loss, epoch, step, optimizer, scaler, scheduler
             has_data = torch.tensor(1, dtype=torch.long, device=device)
         except StopIteration:
             has_data = torch.tensor(0, dtype=torch.long, device=device)
-        dist.all_reduce(has_data, op=ReduceOp.SUM)
+
+        if args.distributed:
+            dist.all_reduce(has_data, op=ReduceOp.SUM)
         if has_data < args.world_size:
             break  
 
@@ -225,7 +227,8 @@ def train_one_epoch(model, data, loss, epoch, step, optimizer, scaler, scheduler
         end = time.time()
         
         global_loss_tensor = total_loss.detach().clone()
-        dist.all_reduce(global_loss_tensor, op=ReduceOp.AVG)
+        if args.distributed:
+            dist.all_reduce(global_loss_tensor, op=ReduceOp.AVG)
 
         batch_count = i + 1
         step += 1
