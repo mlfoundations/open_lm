@@ -60,42 +60,6 @@ def preprocess_json(text, vocab_size):
     return text
 
 
-def _batched_fulldata(data, 
-                      batchsize=20, 
-                      collation_fn=wds.filters.default_collation_fn,
-                      partial=True):
-    batch = []
-    first_batch = None
-    for sample in data:
-        if len(batch) >= batchsize:
-            if first_batch == None:
-                first_batch = batch
-            if collation_fn is not None:
-                batch = collation_fn(batch)
-            yield batch
-
-            batch = []
-        batch.append(sample)
-
-    if len(batch) == 0:
-        return
-    elif len(batch) == batchsize or partial:
-        if collation_fn is not None:
-            batch = collation_fn(batch)
-        yield batch
-    elif len(batch) < batchsize and not partial:
-        for sample in first_batch:
-            batch.append(sample)
-            if len(batch) >= batchsize:
-                if collation_fn is not None:
-                    batch = collation_fn(batch)
-                yield batch
-                return
-
-
-batched_fulldata = wds.pipelinefilter(_batched_fulldata)
-
-
 class SharedEpoch:
     def __init__(self, epoch: int = 0):
         self.shared_epoch = Value("i", epoch)
@@ -460,7 +424,7 @@ def get_wds_dataset(args, is_train, epoch=0, floor=True, tokenizer=None, data_ke
                     wds.map_dict(json=partial(preprocess_json, vocab_size=args.vocab_size), **map_dict_handler),
                     wds.to_tuple("json"),
                     wds.select(partial(filter_lt_seqlen, args.seq_len)),
-                    batched_fulldata(args.batch_size, partial=not is_train),
+                    wds.batched(args.batch_size, partial=not is_train),
                 ]
             )
         elif data_key == "txt":
@@ -469,7 +433,7 @@ def get_wds_dataset(args, is_train, epoch=0, floor=True, tokenizer=None, data_ke
                     wds.map_dict(txt=partial(preprocess_txt, vocab_size=args.vocab_size), **map_dict_handler),
                     wds.to_tuple("txt"),
                     wds.select(partial(filter_lt_seqlen, args.seq_len)),
-                    batched_fulldata(args.batch_size, partial=not is_train),
+                    wds.batched(args.batch_size, partial=not is_train),
                 ]
             )
         else:
