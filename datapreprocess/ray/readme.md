@@ -56,5 +56,3 @@
    ```
 
 > **Heads up**: This is version 0 of this script. The user interface will be improved in future versions. Currently, objects are being spilled to `dcnlp-hub`.
-
---- 
