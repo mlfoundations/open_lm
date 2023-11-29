@@ -14,7 +14,7 @@ def test_tokenize_shuffle_simple():
     content_len = 2048
     NUM_TOKENS = 381114
     exit_value = os.system(
-        f"python datapreprocess/ray/tokenize_shuffle.py --input s3://dcnlp-west-test/tokenize_shuffle_test/C4_V3_tiny/ --content_key content --output test_output/ --seqlen {content_len}"
+        f"python open_lm/datapreprocess/ray/tokenize_shuffle.py --input s3://dcnlp-west-test/tokenize_shuffle_test/C4_V3_tiny/ --content_key content --output test_output/ --seqlen {content_len}"
     )
     assert exit_value == 0
     ds = wds.WebDataset("test_output/00000001.tar").decode()
@@ -30,7 +30,7 @@ def test_tokenize_shuffle_s3_write():
     content_len = 2048
     NUM_TOKENS = 381114
     exit_value = os.system(
-        f"python datapreprocess/ray/tokenize_shuffle.py --input s3://dcnlp-west-test/tokenize_shuffle_test/C4_V3_tiny/ --content_key content --seqlen {content_len} --output s3://dcnlp-west-test/tokenize_shuffle_test_output/simple/"
+        f"python open_lm/datapreprocess/ray/tokenize_shuffle.py --input s3://dcnlp-west-test/tokenize_shuffle_test/C4_V3_tiny/ --content_key content --seqlen {content_len} --output s3://dcnlp-west-test/tokenize_shuffle_test_output/simple/"
     )
     os.system("aws s3 sync  s3://dcnlp-west-test/tokenize_shuffle_test_output/simple/ test_output/")
     ds = wds.WebDataset("test_output/00000001.tar").decode()
