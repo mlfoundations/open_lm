@@ -172,8 +172,8 @@ def enough_shards(shard_lists, min_shards_needed):
 
 
 def enough_samples(num_samples_per_source, needed_samples_per_source):
-    for i, number in enumerate(num_samples_per_source):
-        if number < needed_samples_per_source[i]:
+    for i, number_per_shard in enumerate(num_samples_per_source):
+        if sum(number_per_shard) < needed_samples_per_source[i]:
             return False
     return True
 

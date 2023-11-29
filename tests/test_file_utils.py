@@ -5,7 +5,7 @@ Mostly just testing the `get_string_for_epoch` method
 """
 
 
-from open_lm.file_utils import get_string_for_epoch, adjust_samples
+from open_lm.file_utils import get_string_for_epoch
 
 import pytest 
 import os

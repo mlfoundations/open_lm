@@ -638,7 +638,8 @@ def main(args):
             logging.info("Using CrossEntropyLossWithZLoss.")
         loss = CrossEntropyLossWithZLoss(args.z_loss_coefficient)
 
-    log_num_checkpoints(total_steps, args)
+    if args.dataset_manifest:
+        log_num_checkpoints(total_steps, args)
 
     done_training = False
     epoch = start_epoch
