@@ -1,60 +1,80 @@
+# Complete Guide to Setting Up a Ray Cluster with AWS Instance Profile
 
-# Ray Cluster Setup and Execution Guide
+This guide provides a comprehensive walkthrough on setting up a Ray cluster configuration with an AWS Instance Profile, including steps to create the Instance Profile if it doesn't exist already.
 
-## Quick Commands
+## Part 1: Setting Up Ray Cluster Configuration
 
-1. **Spin up the ray cluster**:  
-   ```
-   ray up cluster_test.yaml
-   ```
+### Step 1: Basic Configuration
+Start by defining the basic parameters of your Ray cluster in the configuration file:
 
-2. **Access the ray cluster**:  
-   ```
-   ray attach cluster_test.yaml
-   ```
+```yaml
+cluster_name: ray-shuffle-tokenize
+max_workers: 25
+upscaling_speed: 0.0
+provider:
+    type: aws
+    region: us-west-2
+    cache_stopped_nodes: False
+```
 
-3. **Transfer the `tokenize_shuffle.py` script to the cluster**:  
-   ```
-   ray rsync_up cluster_test.yaml tokenize_shuffle.py /home/ubuntu
-   ```
+### Step 2: Node Configuration
+Configure the node types, specifying the instance types, image IDs, and most importantly, the IAM Instance Profile ARN:
 
-5. **Tokenize with shuffling**:  
-   ```
-   python tokenize_shuffle.py --input “s3://dcnlp-data/redpajamas-raw/c4-train.{00000..00063}-of-01024.jsonl” --output s3://dcnlp-data/tokenize-shuffle-test/
-   ```
+```yaml
+available_node_types:
+    ray.head.default:
+        resources: {}
+        node_config:
+            SubnetIds: [subnet-xxx, subnet-yyy, subnet-zzz]
+            ImageId: ami-xxxxxxx # Example AMI ID
+            InstanceType: i4i.8xlarge
+            IamInstanceProfile:
+                Arn: [Your-Instance-Profile-ARN]
+    ray.worker.default:
+        min_workers: 25
+        max_workers: 25
+        node_config:
+            SubnetIds: [subnet-xxx, subnet-yyy, subnet-zzz]
+            ImageId: ami-xxxxxxx # Example AMI ID
+            InstanceType: i4i.8xlarge
+            IamInstanceProfile:
+                Arn: [Your-Instance-Profile-ARN]
+```
+Replace `[Your-Instance-Profile-ARN]` with the actual ARN of your instance profile. 
 
-> **Note**: Ensure that the paths specified above are in the same AWS region as the one mentioned in the ray yaml file (currently set to `us-west-2`).
+### Step 3: Setup Commands
+Define any setup commands necessary for your environment:
 
-6. **Exit and re-enter the cluster as required**.
+```yaml
+setup_commands:
+    - wget https://repo.anaconda.com/miniconda/Miniconda3-py310_23.3.1-0-Linux-x86_64.sh -O miniconda.sh
+    # ... other setup commands ...
+```
 
-## Detailed Workflow
+### Step 4: Security Best Practices
+**Important**: Avoid hardcoding AWS credentials in your scripts or files. Using an IAM role through an Instance Profile is a more secure and recommended approach.
 
-1. **Configure AWS**:  
-   Start by setting up your AWS credentials:
-   ```
-   aws configure
-   ```
+## Part 2: Creating an AWS Instance Profile (If Not Existing)
 
-2. **Initialize the cluster**:  
-   ```
-   ray up ray_cluster_configs/cluster_west.yaml
-   ```
+### Step 1: Create an IAM Role
+1. **Open IAM in AWS Console**: Log into the AWS Management Console and navigate to the IAM (Identity and Access Management) service.
+2. **Create a New Role**: Go to "Roles" > "Create role".
+3. **Select EC2 as the Trust Entity**: Choose "AWS service" for the type of trusted entity and select "EC2".
+4. **Attach Permissions**: Select `AmazonEC2FullAccess` and `AmazonS3FullAccess` policies for comprehensive EC2 and S3 access.
+5. **Name and Create the Role**: Provide a name (e.g., `RayClusterRole`) and create the role.
 
-3. **Copy the script to the cluster**:  
-   ```
-   ray rsync_up cluster_test.yaml tokenize_shuffle.py /home/ubuntu
-   ```
+### Step 2: Create the Instance Profile
+1. **Navigate to the Role**: In IAM roles, find the newly created role.
+2. **Create Instance Profile**: Under the "Role actions" menu, select "Add role to instance profile".
+3. **Name the Instance Profile**: Give the instance profile the same name as the role for consistency.
 
-4. **SSH into the cluster**:  
-   ```
-   ray attach ray_cluster_configs/cluster_west.yaml
-   ```
+### Step 3: Retrieve the Instance Profile ARN
+1. **Open the Role Details**: Click on the role you just created.
+2. **Copy the Instance Profile ARN**: In the summary section, you'll find the ARN which looks like `arn:aws:iam::[aws-account-id]:instance-profile/RayClusterRole`.
 
-5. **Enter tmux and execute the job**:  
-   ```
-   tmux new-session -d -s ray_tokenize_shuffle  'python tokenize_shuffle.py'
-   ```
+### Step 4: Update Ray Cluster Config
+Replace `[Your-Instance-Profile-ARN]` in your Ray cluster configuration with the ARN you just copied.
 
-> **Heads up**: This is version 0 of this script. The user interface will be improved in future versions. Currently, objects are being spilled to `dcnlp-hub`.
+## Conclusion
 
---- 
+You now have a fully configured Ray cluster setup with a secure AWS Instance Profile. This setup enhances the security of your cluster by avoiding the need for hardcoded AWS credentials and allows for efficient management of permissions across your EC2 instances.
