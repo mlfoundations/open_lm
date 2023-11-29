@@ -502,7 +502,7 @@ def get_wds_dataset(args, is_train, epoch=0, floor=True, tokenizer=None, data_ke
         num_workers=args.workers,
         persistent_workers=resampled,
         generator=generator,
-        worker_init_fn=worker_init_fn
+        worker_init_fn=worker_init_fn,
     )
 
     # FIXME not clear which approach is better, with_epoch before vs after dataloader?
