@@ -39,6 +39,12 @@ from webdataset.tariterators import (
 from webdataset.mix import RandomMix
 
 
+def seed_worker(worker_id):
+    worker_seed = torch.initial_seed() % 2**32
+    np.random.seed(worker_seed)
+    random.seed(worker_seed)
+
+
 def proc_token(x, vocab_size):
     if type(x) is int:
         return x % vocab_size if x < 0 else x
@@ -484,8 +490,10 @@ def get_wds_dataset(args, is_train, epoch=0, floor=True, tokenizer=None, data_ke
     if args.seed is not None:
         generator = torch.Generator()
         generator.manual_seed(args.seed + shared_epoch.get_value() * args.world_size + args.rank)
+        worker_init_fn = seed_worker
     else:
         generator = None
+        worker_init_fn = None
 
     dataloader = wds.WebLoader(
         dataset,
@@ -494,6 +502,7 @@ def get_wds_dataset(args, is_train, epoch=0, floor=True, tokenizer=None, data_ke
         num_workers=args.workers,
         persistent_workers=resampled,
         generator=generator,
+        worker_init_fn=worker_init_fn
     )
 
     # FIXME not clear which approach is better, with_epoch before vs after dataloader?
