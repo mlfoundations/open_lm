@@ -17,6 +17,7 @@ from pathlib import Path
 from tests.utils import download_dl_test_data
 
 NUM_SAMPLES = 1000
+NUM_SAMPLES_TO_CHECK = 2
 
 # Update this to two data sources with webdataset, each with their own manifest.
 INPUT_PATHS = [
@@ -25,7 +26,7 @@ INPUT_PATHS = [
 ]
 
 
-def retrieve_dataset_once(epoch, next_shard, weights, seed, disable_buffer, min_shards_needed=2):
+def retrieve_dataset(epoch, next_shard, weights, seed, disable_buffer, min_shards_needed=2):
     args = parse_args("")
     random_seed(seed)
     train_data_string_per_source, num_samples_per_source, _ = get_string_for_epoch(
@@ -43,12 +44,11 @@ def retrieve_dataset_once(epoch, next_shard, weights, seed, disable_buffer, min_
     args.world_size = 1
     data = get_wds_dataset(args, is_train=True, epoch=epoch, force_num_samples=num_samples_per_source)
     dl = data.dataloader
-    iterator = iter(dl)
-    item = next(iterator)
-    return item
+    
+    return dl
 
 
-def retrieve_dataset_once_resampled(epoch, next_shard, weights, seed, min_shards_needed=2):
+def retrieve_dataset_resampled(epoch, next_shard, weights, seed, min_shards_needed=2):
     args = parse_args("")
     random_seed(seed)
     train_data_string_per_source, _, _ = get_string_for_epoch(
@@ -65,9 +65,8 @@ def retrieve_dataset_once_resampled(epoch, next_shard, weights, seed, min_shards
     args.world_size = 1
     data = get_wds_dataset(args, is_train=True, epoch=epoch)
     dl = data.dataloader
-    iterator = iter(dl)
-    item = next(iterator)
-    return item
+    
+    return dl
 
 
 @pytest.mark.parametrize("next_shard", [0, 2])
@@ -76,10 +75,19 @@ def retrieve_dataset_once_resampled(epoch, next_shard, weights, seed, min_shards
 def test_deterministic_no_buffer(next_shard, weights, seed):
     download_dl_test_data("tests/assets")
     disable_buffer = True
-    output1 = retrieve_dataset_once(0, next_shard, weights, seed, disable_buffer)
-    output2 = retrieve_dataset_once(0, next_shard, weights, seed, disable_buffer)
-    assert output1 == output2
+    dl1 = retrieve_dataset(0, next_shard, weights, seed, disable_buffer)
+    iter1 = iter(dl1)
+    items1 = []
+    for _ in range(NUM_SAMPLES_TO_CHECK):
+        items1.append(next(iter1))
 
+    dl2 = retrieve_dataset(0, next_shard, weights, seed, disable_buffer)
+    iter2 = iter(dl2)
+    items2 = []
+    for _ in range(NUM_SAMPLES_TO_CHECK):
+        items2.append(next(iter2))
+
+    assert items1 == items2
 
 @pytest.mark.parametrize("next_shard", [0, 2])
 @pytest.mark.parametrize("weights", [[0.5, 0.5], [0.9, 0.1]])
@@ -87,9 +95,19 @@ def test_deterministic_no_buffer(next_shard, weights, seed):
 def test_deterministic_with_buffer(next_shard, weights, seed):
     download_dl_test_data("tests/assets")
     disable_buffer = False
-    output1 = retrieve_dataset_once(0, next_shard, weights, seed, disable_buffer)
-    output2 = retrieve_dataset_once(0, next_shard, weights, seed, disable_buffer)
-    assert output1 == output2
+    dl1 = retrieve_dataset(0, next_shard, weights, seed, disable_buffer)
+    iter1 = iter(dl1)
+    items1 = []
+    for _ in range(NUM_SAMPLES_TO_CHECK):
+        items1.append(next(iter1))
+
+    dl2 = retrieve_dataset(0, next_shard, weights, seed, disable_buffer)
+    iter2 = iter(dl2)
+    items2 = []
+    for _ in range(NUM_SAMPLES_TO_CHECK):
+        items2.append(next(iter2))
+
+    assert items1 == items2
 
 
 @pytest.mark.parametrize("next_shard", [0, 2])
@@ -97,9 +115,19 @@ def test_deterministic_with_buffer(next_shard, weights, seed):
 @pytest.mark.parametrize("seed", [0, 17])
 def test_deterministic_resampled(next_shard, weights, seed):
     download_dl_test_data("tests/assets")
-    output1 = retrieve_dataset_once_resampled(0, next_shard, weights, seed)
-    output2 = retrieve_dataset_once_resampled(0, next_shard, weights, seed)
-    assert output1 == output2
+    dl1 = retrieve_dataset_resampled(0, next_shard, weights, seed)
+    iter1 = iter(dl1)
+    items1 = []
+    for _ in range(NUM_SAMPLES_TO_CHECK):
+        items1.append(next(iter1))
+
+    dl2 = retrieve_dataset_resampled(0, next_shard, weights, seed)
+    iter2 = iter(dl2)
+    items2 = []
+    for _ in range(NUM_SAMPLES_TO_CHECK):
+        items2.append(next(iter2))
+
+    assert items1 == items2
 
 
 @pytest.mark.parametrize("next_shard", [0, 2])
