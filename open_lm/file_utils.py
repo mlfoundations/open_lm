@@ -192,6 +192,22 @@ def source_exhausted(paths, shard_list_per_source):
     return False
 
 
+def are_sources_imbalanced(paths, ratio = 2):
+    median_shard_size_per_source = []
+    for p in paths:
+        shard_sizes = []
+        data = get_metadata_file(p)
+        for item in data:
+            try:
+                shard_sizes.append(item["num_sequences"])
+            except KeyError:
+                shard_sizes.append(item["num_chunks"])
+
+        median_shard_size_per_source.append(np.median(shard_sizes))
+
+    return max(median_shard_size_per_source) > ratio * min(median_shard_size_per_source)
+
+
 def log_num_checkpoints(total_steps, args):
     """Log the number of checkpoints that will be made.
 
@@ -330,7 +346,17 @@ def _single_epoch_string(
     num_sources = len(paths)
 
     if num_sources > 1:
-        logging.warning("Multiple sources are not supported fully as of now")
+        logging.warning(
+            "Multiple sources are not supported fully as of now. It is advised to combine the data into a single "
+            "source, by using datapreprocess/ray/tokenize_shuffle.py. Best effort will be done to mix data at the "
+            "desired ratio."
+        )
+        if are_sources_imbalanced(paths):
+            logging.warning(
+                "Sources contain highly imbalanced shards (largest median shard size of a source is >2x the smallest "
+                "median size of a source). This will lead to deteriorated performance (less frequent checkpoints, "
+                "data being skipped, and inaccurate mixing). It is STRONGLY advised to combine into one source."
+            )
 
     if weights is None:
         weights = [1.0 / num_sources for _ in range(num_sources)]

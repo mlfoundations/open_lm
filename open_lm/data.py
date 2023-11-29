@@ -450,6 +450,8 @@ def get_wds_dataset(args, is_train, epoch=0, floor=True, tokenizer=None, data_ke
     if is_train:
         # TODO: why did we previoulsy wrap with RandomMix_
         dataset = RandomMix(datasets, probs=args.train_data_mix_weights, longest=True)
+        if len(datasets) > 1:
+            logging.warning("Source mixing is happening during training. It is preferred to mix during tokenization.")
     else:
         pass
 
