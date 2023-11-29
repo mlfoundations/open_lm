@@ -164,14 +164,14 @@ def get_shards_for_chunk(num_samples, chunk, path):
     )
 
 
-def enough_shards(shard_lists, min_shards_needed):
+def enough_shards(shard_lists: List[List[str]], min_shards_needed: int):
     for sl in shard_lists:
         if len(sl) < min_shards_needed:
             return False
     return True
 
 
-def enough_samples(num_samples_per_source, needed_samples_per_source):
+def enough_samples(num_samples_per_source: List[List[int]], needed_samples_per_source: List[int]):
     for i, number_per_shard in enumerate(num_samples_per_source):
         if sum(number_per_shard) < needed_samples_per_source[i]:
             return False
@@ -235,7 +235,7 @@ def log_num_checkpoints(total_steps, args):
 
 
 def get_string_for_epoch(
-    num_samples, starting_points, paths, weights, num_workers_per_gpu, world_size, multi_epoch=False
+    num_samples: int, starting_points: List[int], paths: List[str], weights: Optional[List[float]], num_workers_per_gpu: int, world_size: int, multi_epoch=False
 ):
     """See _single_epoch_string for full docstring.
     """
@@ -246,6 +246,10 @@ def get_string_for_epoch(
 
 
 def _multi_epoch_string(num_samples, starting_chunk, paths, weights, min_shards_needed):
+    """Multi epoch string training. """
+
+    raise NotImplementedError("Function not fully supported yet.")
+
     if weights is None:
         weights = [1.0 / len(paths) for _ in range(len(paths))]
     needed_samples_per_source = [int(np.ceil(weights[i] * num_samples / sum(weights))) for i in range(len(weights))]
@@ -310,7 +314,13 @@ def _single_epoch_string(num_samples: int, starting_shard_per_source: List[int],
 
     if weights is None:
         weights = [1.0 / num_sources for _ in range(num_sources)]
-    needed_samples_per_source = [int(np.ceil(weights[i] * num_samples / sum(weights))) for i in range(len(weights))]
+
+    assert len(weights) == num_sources, "One weight is needed per source."
+
+    print(type(weights[0]))
+    print(type(num_samples))
+
+    needed_samples_per_source = [int(np.ceil(weights[i] * num_samples / sum(weights))) for i in range(num_sources)]
 
 
     manifests = [get_metadata_file(path) for path in paths]

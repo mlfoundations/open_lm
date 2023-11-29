@@ -72,7 +72,7 @@ def download_dl_test_data(root: str = "./tests/assets"):
     """
 
     snapshot_args = dict(
-        repo_id="mlfoundations/open_lm_test_data",
+        repo_id="mlfoundations/open_lm_test_data_v2",
         local_dir=root,
         repo_type="dataset",
     )

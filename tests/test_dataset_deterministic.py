@@ -126,4 +126,4 @@ def test_count_manifest():
     count = 0
     for _ in iter(shard_ds):
         count += 1
-    assert count == item["num_chunks"]
+    assert count == item["num_sequences"]
