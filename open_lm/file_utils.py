@@ -365,8 +365,11 @@ def _single_epoch_string(
 
         except IndexError as e:
             logging.error(
-                "Number of shards requested for a single epoch is more than the number of shards available. "
-                "Consider lowering the number of workers and / or the number of GPUs."
+                "Number of shards requested for a single epoch is more than the number of shards available. This means "
+                "that the amount of data requested to train on is more than the dataloader can serve. This can either "
+                "happen because there are not enough data to begin with, or data being skipped due to rounding errors. "
+                "To alleviate the latter, consider making more uniform shards, and using less workers/GPUs. This will "
+                "allow for better use of the dataset."
             )
             raise e
 
