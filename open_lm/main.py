@@ -586,10 +586,7 @@ def main(args):
     scheduler = None
     if "train" in data and optimizer is not None:
         if args.dataset_manifest is not None:
-            # Account for workers when counting total_steps.
-            total_steps = (
-                (args.train_num_samples * args.epochs) // (args.batch_size * args.world_size * args.workers)
-            ) * args.workers
+            total_steps = (args.train_num_samples * args.epochs) // (args.batch_size * args.world_size)
         else:
             total_steps = (data["train"].dataloader.num_batches) * args.epochs
 

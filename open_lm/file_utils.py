@@ -201,8 +201,8 @@ def log_num_checkpoints(total_steps, args):
 
     steps_done = 0
     tokens_seen = 0
-    next_shard_per_source = 0
-    checkpoints_made = 1
+    next_shard_per_source = [0]
+    checkpoints_made = 0
 
     if is_master(args):
         logging.info("Precounting number of steps / tokens seen per checkpoint:")
