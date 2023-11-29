@@ -1,0 +1,31 @@
+sources:
+  - source: "LMDATA"
+    markers: ["lmdata"]
+  - source: "COMMON_CRAWL"
+    markers: ["common_crawl"]
+  - source: "C4"
+    markers: ["c4"]
+  - source: "GITHUB"
+    markers: ["github"]
+  - source: "WIKIPEDIA"
+    markers: ["wikipedia"]
+  - source: "BOOKS"
+    markers: ["book"]
+  - source: "ARXIV"
+    markers: ["arxiv"]
+  - source: "STACKEXCHANGE"
+    markers: ["stackexchange"]
+  - source: "UNKNOWN"
+    markers: []  # No specific markers for UNKNOWN
+
+sampling_frequencies:
+  COMMON_CRAWL: 0.9233485194
+  C4: 0.75192857132
+  GITHUB: 0.66908898302
+  WIKIPEDIA: 1.64484375
+  BOOKS: 1.51831730753
+  ARXIV: 0.78325892867
+  STACKEXCHANGE: 0.87725
+  LMDATA: 0.275
+  UNKNOWN: 0
+
