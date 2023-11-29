@@ -4,6 +4,7 @@ import re
 from copy import deepcopy
 from pathlib import Path
 from dataclasses import dataclass
+import functools
 
 import torch
 from torch import nn
@@ -183,7 +184,16 @@ class Block(nn.Module):
                                     ffn_type="swiglu",
                                     number_of_experts=self.moe_num_experts,
                                     gate=self.moe_gate)
-            
+            def div_by_num_experts(num_experts, tensor):
+                return tensor / num_experts
+            expert_normalization_term = math.sqrt(self.moe_num_experts)
+            for p in self.feed_forward.moe.experts.parameters():
+                p.expert = True
+                # Scale grads by world_size/pg_size so that grads match the equivalent replicated
+                # world size expected within Trainer
+                p.register_hook(functools.partial(div_by_num_experts, expert_normalization_term))
+
+
         self.layer_id = layer_id
         self.attention_norm = args.norm_type(
             args.dim,
