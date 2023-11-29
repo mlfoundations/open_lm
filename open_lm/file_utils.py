@@ -186,32 +186,6 @@ def source_exhausted(paths, shard_list_per_source):
     return False
 
 
-
-def adjust_samples(shard_list, manifest, starting_index, num_workers_per_gpu, world_size):
-    """Adjust the number of samples to train on.
-
-    This function returns the number of samples that we will train on, given that we have adjusted the number of shards
-    to be a multiple of num_workers_per_gpu * world_size
-
-    Args:
-        shard_list: The list of shards to train on per source.
-        manifest: The list of manifests per source, containing info for the shards as dictionary objects. See the
-            README for the manifest format.
-        starting_index: The list of starting shard indices per source. Every shard before this index has already been
-            consumed for previous checkpoints.
-        num_workers_per_gpu: Number of workers per GPU.
-        world_size: Total number of GPUs.
-    """
-
-    assert len(shard_list) % (num_workers_per_gpu * world_size) == 0, "We need even number of shards per worker for now"
-    try:
-        num_samples = [manifest[j]["num_sequences"] for j in range(starting_index, starting_index + len(shard_list))]
-    except KeyError:
-        num_samples = [manifest[j]["num_chunks"] for j in range(starting_index, starting_index + len(shard_list))]
-
-    return sum(num_samples)
-
-
 def log_num_checkpoints(total_steps, args):
     """Log the number of checkpoints that will be made.
 
@@ -261,14 +235,14 @@ def log_num_checkpoints(total_steps, args):
 
 
 def get_string_for_epoch(
-    num_samples, starting_points, paths, weights, num_workers_per_gpu, world_size, multi_epoch=False, factor_drop_lower_average = 0.0
+    num_samples, starting_points, paths, weights, num_workers_per_gpu, world_size, multi_epoch=False
 ):
     """See _single_epoch_string for full docstring.
     """
     if multi_epoch:
         raise NotImplementedError("Multiple passes over the dataset not fully supported yet.")
     else:
-        return _single_epoch_string(num_samples, starting_points, paths, weights, num_workers_per_gpu, world_size, factor_drop_lower_avg=factor_drop_lower_average)
+        return _single_epoch_string(num_samples, starting_points, paths, weights, num_workers_per_gpu, world_size)
 
 
 def _multi_epoch_string(num_samples, starting_chunk, paths, weights, min_shards_needed):
@@ -311,7 +285,7 @@ def _multi_epoch_string(num_samples, starting_chunk, paths, weights, min_shards_
     return shard_strings_per_source, num_samples_per_source, next_chunk
 
 
-def _single_epoch_string(num_samples: int, starting_shard_per_source: List[int], paths: List[str], weights: Optional[List[float]], num_workers_per_gpu: int, world_size: int, factor_drop_lower_avg: float = 0.0):
+def _single_epoch_string(num_samples: int, starting_shard_per_source: List[int], paths: List[str], weights: Optional[List[float]], num_workers_per_gpu: int, world_size: int):
     """Retrieve shards to train on for a particular checkpoint.
 
     Currently only a single source is fully supported yet.
@@ -343,8 +317,7 @@ def _single_epoch_string(num_samples: int, starting_shard_per_source: List[int],
     shard_strings_per_source = []
     next_shard_per_source = copy.deepcopy(starting_shard_per_source)
     shard_list_per_source = [[] for _ in range(num_sources)]
-    num_samples_per_source = [0 for _ in range(num_sources)]
-    avg_num_samples_per_source = [0 for _ in range(num_sources)]
+    num_samples_per_source = [[] for _ in range(num_sources)]
 
     total_num_workers = num_workers_per_gpu * world_size
     while not enough_shards(shard_list_per_source, total_num_workers) or not enough_samples(
@@ -358,10 +331,9 @@ def _single_epoch_string(num_samples: int, starting_shard_per_source: List[int],
                     num_samples_shard = manifests[i][next_shard_per_source[i]]["num_sequences"]
                 except KeyError:
                     num_samples_shard = manifests[i][next_shard_per_source[i]]["num_chunks"]
-
-                if num_samples_shard >= factor_drop_lower_avg * avg_num_samples_per_source[i]:
-                    shard_list_per_source[i].append(shard_name)
-                    num_samples_per_source[i] += num_samples_shard
+            
+                shard_list_per_source[i].append(shard_name)
+                num_samples_per_source[i].append(num_samples_shard)
 
                 next_shard_per_source[i] += 1
         
@@ -382,15 +354,12 @@ def _single_epoch_string(num_samples: int, starting_shard_per_source: List[int],
         num_multiples = len(shard_list_per_source[i]) // total_num_workers
 
         shard_list_per_source[i] = shard_list_per_source[i][: num_multiples * total_num_workers]
+        num_samples_per_source[i] = num_samples_per_source[i][: num_multiples * total_num_workers]
 
         # Put back unused shards.
         next_shard_per_source[i] = starting_shard_per_source[i] + len(shard_list_per_source[i])
 
-        # Fix the number of samples to be num_workers * samples of the worker with the minimum amount of samples
-        num_samples_per_source[i] = adjust_samples(
-
-            shard_list_per_source[i], manifests[i], starting_shard_per_source[i], num_workers_per_gpu, world_size
-        )
+    num_samples_per_source = [sum(n) for n in num_samples_per_source]
 
     for i, source_path in enumerate(paths):
         # Combine into a single shard string for training

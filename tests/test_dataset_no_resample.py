@@ -113,6 +113,9 @@ def test_singleSource_singleWorker_perfectBatch(num_samples, next_shard, batch_s
 
     Should see exactly num_samples at the end, and no repeats
     """
+    download_dl_test_data()
+    make_fake_tarfiles()
+
     data = retrieve_dataset_once(
         num_samples,
         SINGLE_SOURCE,
@@ -145,6 +148,9 @@ def test_singleSource_singleWorker_imperfectBatch(num_samples, next_shard, batch
 
     Should see no repeats, but the greatest multiple of batch_size <= num_samples
     """
+    download_dl_test_data()
+    make_fake_tarfiles()
+
     data = retrieve_dataset_once(
         num_samples,
         SINGLE_SOURCE,
@@ -175,6 +181,9 @@ def test_singleSource_multiWorker_0():
 
     We should see all samples from the first two shards
     """
+    download_dl_test_data()
+    make_fake_tarfiles()
+
     num_samples = 200
     epoch = 0
     next_shard = 0
@@ -213,6 +222,9 @@ def test_singleSource_multiWorker_1():
     - Each worker should see 15 batches
     Output should be the first 75 examples from each of the first 2 shards
     """
+    download_dl_test_data()
+    make_fake_tarfiles()
+
     num_samples = 150
     epoch = 0
     next_shard = 0
@@ -250,6 +262,9 @@ def test_singleSource_multiWorker_2():
     - Each worker should see 150 // (2 * 10) = 7 batches
     Output should be the first 70 examples from each of the first 2 shards
     """
+    download_dl_test_data()
+    make_fake_tarfiles()
+
     num_samples = 150
     epoch = 0
     next_shard = 0
@@ -288,6 +303,9 @@ def test_singleSource_multiWorker_3():
     Output should be the full first 2 shards
 
     """
+    download_dl_test_data()
+    make_fake_tarfiles()
+
     num_samples = 300
     epoch = 0
     next_shard = 0
@@ -324,6 +342,9 @@ def test_singleSource_multiWorker_4():
     Output should be the full first 2 shards
 
     """
+    download_dl_test_data()
+    make_fake_tarfiles()
+
     num_samples = 256
     epoch = 0
     next_shard = 0
