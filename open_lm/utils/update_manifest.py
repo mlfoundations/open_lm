@@ -58,5 +58,6 @@ def main(args):
     else:
         shutil.copy(temp_manifest_filename, args.manifest_path)
 
+
 if __name__ == "__main__":
     main(sys.argv[1:])

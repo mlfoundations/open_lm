@@ -150,7 +150,6 @@ def load_data_chunks(args):
         return checkpoint["next_shard_per_source"], checkpoint["samples_seen"]
     else:
         logging.info(
-
             "=> WARNING: tried to resume a checkpoint without data loading info. Re-starting data loading from the "
             "first shard."
         )
@@ -695,7 +694,6 @@ def main(args):
         if args.distributed:
             dist.barrier()
 
-
         done_training = global_step >= total_steps
         steps_done_epoch = global_step - prev_step
         samples_seen = samples_seen + steps_done_epoch * args.batch_size * args.world_size
@@ -718,18 +716,15 @@ def main(args):
             scaler,
             epoch,
             evaluation_loss,
-
             step=global_step,
             next_shard_per_source=next_shard_per_source if args.dataset_manifest is not None else None,
             samples_seen=samples_seen if args.dataset_manifest is not None else None,
         )
 
-
         if done_training:
             if is_master(args):
                 logging.info("Model has seen the desired number of tokens. Ending training.")
             break
-
 
     if args.wandb and is_master(args):
         wandb.finish()

@@ -39,7 +39,6 @@ from webdataset.tariterators import (
 from webdataset.mix import RandomMix
 
 
-
 def proc_token(x, vocab_size):
     if type(x) is int:
         return x % vocab_size if x < 0 else x
@@ -303,7 +302,6 @@ def filter_lt_seqlen(seq_len, x):
 
 
 class FiniteDataPipeline(wds.DataPipeline):
-
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -473,7 +471,7 @@ def get_wds_dataset(args, is_train, epoch=0, floor=True, tokenizer=None, data_ke
             # Note that this internally sets num_repetitions = sys.maxsize, therefore allowing repeats. We are
             # safeguarded by the fact that num_worker_batches is the number of minimum worker batches.
             datasets[ii] = datasets[ii].repeat(nepochs=1, nbatches=num_worker_batches)
-            
+
             total_num_batches += num_batches
             total_num_samples += num_samples
     else:
@@ -482,7 +480,7 @@ def get_wds_dataset(args, is_train, epoch=0, floor=True, tokenizer=None, data_ke
         total_num_batches = num_batches
         total_num_samples = num_samples
 
-    # Start a generator to have control over reproducibility. 
+    # Start a generator to have control over reproducibility.
     if args.seed is not None:
         generator = torch.Generator()
         generator.manual_seed(args.seed + shared_epoch.get_value() * args.world_size + args.rank)

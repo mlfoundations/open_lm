@@ -213,7 +213,7 @@ def log_num_checkpoints(total_steps, args):
         global_batch_size = args.world_size * args.batch_size
         steps_epoch = sum([(n // (args.workers * global_batch_size)) * args.workers for n in num_samples_per_source])
         steps_done += steps_epoch
-        tokens_seen += (steps_epoch * global_batch_size * args.seq_len)
+        tokens_seen += steps_epoch * global_batch_size * args.seq_len
         checkpoints_made += 1
 
         logging.info(f"==> Checkpoint {checkpoints_made}, steps {steps_done}, tokens seen {tokens_seen}")
@@ -235,10 +235,15 @@ def log_num_checkpoints(total_steps, args):
 
 
 def get_string_for_epoch(
-    num_samples: int, starting_points: List[int], paths: List[str], weights: Optional[List[float]], num_workers_per_gpu: int, world_size: int, multi_epoch=False
+    num_samples: int,
+    starting_points: List[int],
+    paths: List[str],
+    weights: Optional[List[float]],
+    num_workers_per_gpu: int,
+    world_size: int,
+    multi_epoch=False,
 ):
-    """See _single_epoch_string for full docstring.
-    """
+    """See _single_epoch_string for full docstring."""
     if multi_epoch:
         raise NotImplementedError("Multiple passes over the dataset not fully supported yet.")
     else:
@@ -246,7 +251,7 @@ def get_string_for_epoch(
 
 
 def _multi_epoch_string(num_samples, starting_chunk, paths, weights, min_shards_needed):
-    """Multi epoch string training. """
+    """Multi epoch string training."""
 
     raise NotImplementedError("Function not fully supported yet.")
 
@@ -289,11 +294,18 @@ def _multi_epoch_string(num_samples, starting_chunk, paths, weights, min_shards_
     return shard_strings_per_source, num_samples_per_source, next_chunk
 
 
-def _single_epoch_string(num_samples: int, starting_shard_per_source: List[int], paths: List[str], weights: Optional[List[float]], num_workers_per_gpu: int, world_size: int):
+def _single_epoch_string(
+    num_samples: int,
+    starting_shard_per_source: List[int],
+    paths: List[str],
+    weights: Optional[List[float]],
+    num_workers_per_gpu: int,
+    world_size: int,
+):
     """Retrieve shards to train on for a particular checkpoint.
 
     Currently only a single source is fully supported yet.
-    
+
     Args:
         num_samples: Total number of samples required.
         starting_shard_per_source: First shard per source that has not been consumed yet.
@@ -306,7 +318,6 @@ def _single_epoch_string(num_samples: int, starting_shard_per_source: List[int],
             decrease the amount of elements discarded.
     """
 
-
     num_sources = len(paths)
 
     if num_sources > 1:
@@ -318,7 +329,6 @@ def _single_epoch_string(num_samples: int, starting_shard_per_source: List[int],
     assert len(weights) == num_sources, "One weight is needed per source."
 
     needed_samples_per_source = [int(np.ceil(weights[i] * num_samples / sum(weights))) for i in range(num_sources)]
-
 
     manifests = [get_metadata_file(path) for path in paths]
     shard_strings_per_source = []
@@ -338,12 +348,12 @@ def _single_epoch_string(num_samples: int, starting_shard_per_source: List[int],
                     num_samples_shard = manifests[i][next_shard_per_source[i]]["num_sequences"]
                 except KeyError:
                     num_samples_shard = manifests[i][next_shard_per_source[i]]["num_chunks"]
-            
+
                 shard_list_per_source[i].append(shard_name)
                 num_samples_per_source[i].append(num_samples_shard)
 
                 next_shard_per_source[i] += 1
-        
+
         except IndexError as e:
             logging.error(
                 "Number of shards requested for a single epoch is more than the number of shards available. "
@@ -381,4 +391,3 @@ def _single_epoch_string(num_samples: int, starting_shard_per_source: List[int],
         shard_strings_per_source.append(shard_string_source)
 
     return shard_strings_per_source, num_samples_per_source, next_shard_per_source
-

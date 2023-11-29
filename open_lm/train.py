@@ -107,7 +107,6 @@ def sample_chunk(chunk, args):
     return inputs, targets
 
 
-
 def train_one_epoch(model, data, loss, epoch, step, optimizer, scaler, scheduler, total_steps, args, tb_writer=None):
     """Trains model for one epoch on the provided data.
 
@@ -136,10 +135,8 @@ def train_one_epoch(model, data, loss, epoch, step, optimizer, scaler, scheduler
 
     end = time.time()
 
-
     data_iterator = iter(dataloader)
     for i in itertools.count():
-
         if not args.skip_scheduler:
             scheduler(step)
 
@@ -156,7 +153,7 @@ def train_one_epoch(model, data, loss, epoch, step, optimizer, scaler, scheduler
         if args.world_size > 1:
             dist.all_reduce(has_data, op=ReduceOp.SUM)
         if has_data < args.world_size:
-            break  
+            break
 
         (texts,) = batch
         texts = torch.LongTensor(texts).to(device)
@@ -225,7 +222,7 @@ def train_one_epoch(model, data, loss, epoch, step, optimizer, scaler, scheduler
 
         batch_time_m.update(time.time() - end)
         end = time.time()
-        
+
         global_loss_tensor = total_loss.detach().clone()
         if args.world_size > 1:
             dist.all_reduce(global_loss_tensor, op=ReduceOp.AVG)
@@ -287,7 +284,7 @@ def train_one_epoch(model, data, loss, epoch, step, optimizer, scaler, scheduler
                 # e.g., saving checkpoints and optmization states that may lead to skipped
                 # training on restarts.
                 return False, step
-    
+
     # end for
     return True, step
 
