@@ -82,12 +82,14 @@ class MockDataArgs(object):
         self.vocab_size = 50432
         self.batch_size = 64
         self.world_size = 1
+        self.rank = 0
         self.workers = 2
         self.seed = 42
         self.dataset_manifest = None
         self.target_mask_left = None
         self.target_mask_individual = None
         self.ignore_parse_errors = False
+
 
 
 def create_train_fixtures():

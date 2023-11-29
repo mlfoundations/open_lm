@@ -91,6 +91,7 @@ def retrieve_dataset_once(
     args.vocab_size = _MODEL_CONFIGS[args.model]["vocab_size"]
     args.seq_len = _MODEL_CONFIGS[args.model]["seq_len"]
     args.world_size = 1
+    args.rank = 0
     data = get_wds_dataset(args, is_train=True, epoch=epoch, force_num_samples=[total_seqs])
     return data
 

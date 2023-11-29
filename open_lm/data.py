@@ -482,12 +482,20 @@ def get_wds_dataset(args, is_train, epoch=0, floor=True, tokenizer=None, data_ke
         total_num_batches = num_batches
         total_num_samples = num_samples
 
+    # Start a generator to have control over reproducibility. 
+    if args.seed is not None:
+        generator = torch.Generator()
+        generator.manual_seed(args.seed + shared_epoch.get_value() * args.world_size + args.rank)
+    else:
+        generator = None
+
     dataloader = wds.WebLoader(
         dataset,
         batch_size=None,
         shuffle=False,
         num_workers=args.workers,
-        persistent_workers=args.dataset_manifest is None,
+        persistent_workers=resampled,
+        generator=generator,
     )
 
     # FIXME not clear which approach is better, with_epoch before vs after dataloader?
