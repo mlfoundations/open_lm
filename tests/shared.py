@@ -92,9 +92,9 @@ class MockDataArgs(object):
 
 
 
-def create_train_fixtures():
+def create_train_fixtures(model = "open_lm_11m"):
     # Setup data, optimizer, and other basic settings
-    args = MockTrainArgs("open_lm_11m")
+    args = MockTrainArgs(model)
 
     # only want to look at one batch
     args.train_num_samples = args.batch_size
