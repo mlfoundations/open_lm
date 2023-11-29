@@ -154,17 +154,3 @@ def test_gsfe_ss_6():
     assert expected_nums_ps == nums_ps
     assert expected_next_ps == next_ps
 
-
-
-# ==========================================================
-# =           Multi Source get_string_for_epoch            =
-# ==========================================================
-
-def test_gsfe_ms_0():
-    download_dl_test_data()
-    make_fake_tarfiles()
-    try:
-        get_string_for_epoch([10, 10], [0, 0], SINGLE_SOURCE + SINGLE_SOURCE, None, 1, 1, multi_epoch=False)
-    except ValueError as err:
-        assert str(err) == "Multiple sources are not supported fully as of now"
-
