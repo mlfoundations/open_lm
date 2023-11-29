@@ -317,9 +317,6 @@ def _single_epoch_string(num_samples: int, starting_shard_per_source: List[int],
 
     assert len(weights) == num_sources, "One weight is needed per source."
 
-    print(type(weights[0]))
-    print(type(num_samples))
-
     needed_samples_per_source = [int(np.ceil(weights[i] * num_samples / sum(weights))) for i in range(num_sources)]
 
 
