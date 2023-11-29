@@ -43,69 +43,49 @@ from tqdm import tqdm
 from transformers import GPTNeoXTokenizerFast
 
 
+import enum
+import yaml
+import pathlib
+
+# Initialize an empty dictionary for sampling frequencies
+
+DIR = pathlib.Path(__file__).parent.absolute()
+
+
+def load_from_yaml(filename):
+    SAMPLING_FREQUENCIES = {}
+
+    with open(filename, "r") as file:
+        data = yaml.safe_load(file)
+
+    # Dynamically create the Sources enum based on YAML file
+    Sources = enum.Enum("Sources", {item["source"]: index for index, item in enumerate(data["sources"])})
+
+    # Add get_source and get_sampling_frequency methods to Sources
+    def get_source_dynamic(self, key):
+        for item in data["sources"]:
+            if any(marker in key for marker in item["markers"]):
+                return Sources[item["source"]]
+        return Sources.UNKNOWN
+
+    def get_sampling_frequency_dynamic(self, key):
+        return SAMPLING_FREQUENCIES[self.get_source(key)]
+
+    Sources.get_source = classmethod(get_source_dynamic)
+    Sources.get_sampling_frequency = classmethod(get_sampling_frequency_dynamic)
+
+    # Load sampling frequencies
+    for key, value in data["sampling_frequencies"].items():
+        source = Sources[key]
+        SAMPLING_FREQUENCIES[source] = value
+    return Sources, SAMPLING_FREQUENCIES
+
+
 class RawFileType(enum.Enum):
     JSONL = 1
     ZSTD_JSONL_COMPRESSED = 2
     GZIP_JSONL_COMPRESSED = 3
     UNKNOWN = -1
-
-
-class Sources(enum.Enum):
-    COMMON_CRAWL = 0
-    C4 = 1
-    GITHUB = 2
-    WIKIPEDIA = 3
-    BOOKS = 4
-    ARXIV = 5
-    STACKEXCHANGE = 6
-    UNKNOWN = 7
-
-    @classmethod
-    def get_source(cls, key):
-        if "common_crawl" in key or "webtext" in key or "realnews" in key or "pile-cc" in key:
-            return cls.COMMON_CRAWL
-        elif "c4" in key:
-            return cls.C4
-        elif "github" in key or "dedup" in key:
-            return cls.GITHUB
-        elif "wikipedia" in key:
-            return cls.WIKIPEDIA
-        elif "book" in key:
-            return cls.BOOKS
-        elif "arxiv" in key or "s2orc" in key or "pubmed" or "phil" or "nih" or "math":
-            return cls.ARXIV
-        elif (
-            "stackexchange" in key
-            or "youtube"
-            or "ubuntu"
-            or "hn"
-            or "law" in key
-            or "europarl" in key
-            or "enron" in key
-        ):
-            return cls.STACKEXCHANGE
-        else:
-            return cls.UNKNOWN
-
-    @classmethod
-    def get_sampling_frequency(cls, key):
-        return SAMPLING_FREQUENCIES[cls.get_source(key)]
-
-
-# hard coded from Mitchell
-# These are sampling frequencies for each source used to match
-# the Mosaic training run on RPJ
-# TODO load from JSON
-
-SAMPLING_FREQUENCIES = {}
-SAMPLING_FREQUENCIES[Sources.COMMON_CRAWL] = 0.9233485194
-SAMPLING_FREQUENCIES[Sources.C4] = 1.037142857
-SAMPLING_FREQUENCIES[Sources.GITHUB] = 0.9228813559
-SAMPLING_FREQUENCIES[Sources.WIKIPEDIA] = 2.26875
-SAMPLING_FREQUENCIES[Sources.BOOKS] = 2.094230769
-SAMPLING_FREQUENCIES[Sources.ARXIV] = 1.080357143
-SAMPLING_FREQUENCIES[Sources.STACKEXCHANGE] = 1.21
-SAMPLING_FREQUENCIES[Sources.UNKNOWN] = 0
 
 
 def jsonl_file_reader(fh: BinaryIO, content_key: str):
@@ -392,9 +372,12 @@ if __name__ == "__main__":
     parser.add_argument("--block_size", type=str, default="10MB")
     parser.add_argument("--force_parallelism", type=int, default=None)
     parser.add_argument("--no_shuffle", action="store_true")
+    parser.add_argument("--upsample", action="store_true")
     parser.add_argument("--ray_spill_location", type=str, default="/tmp/ray_spill")
+    parser.add_argument("--default_dataset_yaml", type=str, default=(DIR.parent / "metadata" / "rpj_lm_data.yaml"))
 
     args = parser.parse_args()
+    Sources, SAMPLING_FREQUENCIES = load_from_yaml(args.default_dataset_yaml)
     # configure remote spilling
     creds = {k: v for k, v in os.environ.items() if k.startswith("AWS")}
     runtime_env = {"env_vars": creds}
