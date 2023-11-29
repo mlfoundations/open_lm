@@ -1,3 +1,4 @@
+import atexit
 import glob
 import logging
 import os
@@ -8,10 +9,11 @@ import random
 from datetime import datetime
 import functools
 import numpy as np
-from functools import partial
 from pathlib import Path
 import json
 import math
+
+import fsspec
 import torch
 from torch import optim
 from torch.cuda.amp import GradScaler
@@ -58,6 +60,7 @@ from .file_utils import (
     remote_sync,
     get_string_for_epoch,
     log_num_checkpoints,
+    terminate_sync_process,
 )
 
 
@@ -75,23 +78,14 @@ def natural_key(string_):
     return [int(s) if s.isdigit() else s for s in re.split(r"(\d+)", string_.lower())]
 
 
-def get_latest_checkpoint(path: str, remote: bool):
-    # as writen, this glob recurses, so can pick up checkpoints across multiple sub-folders
-    if remote:
-        result = subprocess.run(
-            ["aws", "s3", "ls", path + "/"],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-        )
-        print(result)
-        if result.returncode == 1:
-            return None
-        checkpoints = [os.path.join(path, x.split(" ")[-1]) for x in result.stdout.decode().split("\n")[:-1]]
-    else:
-        checkpoints = glob.glob(path + "**/epoch_*.pt", recursive=True)
+def get_latest_checkpoint(path: str):
+    is_s3 = path.startswith("s3")
+    fs, root_path = fsspec.core.url_to_fs(path)
+    checkpoints = fs.glob(os.path.join(root_path, "**/epoch_*.pt"))
     if checkpoints:
         checkpoints = sorted(checkpoints, key=natural_key)
-        return checkpoints[-1]
+        return f"s3://{checkpoints[-1]}" if is_s3 else checkpoints[-1]
+
     return None
 
 
@@ -164,6 +158,7 @@ def save_checkpoint(
     completed_epoch,
     evaluation_loss,
     step,
+    is_final_checkpoint,
     next_shard_per_source=None,
     samples_seen=None,
 ):
@@ -199,7 +194,18 @@ def save_checkpoint(
         if scaler is not None:
             checkpoint_dict_opt["scaler"] = scaler.state_dict()
 
-        if completed_epoch == args.epochs or (args.save_frequency > 0 and (completed_epoch % args.save_frequency) == 0):
+        checkpoint_dict_stats = {
+            "epoch": completed_epoch,
+            "name": args.name,
+            "is_final_checkpoint": is_final_checkpoint,
+            "evaluation_loss": evaluation_loss,
+        }
+
+        if (
+            completed_epoch == args.epochs
+            or is_final_checkpoint
+            or (args.save_frequency > 0 and (completed_epoch % args.save_frequency) == 0)
+        ):
             torch.save(
                 checkpoint_dict_model,
                 os.path.join(args.checkpoint_path, f"epoch_{completed_epoch}.pt"),
@@ -208,12 +214,19 @@ def save_checkpoint(
                 checkpoint_dict_opt,
                 os.path.join(args.checkpoint_path, f"optimizer_{completed_epoch}.pt"),
             )
+            torch.save(
+                checkpoint_dict_stats,
+                os.path.join(args.checkpoint_path, f"stats_{completed_epoch}.pt"),
+            )
 
         if args.delete_previous_checkpoint:
             previous_checkpoint = os.path.join(args.checkpoint_path, f"epoch_{completed_epoch - 1}.pt")
             if os.path.exists(previous_checkpoint):
                 os.remove(previous_checkpoint)
             previous_checkpoint = os.path.join(args.checkpoint_path, f"optimizer_{completed_epoch - 1}.pt")
+            if os.path.exists(previous_checkpoint):
+                os.remove(previous_checkpoint)
+            previous_checkpoint = os.path.join(args.checkpoint_path, f"stats_{completed_epoch - 1}.pt")
             if os.path.exists(previous_checkpoint):
                 os.remove(previous_checkpoint)
 
@@ -313,7 +326,7 @@ def main(args):
                     resume_from = None
             else:
                 # otherwise, list checkpoint dir contents and pick the newest checkpoint
-                resume_from = get_latest_checkpoint(checkpoint_path, remote=args.remote_sync is not None)
+                resume_from = get_latest_checkpoint(checkpoint_path)
             if resume_from:
                 logging.info(f"Found latest resume checkpoint at {resume_from}.")
             else:
@@ -347,6 +360,9 @@ def main(args):
             args.remote_sync_protocol,
         )
         remote_sync_process.start()
+
+        # make sure that if open_lm throws the remote process is still killed to prevent hanging
+        atexit.register(terminate_sync_process, p=remote_sync_process)
 
     if args.precision == "fp16":
         logging.warning(
@@ -617,7 +633,7 @@ def main(args):
         logging.debug("Finished loading wandb.")
 
     if "train" not in data:
-        checkpoint_root = Path(args.resume).parent
+        checkpoint_root = os.path.dirname(args.resume)
 
         metrics = evaluate(model, data, start_epoch, args, writer)
         metrics["checkpoint_path"] = args.resume
@@ -625,7 +641,7 @@ def main(args):
         metrics["model"] = args.hf_model if args.hf_model else args.model
 
         if is_master(args):
-            with open(os.path.join(checkpoint_root, "results.jsonl"), "a+") as f:
+            with fsspec.open(os.path.join(checkpoint_root, "results.jsonl"), "a") as f:
                 f.write(json.dumps(metrics))
                 f.write("\n")
 
@@ -717,6 +733,7 @@ def main(args):
             epoch,
             evaluation_loss,
             step=global_step,
+            is_final_checkpoint=done_training,
             next_shard_per_source=next_shard_per_source if args.dataset_manifest is not None else None,
             samples_seen=samples_seen if args.dataset_manifest is not None else None,
         )
@@ -732,7 +749,7 @@ def main(args):
     # run a final sync.
     if remote_sync_process is not None:
         logging.info("Final remote sync.")
-        remote_sync_process.terminate()
+        terminate_sync_process(remote_sync_process)
         result = remote_sync(
             os.path.join(args.logs, args.name),
             os.path.join(args.remote_sync, args.name),

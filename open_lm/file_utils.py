@@ -85,6 +85,12 @@ def start_sync_process(sync_every, local_dir, remote_dir, protocol):
     return p
 
 
+def terminate_sync_process(p: multiprocessing.Process):
+    if p is not None and p.is_alive():
+        logging.info(f"Terminating remote sync process.")
+        p.terminate()
+
+
 # Note: we are not currently using this save function.
 def pt_save(pt_obj, file_path):
     of = fsspec.open(file_path, "wb")
