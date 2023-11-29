@@ -141,7 +141,7 @@ def train_one_epoch(model, data, loss, epoch, step, optimizer, scaler, scheduler
             scheduler(step)
 
         if step >= total_steps:
-            logging.warning(f"step: {step} exceeds total_steps: {total_steps}. ending training.")
+            logging.warning(f"step: {step} has reached/exceeded total_steps: {total_steps}. ending training.")
             break
 
         try:
