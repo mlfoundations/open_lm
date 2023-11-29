@@ -192,7 +192,21 @@ def source_exhausted(paths, shard_list_per_source):
     return False
 
 
-def are_sources_imbalanced(paths, ratio = 2):
+def count_small_shards(path, ratio = 0.9):
+    shard_sizes = []
+    data = get_metadata_file(path)
+    for item in data:
+        try:
+            shard_sizes.append(item["num_sequences"])
+        except KeyError:
+            shard_sizes.append(item["num_chunks"])
+
+    shard_sizes = np.array(shard_sizes)
+
+    return np.sum(shard_sizes < ratio * max(shard_sizes))
+
+
+def are_sources_imbalanced_with_each_other(paths, ratio = 2):
     median_shard_size_per_source = []
     for p in paths:
         shard_sizes = []
@@ -338,9 +352,6 @@ def _single_epoch_string(
         weights: Weighting between sources. If None, it is assumed to be uniform.
         num_workers_per_gpu: Number of workers per gpu process.
         world_size: Total number of gpus used for training.
-        factor_drop_lower_avg: While creating the shard list, shards that contain fewer samples than this factor times a
-            running average of samples are skipped. This is done to keep the number of samples per worker uniform, to
-            decrease the amount of elements discarded.
     """
 
     num_sources = len(paths)
@@ -351,11 +362,20 @@ def _single_epoch_string(
             "source, by using datapreprocess/ray/tokenize_shuffle.py. Best effort will be done to mix data at the "
             "desired ratio."
         )
-        if are_sources_imbalanced(paths):
+        if are_sources_imbalanced_with_each_other(paths):
             logging.warning(
                 "Sources contain highly imbalanced shards (largest median shard size of a source is >2x the smallest "
                 "median size of a source). This will lead to deteriorated performance (less frequent checkpoints, "
                 "data being skipped, and inaccurate mixing). It is STRONGLY advised to combine into one source."
+            )
+
+    for path in paths:
+        num_small_shards = count_small_shards(path)
+        if num_small_shards > 0:
+            logging.warning(
+                f"Source defined by {path} contains {num_small_shards} shards that are smaller than 90% the size of "
+                f"the largest shard. These shards might cause deterioration in performance, with more samples being "
+                f"skipped than necessary. It is advised to make the shards more uniform."
             )
 
     if weights is None:
