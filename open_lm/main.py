@@ -106,7 +106,7 @@ def load_model(args, model):
         # resuming a train checkpoint w/ epoch and optimizer state
         start_epoch = checkpoint["epoch"]
         sd = checkpoint["state_dict"]
-        global_step = checkpoint["step"]
+        global_step = checkpoint.get("step", None)
         if next(iter(sd.items()))[0].startswith("module"):
             sd = {k[len("module.") :]: v for k, v in sd.items()}
         model.load_state_dict(sd)
@@ -233,6 +233,8 @@ def save_checkpoint(
 
 def main(args):
     args = parse_args(args)
+
+    requires_training = args.train_data or args.dataset_type == "synthetic" or args.dataset_manifest is not None
 
     if torch.cuda.is_available():
         # This enables tf32 on Ampere GPUs which is only 8% slower than
@@ -442,6 +444,9 @@ def main(args):
                 state_dict[k] = state_dict[k] + state_dict_i[k] * args.average_coefficients[i]
         model.load_state_dict(state_dict)
 
+    if requires_training and global_step is None:
+        raise ValueError("Key 'step' not found in checkpoint, but required for training.")
+
     # Add data chunk when resuming (only for dataset without resampling)
     next_shard_per_source = [0 for _ in range(len(args.dataset_manifest))] if args.dataset_manifest is not None else 0
     samples_seen = 0
@@ -530,7 +535,7 @@ def main(args):
     optimizer = None
     scaler = None
 
-    if args.train_data or args.dataset_type == "synthetic" or args.dataset_manifest is not None:
+    if requires_training:
         named_parameters = list(model.named_parameters())
         no_decay_params = []  # to be potentially used later
         params = [p for n, p in named_parameters if p.requires_grad]
@@ -582,7 +587,7 @@ def main(args):
 
     # create scheduler if train
     scheduler = None
-    if "train" in data and optimizer is not None:
+    if requires_training:
         if args.dataset_manifest is not None:
             total_steps = (args.train_num_samples * args.epochs) // (args.batch_size * args.world_size)
         else:
@@ -627,7 +632,7 @@ def main(args):
         wandb.save(params_file)
         logging.debug("Finished loading wandb.")
 
-    if "train" not in data:
+    if not requires_training:
         checkpoint_root = os.path.dirname(args.resume)
 
         metrics = evaluate(model, data, start_epoch, args, writer)
