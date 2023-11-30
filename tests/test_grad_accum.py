@@ -36,16 +36,19 @@ def _grad_acc_helper_fsdp(rank, world_size, accs, threshold):
 
 
 def _grad_acc_helper_single(test_fsdp, accs=[2, 1], threshold=1e-7):
-    args, model, data, optimizer, scheduler, loss = create_train_fixtures()
+    random_seed()
+    args, model_accum_grad, data, optimizer, scheduler, loss = create_train_fixtures()
+    random_seed()
+    _, model_no_accum_grad, _, _, _, _ = create_train_fixtures()
+    model_no_accum_grad.load_state_dict(model_accum_grad.state_dict())
+
+    # check that models weights are similar at the start (within some threshold)
+    for p1, p2 in zip(model_accum_grad.parameters(), model_no_accum_grad.parameters()):
+        assert torch.allclose(p1, p2, atol=threshold)
 
     if test_fsdp:
         args.fsdp = True
         args.fsdp_amp = True
-
-    # create models
-    random_seed()
-    model_accum_grad = copy.deepcopy(model).to(args.device)
-    model_no_accum_grad = copy.deepcopy(model_accum_grad).to(args.device)
 
     # train on mock data with/without grad accumulation for one epoch
     for model, accum_freq in zip([model_accum_grad, model_no_accum_grad], accs):
