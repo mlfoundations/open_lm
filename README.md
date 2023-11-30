@@ -141,7 +141,7 @@ This will create a file called ```manifest.jsonl``` under ```/preproc_data```. T
 The manifest created with `open_lm/utils/make_wds_manifest.py` is a `jsonl` file describing the dataset. Each line in this file corresponds to a shard of the dataset and is a `json` object containing two fields:
 
 - `"shard"`: the name of a shard in the dataset.
-- `"num_chunks"`: the number of sequences contained in the shards. Each sequence contains a set length of tokens.
+- `"num_sequences"`: the number of sequences contained in the shards. Each sequence contains a set length of tokens.
 
 This manifest file provides auxiliary information about the dataset, and is assumed to be found within the same directory as the shards.
 

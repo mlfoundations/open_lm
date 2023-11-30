@@ -13,7 +13,6 @@ from multiprocessing import Value
 from functools import partial
 from itertools import islice
 
-import json
 import numpy as np
 import pandas as pd
 import torch

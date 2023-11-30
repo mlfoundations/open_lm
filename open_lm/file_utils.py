@@ -7,7 +7,6 @@ import os
 import subprocess
 import sys
 import time
-import copy
 from itertools import cycle, islice
 
 import fsspec
@@ -193,6 +192,10 @@ def source_exhausted(paths, shard_list_per_source):
 
 
 def count_small_shards(path, ratio=0.9):
+    """Count the number of shards with significantly fewer sequences than the largest shard.
+
+    Small shards are defined as those that have size less than a ratio (default 90%) of the size of the largest shard.
+    """
     shard_sizes = []
     data = get_metadata_file(path)
     for item in data:
