@@ -192,7 +192,7 @@ def source_exhausted(paths, shard_list_per_source):
     return False
 
 
-def count_small_shards(path, ratio = 0.9):
+def count_small_shards(path, ratio=0.9):
     shard_sizes = []
     data = get_metadata_file(path)
     for item in data:
@@ -206,7 +206,7 @@ def count_small_shards(path, ratio = 0.9):
     return np.sum(shard_sizes < ratio * max(shard_sizes))
 
 
-def are_sources_imbalanced_with_each_other(paths, ratio = 2):
+def are_sources_imbalanced_with_each_other(paths, ratio=2):
     median_shard_size_per_source = []
     for p in paths:
         shard_sizes = []
