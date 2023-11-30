@@ -203,12 +203,12 @@ def preprocess(
         return
 
 
-def process_keys(data, tokenizer, seqlen, seed, content_key):
+def process_keys(data, tokenizer, seqlen, seed, content_key, is_bytesio=False):
     s3_client = boto3.client("s3")
     path = data["path"]
     bucket, key = parse_s3_path(path)
     response = s3_client.get_object(Bucket=bucket, Key=key)
-    if isinstance(dh, BytesIO):
+    if is_bytesio:
         fh = BytesIO(response["Body"]).read()
     else:
         fh = response["Body"]
@@ -442,6 +442,7 @@ if __name__ == "__main__":
             seqlen=seqlen,
             seed=args.seed,
             content_key=content_key,
+            is_bytesio=False
         )
     )
     ds = ds.map(add_hash)
