@@ -277,7 +277,13 @@ def map_write_wds(batch, batch_size, folder, counter):
     bio.seek(0)
     token_count = ray.get(counter.increment_token_count.remote(token_count))
     write_to_location(folder, tar_name, bio)
-    return batch
+    
+    return_dict = {
+        "shard": [tar_name.split(".")[0]],
+        "num_sequences": [len(batch["tokens"])]
+    }
+
+    return return_dict
 
 
 def write_to_location(folder, tar_name, bio):
@@ -458,7 +464,17 @@ if __name__ == "__main__":
             "counter": counter,
         },
         batch_format="pandas",
-    ).count()
+    )
+    
+    # Sort by shard name
+    ds = ds.repartition(1)
+    ds = ds.sort(key="shard")
+    ds.write_json(
+        args.output.strip("/"),
+        filesystem = fs,
+        block_path_provider = lambda *a, **kw: os.path.join(args.output.rstrip("/"), "manifest.jsonl")
+    )
+
     end_time = time.time()
     duration = end_time - start_time
     final_token_count = ray.get(counter.increment_token_count.remote(0))
