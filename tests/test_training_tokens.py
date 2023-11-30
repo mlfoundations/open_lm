@@ -25,6 +25,9 @@ def test_token_count(test_case):
 
     Run training several times, and make sure that the expected number of steps is done each time.
     Having the same number of steps guarantees that the same number of tokens/samples are seen.
+
+    TODO: this test seems to break for some reason, if test_training_simple.py is run along with it.
+    It works fine when run by itself and if the other tests pass, and it does not affect CI, so it is fine for now.
     """
     batch_size, workers, desired_sequences_per_epoch, desired_epochs, expected_result = test_case
 
