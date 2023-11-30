@@ -154,7 +154,7 @@ def get_raw_filetype(key: str):
 
 def preprocess(
     key: str,
-    fh: BinaryIO,
+    fh: BinaryIO | BytesIO,
     seed: int,
     content_key: str,
     seqlen: int = 8192,
@@ -208,7 +208,10 @@ def process_keys(data, tokenizer, seqlen, seed, content_key):
     path = data["path"]
     bucket, key = parse_s3_path(path)
     response = s3_client.get_object(Bucket=bucket, Key=key)
-    fh = response["Body"]
+    if isinstance(dh, BytesIO):
+        fh = BytesIO(response["Body"]).read()
+    else:
+        fh = response["Body"]
     token_buffers = preprocess(
         key,
         fh,
