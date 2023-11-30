@@ -183,7 +183,7 @@ def preprocess(
         return
 
 
-def process_keys(data, tokenizer, seqlen, seed, content_key):
+def process_keys(data, tokenizer, seqlen, seed, content_key, do_sample):
     s3_client = boto3.client("s3")
     path = data["path"]
     bucket, key = parse_s3_path(path)
@@ -196,7 +196,7 @@ def process_keys(data, tokenizer, seqlen, seed, content_key):
         seed=seed,
         tokenizer=tokenizer,
         content_key=content_key,
-        do_sample=False,
+        do_sample=do_sample,
     )
     for token_buffer in token_buffers:
         yield {"tokens": token_buffer}
@@ -422,6 +422,7 @@ if __name__ == "__main__":
             seqlen=seqlen,
             seed=args.seed,
             content_key=content_key,
+            do_sample=args.do_sample
         )
     )
     ds = ds.map(add_hash)
