@@ -372,12 +372,14 @@ if __name__ == "__main__":
     parser.add_argument("--block_size", type=str, default="10MB")
     parser.add_argument("--force_parallelism", type=int, default=None)
     parser.add_argument("--no_shuffle", action="store_true")
-    parser.add_argument("--upsample", action="store_true")
+    parser.add_argument("--do_sample", action="store_true")
     parser.add_argument("--ray_spill_location", type=str, default="/tmp/ray_spill")
     parser.add_argument("--default_dataset_yaml", type=str, default=(DIR.parent / "metadata" / "rpj_lm_data.yaml"))
 
     args = parser.parse_args()
     Sources, SAMPLING_FREQUENCIES = load_from_yaml(args.default_dataset_yaml)
+    logger.info(f"SOURCES:\n {Sources}")
+    logger.info(f"SAMPLING_FREQUENCIES:\n{SAMPLING_FREQUENCIES}")
     # configure remote spilling
     creds = {k: v for k, v in os.environ.items() if k.startswith("AWS")}
     runtime_env = {"env_vars": creds}
