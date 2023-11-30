@@ -354,6 +354,27 @@ def glob_files(path, suffix=".jsonl"):
     return matching_files
 
 
+def get_filesystem(environment):
+    """
+    Create a pyarrow.fs.FileSystem based on provided AWS credentials.
+
+    :param environment: Dictionary containing AWS credentials.
+    :return: pyarrow.fs.S3FileSystem
+    """
+    # Extract the AWS credentials from the environment dictionary
+    access_key = environment.get("AWS_ACCESS_KEY_ID")
+    secret_key = environment.get("AWS_SECRET_ACCESS_KEY")
+    session_token = environment.get("AWS_SESSION_TOKEN", None)  # Session token might be optional
+
+    # Create and return the S3FileSystem
+    return fs.S3FileSystem(
+        access_key=access_key,
+        secret_key=secret_key,
+        session_token=session_token,
+        region="us-west-2",
+    )
+
+
 @ray.remote
 class GlobalCounter:
     def __init__(self):
@@ -468,7 +489,7 @@ if __name__ == "__main__":
     ds = ds.sort(key="shard")
     ds.write_json(
         args.output.strip("/"),
-        filesystem=fs,
+        filesystem=get_filesystem(creds) if args.output.startswith("s3") else None,
         block_path_provider=lambda *a, **kw: os.path.join(args.output.rstrip("/"), "manifest.jsonl"),
     )
 
