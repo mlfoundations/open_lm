@@ -246,12 +246,10 @@ def main(args):
     device = init_distributed_device(args)
 
     if args.hf_model is not None and args.hf_seq_len is None:
-        print("If passing --hf-model, must also pass --hf-seq-len to be used for training/fine-tuning.")
-        return -1
+        raise ValueError("If passing --hf-model, must also pass --hf-seq-len to be used for training/fine-tuning.")
 
     if args.hf_model is not None and args.fsdp and args.hf_fsdp_block is None:
-        print("If passing --hf-model and --fsdp, must also pass --hf-fspd-block.")
-        return -1
+        raise ValueError("If passing --hf-model and --fsdp, must also pass --hf-fspd-block.")
 
     # get the name of the experiments
     if args.name is None:
