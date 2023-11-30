@@ -1,4 +1,5 @@
 import ast
+import itertools
 import json
 import logging
 import math
@@ -8,7 +9,9 @@ from contextlib import nullcontext
 
 import numpy as np
 import torch
+import torch.distributed as dist
 import torch.nn.functional as F
+from torch.distributed.distributed_c10d import ReduceOp
 from torch.nn.parallel.distributed import DistributedDataParallel
 from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
 
@@ -132,12 +135,24 @@ def train_one_epoch(model, data, loss, epoch, step, optimizer, scaler, scheduler
 
     end = time.time()
 
-    for i, batch in enumerate(dataloader):
+    data_iterator = iter(dataloader)
+    for i in itertools.count():
         if not args.skip_scheduler:
             scheduler(step)
 
-        if step > total_steps:
-            logging.warning(f"step: {step} exceeds total_steps: {total_steps}. ending training.")
+        if step >= total_steps:
+            logging.warning(f"step: {step} has reached/exceeded total_steps: {total_steps}. ending training.")
+            break
+
+        try:
+            batch = next(data_iterator)
+            has_data = torch.tensor(1, dtype=torch.long, device=device)
+        except StopIteration:
+            has_data = torch.tensor(0, dtype=torch.long, device=device)
+
+        if args.world_size > 1:
+            dist.all_reduce(has_data, op=ReduceOp.SUM)
+        if has_data < args.world_size:
             break
 
         (texts,) = batch
@@ -207,9 +222,17 @@ def train_one_epoch(model, data, loss, epoch, step, optimizer, scaler, scheduler
 
         batch_time_m.update(time.time() - end)
         end = time.time()
+
+        global_loss_tensor = total_loss.detach().clone()
+        if args.world_size > 1:
+            dist.all_reduce(global_loss_tensor, op=ReduceOp.AVG)
+
         batch_count = i + 1
         step += 1
-        if is_master(args) and (i % args.log_every_n_steps == 0 or batch_count == num_batches_per_epoch):
+
+        if is_master(args) and (
+            i % args.log_every_n_steps == 0 or batch_count == num_batches_per_epoch or step == total_steps - 1
+        ):
             batch_size = len(inputs)
             num_samples = batch_count * batch_size * args.world_size
             samples_per_epoch = dataloader.num_samples
@@ -218,7 +241,7 @@ def train_one_epoch(model, data, loss, epoch, step, optimizer, scaler, scheduler
             # gathered_loss = [torch.zeros_like(total_loss) for _ in range(args.world_size)]
             # torch.distributed.all_gather(gathered_loss, total_loss)
             # losses_m.update(sum(gathered_loss).item() / args.world_size, batch_size * args.world_size)
-            losses_m.update(total_loss.item(), batch_size)
+            losses_m.update(global_loss_tensor.item(), batch_size)
             samples_per_second = inputs.numel() * args.world_size / batch_time_m.val
             samples_per_second_per_gpu = inputs.numel() / batch_time_m.val
             logging.info(
