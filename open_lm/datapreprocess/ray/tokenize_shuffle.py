@@ -44,6 +44,7 @@ from transformers import GPTNeoXTokenizerFast
 
 import logging
 
+
 class RawFileType(enum.Enum):
     JSONL = 1
     ZSTD_JSONL_COMPRESSED = 2
