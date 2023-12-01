@@ -1,3 +1,4 @@
+import json
 import os
 import pytest
 import webdataset as wds
@@ -24,6 +25,12 @@ def test_tokenize_shuffle_simple():
         total += len(x["json.gz"])
     assert total == NUM_TOKENS
 
+    with open("test_output/manifest.jsonl", "rb") as f:
+        out = f.read()
+    out = [json.loads(o) for o in out.decode("utf-8").split("\n")[:-1]]
+    
+    assert out[0]["shard"] == "00000001"
+    assert out[0]["num_sequences"] == NUM_TOKENS // (content_len + 1)
 
 @pytest.mark.s3
 def test_tokenize_shuffle_s3_write():
@@ -40,3 +47,10 @@ def test_tokenize_shuffle_s3_write():
         total += len(x["json.gz"])
     assert total == NUM_TOKENS
     assert exit_value == 0
+
+    with open("test_output/manifest.jsonl", "rb") as f:
+        out = f.read()
+    out = [json.loads(o) for o in out.decode("utf-8").split("\n")[:-1]]
+    
+    assert out[0]["shard"] == "00000001"
+    assert out[0]["num_sequences"] == NUM_TOKENS // (content_len + 1)

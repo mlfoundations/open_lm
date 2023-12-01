@@ -42,6 +42,7 @@ from ray.runtime_context import RuntimeContext
 from tqdm import tqdm
 from transformers import GPTNeoXTokenizerFast
 
+import logging
 
 class RawFileType(enum.Enum):
     JSONL = 1
@@ -484,13 +485,20 @@ if __name__ == "__main__":
         batch_format="pandas",
     )
 
+    def path_creation(*a, **kw):
+        output_path = os.path.join(args.output.strip("/"), "manifest.jsonl")
+        if output_path.startswith("s3://"):
+            return output_path[5:]
+        else:
+            return output_path
+
     # Sort by shard name
     ds = ds.repartition(1)
     ds = ds.sort(key="shard")
     ds.write_json(
         args.output.strip("/"),
         filesystem=get_filesystem(creds) if args.output.startswith("s3") else None,
-        block_path_provider=lambda *a, **kw: os.path.join(args.output.rstrip("/"), "manifest.jsonl"),
+        block_path_provider=path_creation,
     )
 
     end_time = time.time()
