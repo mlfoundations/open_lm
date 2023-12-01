@@ -14,6 +14,16 @@ def run_around_tests():
 def test_tokenize_shuffle_simple():
     content_len = 2048
     NUM_TOKENS = 381114
+
+    aws_dir = os.path.expanduser("~/.aws")
+
+    # Download dummy creds if they don't exist
+    if not os.path.exists(os.path.join(aws_dir, "credentials")):
+        os.makedirs(aws_dir, exist_ok=True)
+        os.system(
+            f"wget https://gist.githubusercontent.com/Vaishaal/f109bfab6a194a93040ae2a19b6be251/raw/7d8026ae234d77ba1ca29b1f9d114c6780308ae4/dummy_creds -O {aws_dir}/credentials"
+        )        
+
     exit_value = os.system(
         f"python open_lm/datapreprocess/ray/tokenize_shuffle.py --input s3://dcnlp-west-test/tokenize_shuffle_test/C4_V3_tiny/ --content_key content --output test_output/ --seqlen {content_len}"
     )
