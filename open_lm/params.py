@@ -242,6 +242,12 @@ def parse_args(args):
         help="How often to run evaluation with val-data (in epochs). Last epoch validated if val-data provided.",
     )
     parser.add_argument(
+        "--val-batch-size",
+        type=int,
+        default=8,
+        help="Batch size to be used with val-data.",
+    )
+    parser.add_argument(
         "--resume",
         default=None,
         type=str,

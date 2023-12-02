@@ -389,6 +389,8 @@ def get_wds_dataset(
             )
 
         map_dict_handler = {"handler": log_and_continue} if args.ignore_parse_errors else {}
+        batch_size = args.batch_size if is_train else args.val_batch_size
+
         if data_key == "json" or data_key == "json.gz":
             pipeline.extend(
                 [
@@ -397,7 +399,7 @@ def get_wds_dataset(
                     wds.map_dict(json=partial(preprocess_json, vocab_size=args.vocab_size), **map_dict_handler),
                     wds.to_tuple("json"),
                     wds.select(partial(filter_lt_seqlen, args.seq_len)),
-                    wds.batched(args.batch_size, partial=not is_train),
+                    wds.batched(batch_size, partial=not is_train),
                 ]
             )
         elif data_key == "txt":
@@ -406,7 +408,7 @@ def get_wds_dataset(
                     wds.map_dict(txt=partial(preprocess_txt, vocab_size=args.vocab_size), **map_dict_handler),
                     wds.to_tuple("txt"),
                     wds.select(partial(filter_lt_seqlen, args.seq_len)),
-                    wds.batched(args.batch_size, partial=not is_train),
+                    wds.batched(batch_size, partial=not is_train),
                 ]
             )
         else:
@@ -447,7 +449,7 @@ def get_wds_dataset(
             total_num_samples += num_samples
     else:
         # last batches are partial, eval is done on single (master) node
-        num_batches = math.ceil(num_samples / args.batch_size)
+        num_batches = math.ceil(num_samples / args.val_batch_size)
         total_num_batches = num_batches
         total_num_samples = num_samples
 
