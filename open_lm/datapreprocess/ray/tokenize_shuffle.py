@@ -377,7 +377,7 @@ def main(args):
     parser.add_argument("--ray_spill_location", type=str, default="/tmp/ray_spill")
     parser.add_argument("--default_dataset_yaml", type=str, default=(DIR.parent / "metadata" / "rpj_lm_data.yaml"))
 
-    args = parser.parse_args()
+    args = parser.parse_args(args)
     Sources, SAMPLING_FREQUENCIES = load_from_yaml(args.default_dataset_yaml)
     logger.info(f"SOURCES:\n {Sources}")
     logger.info(f"SAMPLING_FREQUENCIES:\n{SAMPLING_FREQUENCIES}")
