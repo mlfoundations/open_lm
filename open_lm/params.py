@@ -54,7 +54,7 @@ def add_model_args(parser):
         help="apply --model-norm to qk as in: https://arxiv.org/abs/2302.05442. This might be overridden by the model config.",
     )
     parser.add_argument(
-        "--positional_embedding_type",
+        "--positional-embedding-type",
         type=str,
         default="rotary",
         help="Type of positional embedding to use. This might be overridden by the model config.",
@@ -491,18 +491,6 @@ def parse_args(args):
         type=int,
         default=None,
         help="Mask the loss for a special pad token. Useful for sequences shorter than sequence lenght.",
-    )
-    parser.add_argument(
-        "--no-skip-tokens",
-        action="store_true",
-        default=False,
-        help="Use as many tokens from the data as possible. Requires --dataset-manifest and takes precedence over --train-num-samples. Using --accurate-total-tokens is recommended.",
-    )
-    parser.add_argument(
-        "--accurate-total-tokens",
-        action="store_true",
-        default=False,
-        help="If true, will end training early if the desired token count is reached. Requires --no-skip-tokens.",
     )
     parser.add_argument(
         "--ignore-parse-errors",
