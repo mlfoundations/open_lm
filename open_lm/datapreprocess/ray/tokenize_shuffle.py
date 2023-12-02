@@ -352,7 +352,7 @@ class GlobalCounter:
         return self.token_count
 
 
-if __name__ == "__main__":
+def main(args):
     parser = argparse.ArgumentParser()
     parser.add_argument("--input", help="input path", type=str, required=True)
     parser.add_argument(
@@ -462,3 +462,6 @@ if __name__ == "__main__":
         print("Failed to retrieve memory summary")
         print(traceback.format_exc())
     print("")
+
+if __name__ == "__main__":
+    main(sys.argv[1:])
