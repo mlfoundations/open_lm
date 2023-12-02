@@ -309,6 +309,7 @@ def main(args):
         checkpoint_path = args.checkpoint_path
         # If using remote_sync, need to check the remote instead of the local checkpoints folder.
         if args.remote_sync is not None:
+            checkpoint_path = os.path.join(args.remote_sync, args.name)
             if args.save_most_recent:
                 raise ValueError("Cannot use save-most-recent with remote_sync and resume latest.")
             if args.remote_sync_protocol != "s3":
