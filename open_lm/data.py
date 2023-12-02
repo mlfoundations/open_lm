@@ -575,7 +575,7 @@ def get_data(args, epoch=0, tokenizer=None, skip_train=False):
 
     if args.val_data:
         data["val"] = get_dataset_fn(args.val_data, args.dataset_type)(
-            args, is_train=False, tokenizer=tokenizer, data_key=args.data_key
+            args, is_train=False, tokenizer=tokenizer, data_key=args.val_data_key
         )
 
     return data

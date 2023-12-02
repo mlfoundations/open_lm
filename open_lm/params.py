@@ -248,6 +248,12 @@ def parse_args(args):
         help="Batch size to be used with val-data.",
     )
     parser.add_argument(
+        "--val-data-key",
+        type=str,
+        default="txt",
+        help="what is the extension for val-data.",
+    )
+    parser.add_argument(
         "--resume",
         default=None,
         type=str,
