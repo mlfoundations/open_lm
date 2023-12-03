@@ -57,7 +57,7 @@ def worker_fn(input_data):
         basename,
         {
             "shard": basename.split(".")[0],
-            "num_chunks": count_samples(shard_path, tmp_dir),
+            "num_sequences": count_samples(shard_path, tmp_dir),
         },
     )
 
