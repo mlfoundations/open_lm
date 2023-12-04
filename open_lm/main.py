@@ -567,6 +567,7 @@ def main(args):
         epoch=start_epoch,
         tokenizer=None,
         skip_train=args.dataset_manifest is not None,
+        floor=args.dataset_manifest is not None,
     )
 
     if args.target_mask_left is not None and args.target_mask_individual == args.target_mask_left:
