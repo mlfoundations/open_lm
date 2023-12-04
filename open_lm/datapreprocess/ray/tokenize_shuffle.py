@@ -131,7 +131,13 @@ def gzip_compressed_reader(fh: BinaryIO, content_key: str):
 
 
 def tar_reader(fh: BinaryIO, content_key: str):
-    content_ext = content_key.split(":")[0]  # in case of json
+    """
+        content_key: where in the tarfile to find the text/tokens. Options:
+            "txt" - read text file as string
+            "json:key" - read json[key] as string
+            "npy" - read numpy array as tokens
+    """
+    content_ext = content_key.split(":")[0]
     buffer = io.BytesIO(fh.read())
     with tarfile.open(fileobj=buffer, mode="r") as tar:
         samples = []
@@ -341,9 +347,6 @@ def load_tokenizer(tokenizer):
     if tokenizer == "EleutherAI/gpt-neox-20b":
         enc = GPTNeoXTokenizerFast.from_pretrained("EleutherAI/gpt-neox-20b")
         return (lambda x: enc(x).input_ids, enc.vocab_size)
-    elif tokenizer == "none":
-        enc = lambda x: x
-        return (enc, -1)
     else:
         raise ValueError(f"Unknown Tokenizer: {tokenizer}")
 
@@ -416,6 +419,7 @@ if __name__ == "__main__":
     parser.add_argument("--content_key", type=str, default="text")
     parser.add_argument("--seqlen", type=int, default=2048)
     parser.add_argument("--tokenizer", type=str, default="EleutherAI/gpt-neox-20b")
+    parser.add_argument("--vocab_size", type=int, default=None)  # for pre-tokenized data, don't load tokenizer
     parser.add_argument("--wds_chunk_size", type=int, default=8192)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--subset", type=int, default=None)
@@ -460,7 +464,7 @@ if __name__ == "__main__":
     ctx.use_push_based_shuffle = True
     ray.data.DataContext.get_current().execution_options.verbose_progress = True
     start_time = time.time()
-    tokenizer = load_tokenizer(args.tokenizer)
+    tokenizer = load_tokenizer(args.tokenizer) if args.vocab_size is None else (lambda x: x, args.vocab_size)
     logger.info(f"Total number of keys = {len(input_paths)}")
     df = pd.DataFrame(input_paths, columns=["path"])
     ds = ray.data.from_pandas(pd.DataFrame(input_paths, columns=["path"])).repartition(parallelism)
