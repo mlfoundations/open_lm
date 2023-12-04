@@ -386,6 +386,8 @@ def main(args):
     else:
         with torch.device("meta" if args.fsdp else args.device):
             model = create_model(args)
+        if not args.fsdp:
+            model.reset_parameters()
 
     args.vocab_size = model.vocab_size
     args.seq_len = model.seq_len
@@ -470,7 +472,6 @@ def main(args):
             if args.ddp_static_graph:
                 # this doesn't exist in older PyTorch, arg only added if enabled
                 ddp_args["static_graph"] = True
-            model.reset_parameters()
             model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[device], **ddp_args)
 
     if args.grad_checkpointing:
