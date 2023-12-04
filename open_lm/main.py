@@ -656,7 +656,8 @@ def main(args):
     if args.dataset_manifest:
         log_num_checkpoints(total_steps, args)
 
-    done_training = False
+    # Only enter training loop if there are steps to be done.
+    done_training = global_step >= total_steps
     epoch = start_epoch
     while not done_training:
         if is_master(args):
