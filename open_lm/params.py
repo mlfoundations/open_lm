@@ -521,6 +521,7 @@ def parse_args(args):
 
     if args.val_data is not None and args.val_batch_size is None:
         # if not set explicitly make sure that the val batch size is set to the micro batch size
-        args.val_batch_size = args.batch_size / args.accum_freq
+
+        args.val_batch_size = args.batch_size // args.accum_freq
 
     return args
