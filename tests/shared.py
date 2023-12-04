@@ -21,7 +21,7 @@ class MockTrainArgs:
         ]
         self.log_logit_mean = False
         self.device = 0
-        self.precision = "amp_bfloat16"
+        self.precision = "float32"
         self.wd = 0.033
         self.lr = 3e-3
         self.beta1 = 0.9
@@ -100,7 +100,7 @@ def create_train_fixtures(model = "open_lm_11m"):
     args.train_num_samples = args.batch_size
 
     # increase learning rate and remove warmup for maximize change to model weights
-    args.lr = 2
+    args.lr = 1e-3
     args.warmup = 0
 
     # create base models

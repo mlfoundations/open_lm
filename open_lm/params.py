@@ -54,7 +54,7 @@ def add_model_args(parser):
         help="apply --model-norm to qk as in: https://arxiv.org/abs/2302.05442. This might be overridden by the model config.",
     )
     parser.add_argument(
-        "--positional_embedding_type",
+        "--positional-embedding-type",
         type=str,
         default="rotary",
         help="Type of positional embedding to use. This might be overridden by the model config.",
