@@ -323,7 +323,7 @@ class FiniteDataPipeline(wds.DataPipeline):
             return self.iterator()
 
 
-def get_wds_dataset(args, is_train, epoch=0, floor=True, tokenizer=None, data_key="json", force_num_samples=None):
+def get_wds_dataset(args, is_train, epoch=0, floor=False, tokenizer=None, data_key="json", force_num_samples=None):
     """Create a dataloader for a dataset in webdataset format.
 
     Args:
@@ -473,12 +473,18 @@ def get_wds_dataset(args, is_train, epoch=0, floor=True, tokenizer=None, data_ke
             # Calculate batches per worker, round as little as possible.
             num_workers_per_gpu = max(1, args.workers)
             num_worker_batches = round_fn(all_num_samples[ii] / (global_batch_size * num_workers_per_gpu))
+
+            if num_worker_batches == 0:
+                raise ValueError(
+                    f"The dataloader for source {ii} has received zero batches. This can happen due to rounding if "
+                    f"too many GPUs / workers are used for this source, or if the mixing coefficient is too low. "
+                    f"Consider addressing the above to fix this."
+                )
+
             num_batches = num_worker_batches * num_workers_per_gpu
             num_samples = num_batches * global_batch_size
 
             # This forces the dataloader to take num_worker_batches steps per worker, so num_batches total.
-            # Note that this internally sets num_repetitions = sys.maxsize, therefore allowing repeats. We are
-            # safeguarded by the fact that num_worker_batches is the number of minimum worker batches.
             datasets[ii] = datasets[ii].repeat(nepochs=1, nbatches=num_worker_batches)
 
             total_num_batches += num_batches
