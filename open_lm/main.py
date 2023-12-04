@@ -394,6 +394,8 @@ def main(args):
     if args.val_num_samples is not None:
         args.val_num_samples //= args.seq_len
 
+    random_seed(args.seed, args.rank)
+
     if args.distributed:
         if args.fsdp:
             transformer_layer_cls = None
@@ -470,8 +472,6 @@ def main(args):
                 ddp_args["static_graph"] = True
             model.reset_parameters()
             model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[device], **ddp_args)
-
-    random_seed(args.seed, args.rank)
 
     if args.grad_checkpointing:
         model.set_grad_checkpointing()
