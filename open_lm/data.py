@@ -572,12 +572,7 @@ def get_data(args, epoch=0, tokenizer=None, skip_train=False, floor=True):
     else:
         if args.train_data or args.dataset_type == "synthetic":
             data["train"] = get_dataset_fn(args.train_data, args.dataset_type)(
-                args,
-                is_train=True,
-                epoch=epoch,
-                tokenizer=tokenizer,
-                data_key=args.data_key,
-                floor=floor
+                args, is_train=True, epoch=epoch, tokenizer=tokenizer, data_key=args.data_key, floor=floor
             )
 
     if args.val_data:
