@@ -144,7 +144,6 @@ class CustomAttn(nn.Module):
         std = std / math.sqrt(2 * (self.layer_id + 1))
         torch.nn.init.trunc_normal_(self.out_proj.weight, std=std, a=-3 * std, b=3 * std)
 
-
     def forward(self, x: torch.Tensor, is_causal=True):
         batchsize, seqlen, _ = x.shape
         queries, keys, vals = self.in_proj(x).chunk(3, dim=-1)
