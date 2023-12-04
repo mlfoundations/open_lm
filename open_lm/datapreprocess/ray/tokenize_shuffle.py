@@ -132,10 +132,10 @@ def gzip_compressed_reader(fh: BinaryIO, content_key: str):
 
 def tar_reader(fh: BinaryIO, content_key: str):
     """
-        content_key: where in the tarfile to find the text/tokens. Options:
-            "txt" - read text file as string
-            "json:key" - read json[key] as string
-            "npy" - read numpy array as tokens
+    content_key: where in the tarfile to find the text/tokens. Options:
+        "txt" - read text file as string
+        "json:key" - read json[key] as string
+        "npy" - read numpy array as tokens
     """
     content_ext = content_key.split(":")[0]
     buffer = io.BytesIO(fh.read())
