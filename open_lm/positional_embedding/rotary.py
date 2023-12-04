@@ -44,12 +44,15 @@ class RotaryEmbedding(torch.nn.Module):
     def __init__(self, dim_model: int, *_, **__):
         super().__init__()
         # Generate and save the inverse frequency buffer (non trainable)
-        inv_freq = 1.0 / (10000 ** (torch.arange(0, dim_model, 2).float() / dim_model))
-        self.register_buffer("inv_freq", inv_freq)
+        self.dim_model = dim_model
+        self.register_buffer("inv_freq", torch.zeros(self.dim_model // 2))
 
         self._seq_len_cached = None
         self._cos_cached = None
         self._sin_cached = None
+
+    def reset_parameters(self):
+        self.inv_freq = 1.0 / (10000 ** (torch.arange(0, self.dim_model, 2).float() / self.dim_model))
 
     def _update_cos_sin_tables(self, x, seq_dimension=1):
         seq_len = x.shape[seq_dimension]
