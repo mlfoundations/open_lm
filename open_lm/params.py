@@ -244,7 +244,7 @@ def parse_args(args):
     parser.add_argument(
         "--val-batch-size",
         type=int,
-        default=8,
+        default=None,
         help="Batch size to be used with val-data.",
     )
     parser.add_argument(
@@ -518,5 +518,9 @@ def parse_args(args):
     if args.dataset_type == "synthetic":
         assert args.train_data is None, "--train-data must not be specified if --dataset-type='synthetic'"
         assert args.dataset_manifest is None, "--dataset-manifest must not be specified if --dataset-type='synthetic'"
+
+    if args.val_data is not None and args.val_batch_size is None:
+        # if not set explicitly make sure that the val batch size is set to the micro batch size
+        args.val_batch_size = args.batch_size / args.accum_freq
 
     return args
