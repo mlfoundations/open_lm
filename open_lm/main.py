@@ -384,7 +384,7 @@ def main(args):
     if args.hf_model is not None:
         model = create_wrapped_hf_model(args)
     else:
-        with torch.device("meta"):
+        with torch.device("meta" if args.fsdp else args.device):
             model = create_model(args)
 
     args.vocab_size = model.vocab_size
