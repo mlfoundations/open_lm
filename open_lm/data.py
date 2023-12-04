@@ -323,7 +323,7 @@ class FiniteDataPipeline(wds.DataPipeline):
             return self.iterator()
 
 
-def get_wds_dataset(args, is_train, epoch=0, floor=False, tokenizer=None, data_key="json", force_num_samples=None):
+def get_wds_dataset(args, is_train, epoch=0, floor=True, tokenizer=None, data_key="json", force_num_samples=None):
     """Create a dataloader for a dataset in webdataset format.
 
     Args:
@@ -535,7 +535,7 @@ def get_wds_dataset(args, is_train, epoch=0, floor=False, tokenizer=None, data_k
     return DataInfo(dataloader=dataloader, shared_epoch=shared_epoch)
 
 
-def get_synthetic_dataset(args, is_train, epoch, tokenizer, data_key):
+def get_synthetic_dataset(args, is_train, epoch, tokenizer, data_key, floor):
     print(f"{args.train_num_samples=}")
     dataset = SyntheticDataset(seq_len=args.seq_len, vocab_size=args.vocab_size, dataset_size=args.train_num_samples)
     print(f"{len(dataset)=}")
@@ -564,7 +564,7 @@ def get_dataset_fn(data_path, dataset_type):
         return get_wds_dataset
 
 
-def get_data(args, epoch=0, tokenizer=None, skip_train=False):
+def get_data(args, epoch=0, tokenizer=None, skip_train=False, floor=True):
     data = {}
 
     if skip_train:
@@ -577,6 +577,7 @@ def get_data(args, epoch=0, tokenizer=None, skip_train=False):
                 epoch=epoch,
                 tokenizer=tokenizer,
                 data_key=args.data_key,
+                floor=floor
             )
 
     if args.val_data:
