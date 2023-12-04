@@ -3,11 +3,11 @@ import pytest
 
 import argparse
 
+from transformers import GPTNeoXTokenizerFast
 
 from open_lm.utils.transformers.hf_model import OpenLMforCausalLM
 from open_lm.utils.transformers.hf_config import OpenLMConfig
 from open_lm.model import create_params
-from transformers import GPTNeoXTokenizerFast
 from .utils import run_model
 
 
