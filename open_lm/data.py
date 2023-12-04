@@ -419,6 +419,8 @@ def get_wds_dataset(args, is_train, epoch=0, floor=True, tokenizer=None, data_ke
             )
 
         map_dict_handler = {"handler": log_and_continue} if args.ignore_parse_errors else {}
+        batch_size = args.batch_size if is_train else args.val_batch_size
+
         if data_key == "json" or data_key == "json.gz":
             pipeline.extend(
                 [
@@ -427,7 +429,7 @@ def get_wds_dataset(args, is_train, epoch=0, floor=True, tokenizer=None, data_ke
                     wds.map_dict(json=partial(preprocess_json, vocab_size=args.vocab_size), **map_dict_handler),
                     wds.to_tuple("json"),
                     wds.select(partial(filter_lt_seqlen, args.seq_len)),
-                    wds.batched(args.batch_size, partial=not is_train),
+                    wds.batched(batch_size, partial=not is_train),
                 ]
             )
         elif data_key == "txt":
@@ -436,7 +438,7 @@ def get_wds_dataset(args, is_train, epoch=0, floor=True, tokenizer=None, data_ke
                     wds.map_dict(txt=partial(preprocess_txt, vocab_size=args.vocab_size), **map_dict_handler),
                     wds.to_tuple("txt"),
                     wds.select(partial(filter_lt_seqlen, args.seq_len)),
-                    wds.batched(args.batch_size, partial=not is_train),
+                    wds.batched(batch_size, partial=not is_train),
                 ]
             )
         else:
@@ -464,7 +466,7 @@ def get_wds_dataset(args, is_train, epoch=0, floor=True, tokenizer=None, data_ke
             assert num_shards >= args.workers * args.world_size, "number of shards must be >= total workers"
         # roll over and repeat a few samples to get same number of full batches on each node
         round_fn = math.floor if floor else math.ceil
-        global_batch_size = args.batch_size * args.world_size
+        global_batch_size = batch_size * args.world_size
         total_num_batches = 0
         total_num_samples = 0
         for ii in range(len(datasets)):
@@ -483,7 +485,7 @@ def get_wds_dataset(args, is_train, epoch=0, floor=True, tokenizer=None, data_ke
             total_num_samples += num_samples
     else:
         # last batches are partial, eval is done on single (master) node
-        num_batches = math.ceil(num_samples / args.batch_size)
+        num_batches = math.ceil(num_samples / batch_size)
         total_num_batches = num_batches
         total_num_samples = num_samples
 
@@ -573,7 +575,7 @@ def get_data(args, epoch=0, tokenizer=None, skip_train=False):
 
     if args.val_data:
         data["val"] = get_dataset_fn(args.val_data, args.dataset_type)(
-            args, is_train=False, tokenizer=tokenizer, data_key=args.data_key
+            args, is_train=False, tokenizer=tokenizer, data_key=args.val_data_key
         )
 
     return data
