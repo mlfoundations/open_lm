@@ -22,8 +22,6 @@ import jsonlines
 import numpy as np
 import pandas as pd
 import psutil
-import pyarrow.fs as fs
-import pyarrow.json
 import ray
 import webdataset as wds
 import zstandard as zstd
@@ -181,7 +179,7 @@ def preprocess(
 
     except (IncompleteReadError, ReadTimeoutError, ResponseStreamingError) as e:
         logger.error(f"There was an incomplete read error: {e} for key {key}")
-        return
+        return []
 
 
 def process_keys(data, tokenizer, seqlen, seed, content_key, do_sample):
@@ -412,6 +410,7 @@ def main(args):
         parallelism = num_cores * num_nodes
     ctx = DataContext.get_current()
     ctx.use_push_based_shuffle = True
+    ctx.execution_options.resource_limits.object_store_memory = float("inf")
     ray.data.DataContext.get_current().execution_options.verbose_progress = True
     start_time = time.time()
     tokenizer = load_tokenizer(args.tokenizer)
