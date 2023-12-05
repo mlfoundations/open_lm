@@ -19,7 +19,7 @@ sources:
     markers: []  # No specific markers for UNKNOWN
 
 sampling_frequencies:
-  COMMON_CRAWL: 0.9233485194
+  COMMON_CRAWL: 0.66942767656
   C4: 0.75192857132
   GITHUB: 0.66908898302
   WIKIPEDIA: 1.64484375
