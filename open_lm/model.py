@@ -365,7 +365,7 @@ def create_params(args):
     # Validate norm parameter
     get_norm_class(cfg.get("model_norm", args.model_norm))
 
-    # Note: here all the parameters should come from the config file 
+    # Note: here all the parameters should come from the config file
     # but for retro-compatibility, we add new model parameters to the args (with a default value that matches the old version)
     # These args are managed separately by the argparser
     # If a parameter is in the model config, regardless of the args, we use the config parameters

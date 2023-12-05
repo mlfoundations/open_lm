@@ -23,7 +23,7 @@ class OpenLMforCausalLM(OpenLMModel):
 
     def __init__(self, config):
         super().__init__(config)
-        self.lm_head = None        
+        self.lm_head = None
         # Initialize weights and apply final processing
         self.post_init()
 
@@ -123,9 +123,7 @@ class OpenLMforCausalLM(OpenLMModel):
         return reordered_cache
 
     @classmethod
-    def from_pretrained(
-        cls, pretrained_model_name_or_path: Optional[Union[str, os.PathLike]], **kwargs
-    ):
+    def from_pretrained(cls, pretrained_model_name_or_path: Optional[Union[str, os.PathLike]], **kwargs):
         if os.path.isdir(pretrained_model_name_or_path):
             # Setting torch default dtype
             torch_dtype = getattr(kwargs["config"], "torch_dtype", None)
