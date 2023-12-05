@@ -1,8 +1,8 @@
 sources:
-  - source: "COMMON_CRAWL"
-    markers: ["common_crawl", "webtext", "pile-cc", "realnews"]
   - source: "LMDATA"
     markers: ["lmdata"]
+  - source: "COMMON_CRAWL"
+    markers: ["common_crawl"]
   - source: "C4"
     markers: ["c4"]
   - source: "GITHUB"
