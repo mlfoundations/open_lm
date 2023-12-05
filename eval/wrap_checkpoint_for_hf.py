@@ -1,23 +1,39 @@
 from dataclasses import fields
 import argparse
+import shutil
 from typing import Dict, Union
 import json
 import os
 from copy import deepcopy
 from open_lm.params import add_model_args
 
-
 def do_wrap(
     checkpoint: Union[str, os.PathLike],
     params,
     out_dir: Union[str, os.PathLike],
+    tokenizer: str,
+    copy_model: bool = False,
 ):
+    """
+    Wraps a checkpoint for Huggingface model deployment.
+
+    Args:
+        checkpoint (Union[str, os.PathLike]): Path to the checkpoint file.
+        params: Parameters for configuring the OpenLM model.
+        out_dir (Union[str, os.PathLike]): Output directory for saving the wrapped checkpoint.
+        tokenizer (str): Name of the tokenizer to use.
+        copy_model (bool, optional): Whether to copy the model file to the output directory. Defaults to False.
+    """
     from open_lm.utils.transformers.hf_config import OpenLMConfig
     from transformers import GPTNeoXTokenizerFast, LlamaTokenizerFast
 
     os.makedirs(out_dir, exist_ok=True)
 
     checkpoint_file = os.path.realpath(checkpoint)
+    if copy_model:
+        dest = os.path.join(out_dir, "model")
+        shutil.copy2(checkpoint_file, dest)
+        checkpoint_file = os.path.realpath(dest)
 
     config = OpenLMConfig(params)
     output_config_dict = config.to_diff_dict()
@@ -26,10 +42,9 @@ def do_wrap(
         "AutoModelForCausalLM": "imports.OpenLMforCausalLM",
     }
     output_config_dict["checkpoint_file"] = checkpoint_file
+    # output_config_dict["tokenizer_class"] = args.tokenizer  # Needs to be importable by Huggingface
     output_config_dict["torch_dtype"] = "bfloat16"  # Defaults to bfloat16
-    json.dump(
-        output_config_dict, open(os.path.join(out_dir, "config.json"), "w"), indent=2
-    )
+    json.dump(output_config_dict, open(os.path.join(out_dir, "config.json"), "w"), indent=2)
 
     # Imports file
     imports_file = "from open_lm.utils.transformers.hf_model import OpenLMforCausalLM\nfrom open_lm.utils.transformers.hf_config import OpenLMConfig"
@@ -37,10 +52,10 @@ def do_wrap(
         f.write(imports_file)
 
     # Tokenizer files
-    if "gpt-neox-20b" in args.tokenizer:
+    if "gpt-neox-20b" in tokenizer:
         tokenizer = GPTNeoXTokenizerFast.from_pretrained("EleutherAI/gpt-neox-20b")
-    elif "llama" in args.tokenizer:
-        tokenizer = LlamaTokenizerFast.from_pretrained(args.tokenizer)
+    elif "llama" in tokenizer:
+        tokenizer = LlamaTokenizerFast.from_pretrained(tokenizer)
     tokenizer.save_pretrained(out_dir)
 
 
@@ -49,9 +64,7 @@ if __name__ == "__main__":
     parser.add_argument("--checkpoint")
     parser.add_argument("--out-dir")
 
-    parser.add_argument(
-        "--model", type=str, default="m1b_neox", help="Name of the model to use."
-    )
+    parser.add_argument("--model", type=str, default="m1b_neox", help="Name of the model to use.")
     parser.add_argument("--tokenizer", type=str, default="EleutherAI/gpt-neox-20b")
     add_model_args(parser)
     args = parser.parse_args()
@@ -67,4 +80,4 @@ if __name__ == "__main__":
 
     from open_lm.model import create_params
 
-    do_wrap(args.checkpoint, create_params(args), args.out_dir)
+    do_wrap(args.checkpoint, create_params(args), args.out_dir, args.tokenizer)
