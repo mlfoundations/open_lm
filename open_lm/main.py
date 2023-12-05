@@ -1,9 +1,7 @@
 import atexit
-import glob
 import logging
 import os
 import re
-import subprocess
 import sys
 import random
 from datetime import datetime
@@ -11,7 +9,7 @@ import functools
 import numpy as np
 from pathlib import Path
 import json
-import math
+import traceback
 
 import fsspec
 import torch
@@ -156,7 +154,7 @@ def save_checkpoint(
     optimizer,
     scaler,
     completed_epoch,
-    evaluation_loss,
+    evaluation_metrics,
     step,
     is_final_checkpoint,
     next_shard_per_source=None,
@@ -170,11 +168,22 @@ def save_checkpoint(
             optim_state = FSDP.optim_state_dict(model, optimizer)
 
     if args.save_logs:
+        loss_dict = {
+            "evaluation_loss": -1,
+            "evaluation_loss_lower_95": -1,
+            "evaluation_loss_upper_95": -1,
+        }
+
+        if evaluation_metrics is not None:
+            loss_dict["evaluation_loss"] = evaluation_metrics["loss"]
+            loss_dict["evaluation_loss_lower_95"] = evaluation_metrics["loss_lower_95"]
+            loss_dict["evaluation_loss_upper_95"] = evaluation_metrics["loss_upper_95"]
+
         checkpoint_dict_model = {
             "epoch": completed_epoch,
             "name": args.name,
             "state_dict": cpu_state if args.fsdp else model.state_dict(),
-            "evaluation_loss": evaluation_loss,
+            **loss_dict,
         }
         if next_shard_per_source is not None:
             checkpoint_dict_model["next_shard_per_source"] = next_shard_per_source
@@ -189,8 +198,9 @@ def save_checkpoint(
             "epoch": completed_epoch,
             "name": args.name,
             "optimizer": optim_state if args.fsdp else optimizer.state_dict(),
-            "evaluation_loss": evaluation_loss,
+            **loss_dict,
         }
+
         if scaler is not None:
             checkpoint_dict_opt["scaler"] = scaler.state_dict()
 
@@ -198,7 +208,13 @@ def save_checkpoint(
             "epoch": completed_epoch,
             "name": args.name,
             "is_final_checkpoint": is_final_checkpoint,
-            "evaluation_loss": evaluation_loss,
+            **loss_dict,
+        }
+
+        prefixes = {
+            "epoch_": checkpoint_dict_model,
+            "optimizer_": checkpoint_dict_opt,
+            "stats_": checkpoint_dict_stats,
         }
 
         if (
@@ -206,29 +222,17 @@ def save_checkpoint(
             or is_final_checkpoint
             or (args.save_frequency > 0 and (completed_epoch % args.save_frequency) == 0)
         ):
-            torch.save(
-                checkpoint_dict_model,
-                os.path.join(args.checkpoint_path, f"epoch_{completed_epoch}.pt"),
-            )
-            torch.save(
-                checkpoint_dict_opt,
-                os.path.join(args.checkpoint_path, f"optimizer_{completed_epoch}.pt"),
-            )
-            torch.save(
-                checkpoint_dict_stats,
-                os.path.join(args.checkpoint_path, f"stats_{completed_epoch}.pt"),
-            )
+            for prefix in prefixes:
+                torch.save(
+                    prefixes[prefix],
+                    os.path.join(args.checkpoint_path, f"{prefix}{completed_epoch}.pt"),
+                )
 
         if args.delete_previous_checkpoint:
-            previous_checkpoint = os.path.join(args.checkpoint_path, f"epoch_{completed_epoch - 1}.pt")
-            if os.path.exists(previous_checkpoint):
-                os.remove(previous_checkpoint)
-            previous_checkpoint = os.path.join(args.checkpoint_path, f"optimizer_{completed_epoch - 1}.pt")
-            if os.path.exists(previous_checkpoint):
-                os.remove(previous_checkpoint)
-            previous_checkpoint = os.path.join(args.checkpoint_path, f"stats_{completed_epoch - 1}.pt")
-            if os.path.exists(previous_checkpoint):
-                os.remove(previous_checkpoint)
+            for prefix in prefixes:
+                prev = os.path.join(args.checkpoint_path, f"{prefix}{completed_epoch - 1}.pt")
+                if os.path.exists(prev):
+                    os.remove(prev)
 
 
 def main(args):
@@ -721,10 +725,16 @@ def main(args):
             break
 
         epoch = epoch + 1
-        evaluation_loss = -1
+        evaluation_metrics = None
         if "val" in data and (epoch % args.val_frequency == 0 or done_training):
             # validate based on frequency and always validate the last checkpoint
-            evaluation_loss = evaluate(model, data, epoch, args, writer)["loss"]
+            try:
+                evaluation_metrics = evaluate(model, data, epoch, args, writer)
+            except Exception as e:
+                if is_master(args):
+                    logging.error(e)
+                    logging.error(traceback.format_exc())
+                    logging.warning("evaluation failed! continuing to save_checkpoint")
 
         # Saving checkpoints.
         save_checkpoint(
@@ -733,7 +743,7 @@ def main(args):
             optimizer,
             scaler,
             epoch,
-            evaluation_loss,
+            evaluation_metrics,
             step=global_step,
             is_final_checkpoint=done_training,
             next_shard_per_source=next_shard_per_source if args.dataset_manifest is not None else None,
