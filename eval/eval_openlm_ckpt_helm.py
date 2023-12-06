@@ -138,8 +138,9 @@ if __name__ == "__main__":
         # Running using only one thread to fix run time
         "-n1",
         # # For the Slurm environment. Must change HELM codebase for your environment.
-        # "--runner-class-name"
+        # "--runner-class-name",
         # "helm.benchmark.slurm_runner.SlurmRunner"
     ]
+    print(f"Running HELM with cmd: \n{' '.join(helm_args)}")
     os.chdir(BASE_PATH)
     os.execvp(helm_args[0], helm_args)
