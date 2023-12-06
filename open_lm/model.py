@@ -19,6 +19,10 @@ from open_lm.positional_embedding.head_rotary import HeadRotaryWithCast
 from open_lm.positional_embedding.rotary import RotaryWithCast
 from open_lm.positional_embedding.llama_rotary import LLaMARotaryWithCast
 
+
+from mamba_ssm import MambaLMHeadModel
+
+
 # from openclip
 _MODEL_CONFIG_PATHS = [Path(__file__).parent / f"model_configs/"]
 _MODEL_CONFIGS = {}  # directory (model_name: config) of model architecture configs
@@ -294,20 +298,42 @@ def create_params(args):
     # These args are managed separately by the argparser
     # If a parameter is in the model config, regardless of the args, we use the config parameters
     # If a parameter is not in the model config, we use the args parameter
-    return Params(
-        dim=cfg["hidden_dim"],
-        n_layers=cfg["n_layers"],
-        n_heads=cfg["n_heads"],
-        seq_len=cfg["seq_len"],
-        vocab_size=cfg["vocab_size"],
-        post_embed_norm=cfg["post_embed_norm"],
-        weight_tying=cfg["weight_tying"],
-        norm_type=get_norm_class(cfg.get("model_norm", args.model_norm)),
-        apply_qk_norm=cfg.get("qk_norm", args.qk_norm),
-        positional_embedding_type=cfg.get("positional_embedding_type", args.positional_embedding_type),
-        ffn_type=cfg.get("ffn_type", args.ffn_type),
-    )
+
+    if 'mamba' in args.model:
+        return {
+            "d_model": cfg['d_model'],
+            "n_layer": cfg['n_layer'],
+            "vocab_size": cfg['vocab_size'],
+            "seq_len": cfg['seq_len'],
+        }
+    else:
+        return Params(
+            dim=cfg["hidden_dim"],
+            n_layers=cfg["n_layers"],
+            n_heads=cfg["n_heads"],
+            seq_len=cfg["seq_len"],
+            vocab_size=cfg["vocab_size"],
+            post_embed_norm=cfg["post_embed_norm"],
+            weight_tying=cfg["weight_tying"],
+            norm_type=get_norm_class(cfg.get("model_norm", args.model_norm)),
+            apply_qk_norm=cfg.get("qk_norm", args.qk_norm),
+            positional_embedding_type=cfg.get("positional_embedding_type", args.positional_embedding_type),
+            ffn_type=cfg.get("ffn_type", args.ffn_type),
+        )
 
 
 def create_model(args):
-    return Transformer(create_params(args))
+    if 'mamba' in args.model:
+        params = create_params(args)
+        seq_len = params.pop('seq_len')
+
+        model = MambaLMHeadModel(**params)
+
+        model.vocab_size = params['vocab_size']
+        model.seq_len = seq_len
+        model.type = "mamba"
+        return model
+    else:
+        model = Transformer(create_params(args)) 
+        model.type = "transformer"
+        return model

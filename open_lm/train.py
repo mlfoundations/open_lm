@@ -163,7 +163,11 @@ def train_one_epoch(model, data, loss, epoch, step, optimizer, scaler, scheduler
         if args.accum_freq == 1:
             with autocast():
                 inputs, targets = sample_chunk(texts, args)
-                out, _ = model(inputs)
+
+                if "mamba" in args.model:
+                    out = model(inputs).logits
+                else:
+                    out, _ = model(inputs)
 
                 if args.log_logit_mean:
                     logit_m.update(torch.mean(out).item())
@@ -190,7 +194,11 @@ def train_one_epoch(model, data, loss, epoch, step, optimizer, scaler, scheduler
                         if inputs_ii.shape[0] == 0:
                             break
                         targets_ii = targets[ii * per_batch : (ii + 1) * per_batch]
-                        out, _ = model(inputs_ii)
+
+                        if "mamba" in args.model:
+                            out = model(inputs).logits
+                        else:
+                            out, _ = model(inputs)
 
                         if args.log_logit_mean:
                             logit_m.update(torch.mean(out).item())
