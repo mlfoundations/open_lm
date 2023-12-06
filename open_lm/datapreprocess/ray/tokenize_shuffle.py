@@ -174,8 +174,8 @@ def preprocess(
                 else:
                     yield buffer[:seqlen]
                     buffer = buffer[seqlen:]
-            if len(buffer) > 0:
-                yield buffer + [PAD] * (seqlen - len(buffer))
+        if len(buffer) > 0:
+            yield buffer + [PAD] * (seqlen - len(buffer))
 
     except (IncompleteReadError, ReadTimeoutError, ResponseStreamingError) as e:
         logger.error(f"There was an incomplete read error: {e} for key {key}")
@@ -419,12 +419,7 @@ def main(args):
     ds = ray.data.from_pandas(pd.DataFrame(input_paths, columns=["path"])).repartition(parallelism)
     ds = ds.flat_map(
         lambda x: process_keys(
-            x,
-            tokenizer=tokenizer,
-            seqlen=seqlen,
-            seed=args.seed,
-            content_key=content_key,
-            do_sample=args.do_sample
+            x, tokenizer=tokenizer, seqlen=seqlen, seed=args.seed, content_key=content_key, do_sample=args.do_sample
         )
     )
     ds = ds.map(add_hash)
@@ -462,6 +457,7 @@ def main(args):
         print("Failed to retrieve memory summary")
         print(traceback.format_exc())
     print("")
+
 
 if __name__ == "__main__":
     main(sys.argv[1:])
