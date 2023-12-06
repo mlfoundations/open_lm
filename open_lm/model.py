@@ -118,13 +118,6 @@ class CustomAttn(nn.Module):
         self.attn_fn = xformers_attn if torch.cuda.is_available() else torch_attn
         self.apply_qk_norm = args.apply_qk_norm
 
-        # initialize weights by trunc_normal(1/sqrt(fan_in))
-        std = 1.0 / math.sqrt(args.dim)
-        torch.nn.init.trunc_normal_(self.in_proj.weight, std=std, a=-3 * std, b=3 * std)
-        # scale init by depth as in https://arxiv.org/abs/1908.11365 -- worked slightly better.
-        std = std / math.sqrt(2 * (layer_id + 1))
-        torch.nn.init.trunc_normal_(self.out_proj.weight, std=std, a=-3 * std, b=3 * std)
-
         # initialize norm layers for queries and keys if needed
         self.q_norm = (
             args.norm_type(
@@ -142,6 +135,18 @@ class CustomAttn(nn.Module):
             if self.apply_qk_norm
             else nn.Identity()
         )
+
+        self.layer_id = layer_id
+        self.dim = args.dim
+        self.reset_parameters()
+
+    def reset_parameters(self):
+        # initialize weights by trunc_normal(1/sqrt(fan_in))
+        std = 1.0 / math.sqrt(self.dim)
+        torch.nn.init.trunc_normal_(self.in_proj.weight, std=std, a=-3 * std, b=3 * std)
+        # scale init by depth as in https://arxiv.org/abs/1908.11365 -- worked slightly better.
+        std = std / math.sqrt(2 * (self.layer_id + 1))
+        torch.nn.init.trunc_normal_(self.out_proj.weight, std=std, a=-3 * std, b=3 * std)
 
     def forward(self, x: torch.Tensor, is_causal=True):
         batchsize, seqlen, _ = x.shape
@@ -170,17 +175,19 @@ class Block(nn.Module):
         self.dim = args.dim
         self.head_dim = args.dim // args.n_heads
         self.attention = CustomAttn(layer_id, args)
+        self._ffn_type = args.ffn_type
 
         if args.ffn_type == "swiglu":
             # this follows llama / lit llama -- go to multiple of 256
-            hidden_dim = 256 * ((int(2 * 4 * args.dim / 3) + 256 - 1) // 256)
-            self.feed_forward = xops.SwiGLU(args.dim, hidden_dim, args.dim, bias=False)
+            self.hidden_dim = 256 * ((int(2 * 4 * args.dim / 3) + 256 - 1) // 256)
+            self.feed_forward = xops.SwiGLU(args.dim, self.hidden_dim, args.dim, bias=False)
         elif args.ffn_type == "gelu":
             # Follows mosaic mpt7b, but without a bias.
-            hidden_dim = args.dim * 4
-            self._ff_w1 = nn.Linear(args.dim, hidden_dim, bias=False)
-            self._ff_w2 = nn.Linear(hidden_dim, args.dim, bias=False)
+            self.hidden_dim = args.dim * 4
+            self._ff_w1 = nn.Linear(args.dim, self.hidden_dim, bias=False)
+            self._ff_w2 = nn.Linear(self.hidden_dim, args.dim, bias=False)
             self.feed_forward = nn.Sequential(self._ff_w1, nn.GELU(approximate="none"), self._ff_w2)
+
         self.layer_id = layer_id
         self.attention_norm = args.norm_type(
             args.dim,
@@ -191,21 +198,23 @@ class Block(nn.Module):
             eps=args.norm_eps,
         )
         self.attention.seq_len = args.seq_len
+        self.reset_parameters()
 
-        if args.ffn_type == "swiglu":
+    def reset_parameters(self):
+        if self._ffn_type == "swiglu":
             # initialize weights trunc_normal(1/sqrt(fan_in))
-            std = 1.0 / math.sqrt(args.dim)
+            std = 1.0 / math.sqrt(self.dim)
             torch.nn.init.trunc_normal_(self.feed_forward.w12.weight, std=std, a=-3 * std, b=3 * std)
             # scale init by depth as in https://arxiv.org/abs/1908.11365 -- worked slightly better.
-            std = 1.0 / math.sqrt(hidden_dim)
-            std = std / math.sqrt(2 * (layer_id + 1))
+            std = 1.0 / math.sqrt(self.hidden_dim)
+            std = std / math.sqrt(2 * (self.layer_id + 1))
             torch.nn.init.trunc_normal_(self.feed_forward.w3.weight, std=std, a=-3 * std, b=3 * std)
-        elif args.ffn_type == "gelu":
-            std = 1.0 / math.sqrt(args.dim)
+        elif self._ffn_type == "gelu":
+            std = 1.0 / math.sqrt(self.dim)
             torch.nn.init.trunc_normal_(self._ff_w1.weight, std=std, a=-3 * std, b=3 * std)
 
-            std = 1.0 / math.sqrt(hidden_dim)
-            std = std / math.sqrt(2 * (layer_id + 1))
+            std = 1.0 / math.sqrt(self.hidden_dim)
+            std = std / math.sqrt(2 * (self._layer_id + 1))
             torch.nn.init.trunc_normal_(self._ff_w2.weight, std=std, a=-3 * std, b=3 * std)
 
     def forward(self, x):
@@ -247,11 +256,13 @@ class Transformer(nn.Module, PyTorchModelHubMixin):
         if self.weight_tying:
             self.tok_embeddings.weight = self.output.weight
         self.grad_checkpointing = False
+        self.reset_parameters()
 
+    def reset_parameters(self):
         # initialize weight 1/sqrt(dim)
         # this is 1/fan_in for output, as is default, and Maciej Kilian tried another option
         # for the embed layer (from RWKV paper) but this was better.
-        std = 1.0 / math.sqrt(params.dim)
+        std = 1.0 / math.sqrt(self.params.dim)
         torch.nn.init.trunc_normal_(self.output.weight, std=std, a=-3 * std, b=3 * std)
         torch.nn.init.trunc_normal_(self.tok_embeddings.weight, std=std, a=-3 * std, b=3 * std)
 

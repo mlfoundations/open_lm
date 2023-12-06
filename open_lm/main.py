@@ -1,9 +1,7 @@
 import atexit
-import glob
 import logging
 import os
 import re
-import subprocess
 import sys
 import random
 from datetime import datetime
@@ -11,7 +9,7 @@ import functools
 import numpy as np
 from pathlib import Path
 import json
-import math
+import traceback
 
 import fsspec
 import torch
@@ -156,7 +154,7 @@ def save_checkpoint(
     optimizer,
     scaler,
     completed_epoch,
-    evaluation_loss,
+    evaluation_metrics,
     step,
     is_final_checkpoint,
     next_shard_per_source=None,
@@ -170,11 +168,22 @@ def save_checkpoint(
             optim_state = FSDP.optim_state_dict(model, optimizer)
 
     if args.save_logs:
+        loss_dict = {
+            "evaluation_loss": -1,
+            "evaluation_loss_lower_95": -1,
+            "evaluation_loss_upper_95": -1,
+        }
+
+        if evaluation_metrics is not None:
+            loss_dict["evaluation_loss"] = evaluation_metrics["loss"]
+            loss_dict["evaluation_loss_lower_95"] = evaluation_metrics["loss_lower_95"]
+            loss_dict["evaluation_loss_upper_95"] = evaluation_metrics["loss_upper_95"]
+
         checkpoint_dict_model = {
             "epoch": completed_epoch,
             "name": args.name,
             "state_dict": cpu_state if args.fsdp else model.state_dict(),
-            "evaluation_loss": evaluation_loss,
+            **loss_dict,
         }
         if next_shard_per_source is not None:
             checkpoint_dict_model["next_shard_per_source"] = next_shard_per_source
@@ -189,8 +198,9 @@ def save_checkpoint(
             "epoch": completed_epoch,
             "name": args.name,
             "optimizer": optim_state if args.fsdp else optimizer.state_dict(),
-            "evaluation_loss": evaluation_loss,
+            **loss_dict,
         }
+
         if scaler is not None:
             checkpoint_dict_opt["scaler"] = scaler.state_dict()
 
@@ -198,7 +208,13 @@ def save_checkpoint(
             "epoch": completed_epoch,
             "name": args.name,
             "is_final_checkpoint": is_final_checkpoint,
-            "evaluation_loss": evaluation_loss,
+            **loss_dict,
+        }
+
+        prefixes = {
+            "epoch_": checkpoint_dict_model,
+            "optimizer_": checkpoint_dict_opt,
+            "stats_": checkpoint_dict_stats,
         }
 
         if (
@@ -206,29 +222,17 @@ def save_checkpoint(
             or is_final_checkpoint
             or (args.save_frequency > 0 and (completed_epoch % args.save_frequency) == 0)
         ):
-            torch.save(
-                checkpoint_dict_model,
-                os.path.join(args.checkpoint_path, f"epoch_{completed_epoch}.pt"),
-            )
-            torch.save(
-                checkpoint_dict_opt,
-                os.path.join(args.checkpoint_path, f"optimizer_{completed_epoch}.pt"),
-            )
-            torch.save(
-                checkpoint_dict_stats,
-                os.path.join(args.checkpoint_path, f"stats_{completed_epoch}.pt"),
-            )
+            for prefix in prefixes:
+                torch.save(
+                    prefixes[prefix],
+                    os.path.join(args.checkpoint_path, f"{prefix}{completed_epoch}.pt"),
+                )
 
         if args.delete_previous_checkpoint:
-            previous_checkpoint = os.path.join(args.checkpoint_path, f"epoch_{completed_epoch - 1}.pt")
-            if os.path.exists(previous_checkpoint):
-                os.remove(previous_checkpoint)
-            previous_checkpoint = os.path.join(args.checkpoint_path, f"optimizer_{completed_epoch - 1}.pt")
-            if os.path.exists(previous_checkpoint):
-                os.remove(previous_checkpoint)
-            previous_checkpoint = os.path.join(args.checkpoint_path, f"stats_{completed_epoch - 1}.pt")
-            if os.path.exists(previous_checkpoint):
-                os.remove(previous_checkpoint)
+            for prefix in prefixes:
+                prev = os.path.join(args.checkpoint_path, f"{prefix}{completed_epoch - 1}.pt")
+                if os.path.exists(prev):
+                    os.remove(prev)
 
 
 def main(args):
@@ -309,7 +313,7 @@ def main(args):
         checkpoint_path = args.checkpoint_path
         # If using remote_sync, need to check the remote instead of the local checkpoints folder.
         if args.remote_sync is not None:
-            checkpoint_path = os.path.join(args.remote_sync, args.name, "checkpoints")
+            checkpoint_path = os.path.join(args.remote_sync, args.name)
             if args.save_most_recent:
                 raise ValueError("Cannot use save-most-recent with remote_sync and resume latest.")
             if args.remote_sync_protocol != "s3":
@@ -320,7 +324,7 @@ def main(args):
             # stress, however it's very difficult to fully work around such situations.
             if args.save_most_recent:
                 # if --save-most-recent flag is set, look for latest at a fixed filename
-                resume_from = os.path.join(checkpoint_path, LATEST_CHECKPOINT_NAME)
+                resume_from = os.path.join(checkpoint_path, "checkpoints", LATEST_CHECKPOINT_NAME)
                 if not os.path.exists(resume_from):
                     # If no latest checkpoint has been saved yet, don't try to resume
                     resume_from = None
@@ -384,7 +388,10 @@ def main(args):
     if args.hf_model is not None:
         model = create_wrapped_hf_model(args)
     else:
-        model = create_model(args)
+        with torch.device("meta" if args.fsdp else args.device):
+            model = create_model(args)
+        if not args.fsdp:
+            model.reset_parameters()
 
     args.vocab_size = model.vocab_size
     args.seq_len = model.seq_len
@@ -393,9 +400,83 @@ def main(args):
     if args.val_num_samples is not None:
         args.val_num_samples //= args.seq_len
 
-    model = model.to(device)
-
     random_seed(args.seed, args.rank)
+
+    if args.distributed:
+        if args.fsdp:
+            transformer_layer_cls = None
+
+            if args.hf_model is not None:
+                # retrive the user specified block class for fsdp
+                for _, target_cls in model.named_modules():
+                    if args.hf_fsdp_block in type(target_cls).__name__:
+                        transformer_layer_cls = {type(target_cls)}
+                        break
+
+                if transformer_layer_cls is None:
+                    print(f"--hf-fsdp-block {args.hf_fsdp_block} not found in --hf-model {args.hf_model}")
+                    return -1
+
+            else:
+                transformer_layer_cls = {Block}
+            # from https://pytorch.org/blog/efficient-large-scale-training-with-pytorch/
+            transformer_auto_wrapper_policy = functools.partial(
+                transformer_auto_wrap_policy,
+                transformer_layer_cls=transformer_layer_cls,
+            )
+            # tries to follow gopher...
+            mp_policy = None
+            if args.fsdp_amp:
+                print("=> using bfloat16 params as part of fsdp amp policy.")
+                mp_policy = MixedPrecision(
+                    param_dtype=torch.bfloat16,
+                    reduce_dtype=torch.float32,
+                    buffer_dtype=torch.bfloat16,
+                )
+            elif args.fsdp_pure_bf16:
+                print("=> using pure bfloat16 params as part of fsdp amp policy.")
+                mp_policy = MixedPrecision(
+                    param_dtype=torch.bfloat16,
+                    reduce_dtype=torch.bfloat16,
+                    buffer_dtype=torch.bfloat16,
+                )
+
+            if args.rank == 0:
+                print(f"Before FSDP parameter num: {sum(p.numel() for p in model.parameters()):,}")
+                print(f"Before FSDP {torch.cuda.memory_allocated()/1024**3:.3} GB")
+
+            fsdp_kwargs = {}
+            assert not (
+                args.fsdp_hybrid and args.fsdp_hybrid_o2
+            ), "Only --fsdp-hybrid or --fsdp-hybrid-o2 should be set."
+            if args.fsdp_backward_prefetch:
+                fsdp_kwargs["backward_prefetch"] = BackwardPrefetch.BACKWARD_PRE
+            if args.fsdp_hybrid:
+                fsdp_kwargs["sharding_strategy"] = ShardingStrategy.HYBRID_SHARD
+            if args.fsdp_hybrid_o2:
+                fsdp_kwargs["sharding_strategy"] = ShardingStrategy._HYBRID_SHARD_ZERO2
+            print("=> FSDP kwargs: ", fsdp_kwargs)
+
+            # init FSDP
+            model = FSDP(
+                model,
+                auto_wrap_policy=transformer_auto_wrapper_policy,
+                device_id=device,
+                mixed_precision=mp_policy,
+                cpu_offload=CPUOffload(offload_params=args.fsdp_cpu_offload),
+                use_orig_params=args.fsdp_use_orig_params,
+                limit_all_gathers=args.fsdp_limit_all_gathers,
+                **fsdp_kwargs,
+            )
+
+            print(f"After FSDP parameter num: {sum(p.numel() for p in model.parameters()):,} on rank {args.rank}")
+            print(f"After FSDP {torch.cuda.memory_allocated()/1024**3:.3} GB on rank {args.rank}")
+        else:
+            ddp_args = {}
+            if args.ddp_static_graph:
+                # this doesn't exist in older PyTorch, arg only added if enabled
+                ddp_args["static_graph"] = True
+            model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[device], **ddp_args)
 
     if args.grad_checkpointing:
         model.set_grad_checkpointing()
@@ -455,82 +536,6 @@ def main(args):
         if samples_seen >= args.train_num_samples * args.epochs:
             raise RuntimeError("Loaded a checkpoint which has already seen the desired number of tokens.")
 
-    if args.distributed:
-        if args.fsdp:
-            transformer_layer_cls = None
-
-            if args.hf_model is not None:
-                # retrive the user specified block class for fsdp
-                for _, target_cls in model.named_modules():
-                    if args.hf_fsdp_block in type(target_cls).__name__:
-                        transformer_layer_cls = {type(target_cls)}
-                        break
-
-                if transformer_layer_cls is None:
-                    print(f"--hf-fsdp-block {args.hf_fsdp_block} not found in --hf-model {args.hf_model}")
-                    return -1
-
-            else:
-                transformer_layer_cls = {Block}
-            # from https://pytorch.org/blog/efficient-large-scale-training-with-pytorch/
-            transformer_auto_wrapper_policy = functools.partial(
-                transformer_auto_wrap_policy,
-                transformer_layer_cls=transformer_layer_cls,
-            )
-            # tries to follow gopher...
-            mp_policy = None
-            if args.fsdp_amp:
-                print("=> using bfloat16 params as part of fsdp amp policy.")
-                mp_policy = MixedPrecision(
-                    param_dtype=torch.bfloat16,
-                    reduce_dtype=torch.float32,
-                    buffer_dtype=torch.bfloat16,
-                )
-            elif args.fsdp_pure_bf16:
-                print("=> using pure bfloat16 params as part of fsdp amp policy.")
-                mp_policy = MixedPrecision(
-                    param_dtype=torch.bfloat16,
-                    reduce_dtype=torch.bfloat16,
-                    buffer_dtype=torch.bfloat16,
-                )
-
-            if args.rank == 0:
-                print(f"Before FSDP parameter num: {sum(p.numel() for p in model.parameters())}")
-                print(f"Before FSDP {torch.cuda.memory_allocated()/1024**3:.3} GB")
-
-            fsdp_kwargs = {}
-            assert not (
-                args.fsdp_hybrid and args.fsdp_hybrid_o2
-            ), "Only --fsdp-hybrid or --fsdp-hybrid-o2 should be set."
-            if args.fsdp_backward_prefetch:
-                fsdp_kwargs["backward_prefetch"] = BackwardPrefetch.BACKWARD_PRE
-            if args.fsdp_hybrid:
-                fsdp_kwargs["sharding_strategy"] = ShardingStrategy.HYBRID_SHARD
-            if args.fsdp_hybrid_o2:
-                fsdp_kwargs["sharding_strategy"] = ShardingStrategy._HYBRID_SHARD_ZERO2
-            print("=> FSDP kwargs: ", fsdp_kwargs)
-
-            # init FSDP
-            model = FSDP(
-                model,
-                auto_wrap_policy=transformer_auto_wrapper_policy,
-                device_id=device,
-                mixed_precision=mp_policy,
-                cpu_offload=CPUOffload(offload_params=args.fsdp_cpu_offload),
-                use_orig_params=args.fsdp_use_orig_params,
-                limit_all_gathers=args.fsdp_limit_all_gathers,
-                **fsdp_kwargs,
-            )
-
-            print(f"After FSDP parameter num: {sum(p.numel() for p in model.parameters())} on rank {args.rank}")
-            print(f"After FSDP {torch.cuda.memory_allocated()/1024**3:.3} GB on rank {args.rank}")
-        else:
-            ddp_args = {}
-            if args.ddp_static_graph:
-                # this doesn't exist in older PyTorch, arg only added if enabled
-                ddp_args["static_graph"] = True
-            model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[device], **ddp_args)
-
     # create optimizer and scaler
     optimizer = None
     scaler = None
@@ -567,6 +572,7 @@ def main(args):
         epoch=start_epoch,
         tokenizer=None,
         skip_train=args.dataset_manifest is not None,
+        floor=args.dataset_manifest is not None,
     )
 
     if args.target_mask_left is not None and args.target_mask_individual == args.target_mask_left:
@@ -656,7 +662,8 @@ def main(args):
     if args.dataset_manifest:
         log_num_checkpoints(total_steps, args)
 
-    done_training = False
+    # Only enter training loop if there are steps to be done.
+    done_training = global_step >= total_steps
     epoch = start_epoch
     while not done_training:
         if is_master(args):
@@ -719,10 +726,16 @@ def main(args):
             break
 
         epoch = epoch + 1
-        evaluation_loss = -1
+        evaluation_metrics = None
         if "val" in data and (epoch % args.val_frequency == 0 or done_training):
             # validate based on frequency and always validate the last checkpoint
-            evaluation_loss = evaluate(model, data, epoch, args, writer)["loss"]
+            try:
+                evaluation_metrics = evaluate(model, data, epoch, args, writer)
+            except Exception as e:
+                if is_master(args):
+                    logging.error(e)
+                    logging.error(traceback.format_exc())
+                    logging.warning("evaluation failed! continuing to save_checkpoint")
 
         # Saving checkpoints.
         save_checkpoint(
@@ -731,7 +744,7 @@ def main(args):
             optimizer,
             scaler,
             epoch,
-            evaluation_loss,
+            evaluation_metrics,
             step=global_step,
             is_final_checkpoint=done_training,
             next_shard_per_source=next_shard_per_source if args.dataset_manifest is not None else None,
