@@ -460,7 +460,8 @@ def main(args):
                 fsdp_kwargs["sharding_strategy"] = ShardingStrategy._HYBRID_SHARD_ZERO2
             print("=> FSDP kwargs: ", fsdp_kwargs)
 
-            # init FSDP
+            # Initialize FSDP. Use the same seed across workers to ensure reset_parameters is the same across workers.
+            random_seed(args.seed, rank=0)
             model = FSDP(
                 model,
                 auto_wrap_policy=transformer_auto_wrapper_policy,
