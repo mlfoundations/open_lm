@@ -105,7 +105,7 @@ def load_model(args, model):
         start_epoch = checkpoint["epoch"]
         sd = checkpoint["state_dict"]
         global_step = checkpoint.get("step", None)
-        if next(iter(sd.items()))[0].startswith("module"):
+        if args.distributed and next(iter(sd.items()))[0].startswith("module"):
             sd = {k[len("module.") :]: v for k, v in sd.items()}
         model.load_state_dict(sd)
         logging.info(f"=> resuming checkpoint '{args.resume}' (epoch {start_epoch})")
