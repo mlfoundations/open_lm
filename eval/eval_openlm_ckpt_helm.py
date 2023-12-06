@@ -89,9 +89,9 @@ if __name__ == "__main__":
         "--tokenizer", type=str, default="EleutherAI/gpt-neox-20b", help="Name of the tokenizer to use."
     )
     parser.add_argument("--copy_model", action="store_true", help="Copy the model to the evaluation directory.")
-    parser.add_argument("--overwrite_model", action="store_true", help="Overwrite the model if it already exists.")
+    parser.add_argument("--overwrite_model", action="store_true", help="Overwrite the wrapper if it already exists.")
     parser.add_argument(
-        "--ignore_exisiting_model", action="store_true", help="Overwrite the model if it already exists."
+        "--use_existing_model", action="store_true", help="Use the existing wrapper if it already exists."
     )
     add_model_args(parser)
     args = parser.parse_args()
@@ -107,7 +107,7 @@ if __name__ == "__main__":
         shutil.rmtree(out_dir)
 
     if os.path.exists(out_dir):
-        if not args.ignore_exisiting_model:
+        if not args.ignore_existing_model:
             raise ValueError(f"Output directory {out_dir} already exists.")
     else:
         # Model not found. Generate all necessary files to run HELM on this model
