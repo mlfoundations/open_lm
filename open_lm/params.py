@@ -2,6 +2,7 @@ import argparse
 import ast
 import copy
 import json
+import logging
 import yaml
 
 
@@ -90,12 +91,14 @@ def maybe_load_config(parser, args):
         return None
 
     assert not unknown_args, "No arguments can be passed if --config is provided."
-    print(f"Loading config from: {args.config}")
+    logging.info(f"Loading config from: {args.config}")
     with open(args.config, "r") as f:
-        if args.config.endswith(".yaml"):
+        if args.config.endswith(".yaml") or args.config.endswith(".yml"):
             config = yaml.safe_load(f)
-        else:
+        elif args.config.endswith(".json"):
             config = json.load(f)
+        else:
+            raise ValueError(f"Unknown config format: {args.config}")
 
     default_args = vars(parser.parse_args([]))
     default_arg_keys = default_args.keys()
@@ -566,7 +569,7 @@ def parse_args(args):
     config = maybe_load_config(parser, args)
     if config is not None:
         args = argparse.Namespace(**config)
-        print(f"Loaded config from file: {args=}")
+        logging.info(f"Loaded config from file: {args=}")
     else:
         args = parser.parse_args(args)
 
