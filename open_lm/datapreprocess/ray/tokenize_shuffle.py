@@ -139,13 +139,15 @@ def preprocess(
     seqlen: int = 8192,
     tokenizer=None,
     do_sample: bool = False,
+    sources: enum.Enum = None,
 ):
     tokenizer_fn, vocab_size = tokenizer
     rng = random.Random(hash(key) + seed)
     EOT = SpecialTokens.END_OF_TEXT.value % (vocab_size + len(SpecialTokens))
     PAD = SpecialTokens.PAD.value % (vocab_size + len(SpecialTokens))
     if do_sample:
-        sample_freq = Sources.get_sampling_frequency(key)
+        assert sources is not None
+        sample_freq = sources.get_sampling_frequency(key)
     buffer = []
     try:
         file_type = get_raw_filetype(key)
@@ -182,7 +184,7 @@ def preprocess(
         return []
 
 
-def process_keys(data, tokenizer, seqlen, seed, content_key, do_sample):
+def process_keys(data, tokenizer, seqlen, seed, content_key, do_sample, sources=None):
     s3_client = boto3.client("s3")
     path = data["path"]
     bucket, key = parse_s3_path(path)
@@ -196,6 +198,7 @@ def process_keys(data, tokenizer, seqlen, seed, content_key, do_sample):
         tokenizer=tokenizer,
         content_key=content_key,
         do_sample=do_sample,
+        sources=sources,
     )
     for token_buffer in token_buffers:
         yield {"tokens": token_buffer}
@@ -419,7 +422,13 @@ def main(args):
     ds = ray.data.from_pandas(pd.DataFrame(input_paths, columns=["path"])).repartition(parallelism)
     ds = ds.flat_map(
         lambda x: process_keys(
-            x, tokenizer=tokenizer, seqlen=seqlen, seed=args.seed, content_key=content_key, do_sample=args.do_sample
+            x,
+            tokenizer=tokenizer,
+            seqlen=seqlen,
+            seed=args.seed,
+            content_key=content_key,
+            do_sample=args.do_sample,
+            sources=Sources,
         )
     )
     ds = ds.map(add_hash)
