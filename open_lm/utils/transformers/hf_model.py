@@ -52,7 +52,7 @@ class OpenLMforCausalLM(OpenLMModel):
         position_ids: Optional[torch.LongTensor] = None,
         past_key_values: Optional[List[torch.FloatTensor]] = None,
         inputs_embeds: Optional[torch.FloatTensor] = None,
-        use_cache: Optional[bool] = None,
+        use_cache: Optional[bool] = False,
         output_attentions: Optional[bool] = None,
         output_hidden_states: Optional[bool] = None,
         return_dict: Optional[bool] = None,
@@ -77,14 +77,26 @@ class OpenLMforCausalLM(OpenLMModel):
         "Hey, are you consciours? Can you talk to me?\nI'm not consciours, but I can talk to you."
         ```"""
         # decoder outputs consists of (dec_features, layer_state, dec_hidden, dec_attn)
-        logits, _ = self.model(input_ids)
-        output = CausalLMOutputWithPast(logits=logits)
+        logits, _, past_key_values = self.model(input_ids, past_key_values=past_key_values, use_cache=use_cache)
+        output = CausalLMOutputWithPast(
+            logits=logits,
+            past_key_values=past_key_values,
+        )
         return output
 
     def prepare_inputs_for_generation(
         self, input_ids, past_key_values=None, attention_mask=None, inputs_embeds=None, **kwargs
     ):
-        if past_key_values:
+        if past_key_values is not None:
+            # If past_key_values are defined they should match the expected shape that matches with `input_ids`
+            assert (
+                past_key_values[0][0].shape[0] == input_ids.shape[0]
+            ), "Input shape and past_key_values shape mismatch"
+            assert (
+                past_key_values[0][0].shape[1] == input_ids.shape[1] - 1
+            ), "Input shape and past_key_values shape mismatch"
+
+            # keep only the last token because others are represented in past_key_values
             input_ids = input_ids[:, -1:]
 
         # if `inputs_embeds` are passed, we only want to use them in the 1st generation step

@@ -84,7 +84,11 @@ class Params:
 def xformers_attn(queries, keys, values, is_causal):
     # xformers assumes q, k, v are [batch, seq_len, heads, embed_dim]
     mask = None
-    if is_causal:
+
+    # If queries have shape [batch, 1, heads, dim] it means there is only one query in the sequence.
+    # In this case, there is no notion of causal masking, so we can just set the mask to None.
+    # This is actually needed to get the desired behavior with seq_len=1.
+    if is_causal and queries.shape[1] > 1:
         mask = xops.LowerTriangularMask()
     return xops.memory_efficient_attention(queries, keys, values, attn_bias=mask)
 
@@ -149,24 +153,37 @@ class CustomAttn(nn.Module):
         std = std / math.sqrt(2 * (self.layer_id + 1))
         torch.nn.init.trunc_normal_(self.out_proj.weight, std=std, a=-3 * std, b=3 * std)
 
-    def forward(self, x: torch.Tensor, is_causal=True):
-        batchsize, seqlen, _ = x.shape
+    def forward(self, x: torch.Tensor, is_causal=True, past_key_value=None, use_cache=False):
+        batchsize, q_len, _ = x.shape
         queries, keys, vals = self.in_proj(x).chunk(3, dim=-1)
 
         queries = self.q_norm(queries)
         keys = self.k_norm(keys)
 
-        queries = queries.view(batchsize, seqlen, self.n_heads, self.head_dim)
-        keys = keys.view(batchsize, seqlen, self.n_heads, self.head_dim)
-        vals = vals.view(batchsize, seqlen, self.n_heads, self.head_dim)
+        queries = queries.view(batchsize, q_len, self.n_heads, self.head_dim)
+        keys = keys.view(batchsize, q_len, self.n_heads, self.head_dim)
+        vals = vals.view(batchsize, q_len, self.n_heads, self.head_dim)
 
-        queries, keys, vals = self.pos_embed(queries, keys, vals)
+        past_length = 0 if past_key_value is None else past_key_value[0].shape[1]
+        queries, keys, vals = self.pos_embed(queries, keys, vals, offset=past_length)
 
-        output = self.attn_fn(queries, keys, vals, is_causal=is_causal)
+        if past_key_value is not None and use_cache:
+            keys = torch.cat([past_key_value[0], keys], dim=1)
+            vals = torch.cat([past_key_value[1], vals], dim=1)
 
-        output = output.view(batchsize, seqlen, -1)
+        if use_cache:
+            past_key_value = (keys, vals)
 
-        return self.out_proj(output)
+        output = self.attn_fn(
+            queries,
+            keys,
+            vals,
+            is_causal=is_causal,
+        )
+
+        output = output.view(batchsize, q_len, -1)
+
+        return self.out_proj(output), past_key_value
 
 
 class Block(nn.Module):
@@ -218,10 +235,16 @@ class Block(nn.Module):
             std = std / math.sqrt(2 * (self._layer_id + 1))
             torch.nn.init.trunc_normal_(self._ff_w2.weight, std=std, a=-3 * std, b=3 * std)
 
-    def forward(self, x):
-        h = x + self.attention(self.attention_norm(x), is_causal=True)
+    def forward(self, x, past_key_value=None, use_cache=False):
+        h, past_key_value = self.attention(
+            self.attention_norm(x),
+            is_causal=True,
+            past_key_value=past_key_value,
+            use_cache=use_cache,
+        )
+        h = x + h
         out = h + self.feed_forward(self.ffn_norm(h))
-        return out
+        return out, past_key_value
 
 
 class Transformer(nn.Module, PyTorchModelHubMixin):
@@ -271,20 +294,23 @@ class Transformer(nn.Module, PyTorchModelHubMixin):
     def set_grad_checkpointing(self, enable=True):
         self.grad_checkpointing = enable
 
-    def forward(self, input):
+    def forward(self, input, past_key_values=None, use_cache=False):
         x = self.tok_embeddings(input)
         x = self.post_embed_norm(x)
 
-        for layer in self.layers:
+        if past_key_values is None:
+            past_key_values = [None] * self.n_layers
+        for i, layer in enumerate(self.layers):
             if self.grad_checkpointing:
-                x = checkpoint(layer, x)
+                x, past_key_values[i] = checkpoint(layer, x, past_key_values[i], use_cache)
             else:
-                x = layer(x)
-
+                x, past_key_values[i] = layer(x, past_key_values[i], use_cache=use_cache)
+        if past_key_values[0] is None:
+            past_key_values = None
         x = self.norm(x)
         output = self.output(x)
         # follow llama in casting this to float.
-        return output.float(), x
+        return output.float(), x, past_key_values
 
     def get_input_embeddings(self):
         return self.tok_embeddings

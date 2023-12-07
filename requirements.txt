@@ -22,3 +22,5 @@ loguru
 jsonlines
 transformers
 s3fs
+wikipedia
+ 

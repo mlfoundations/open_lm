@@ -16,78 +16,33 @@ from typing import Tuple
 
 import torch
 
-
-def rotate_half(x):
-    x1, x2 = x.chunk(2, dim=-1)
-    return torch.cat((-x2, x1), dim=-1)
+from open_lm.positional_embedding.rotary import apply_rotary_pos_emb, RotaryEmbedding
 
 
-@torch.jit.script
-def apply_rotary_pos_emb(x, cos, sin):
-    # NOTE: This could probably be moved to Triton
-
-    # Handle a possible sequence length mismatch in between q and k
-    cos = cos[:, :, : x.shape[-2], :]
-    sin = sin[:, :, : x.shape[-2], :]
-
-    return (x * cos) + (rotate_half(x) * sin)
-
-
-class HeadRotaryEmbedding(torch.nn.Module):
+class HeadRotaryEmbedding(RotaryEmbedding):
     """
-    The rotary position embeddings from RoFormer_ (Su et. al).
-    A crucial insight from the method is that the query and keys are
-    transformed by rotation matrices which depend on the relative positions.
-
-    Other implementations are available in the Rotary Transformer repo_ and in
-    GPT-NeoX_, GPT-NeoX was an inspiration
-
-    .. _RoFormer: https://arxiv.org/abs/2104.09864
-    .. _repo: https://github.com/ZhuiyiTechnology/roformer
-    .. _GPT-NeoX: https://github.com/EleutherAI/gpt-neox
-
-
-    .. warning: Please note that this embedding is not registered on purpose, as it is transformative
-        (it does not create the embedding dimension) and will likely be picked up (imported) on a ad-hoc basis
+    The rotary position embeddings used in the first version of OpenLM.
+    It is only kept for compatibility, RotaryEmbedding should be used instead.
     """
 
-    def __init__(self, dim_model: int, *_, **__):
-        super().__init__()
-        # Generate and save the inverse frequency buffer (non trainable)
-        inv_freq = 1.0 / (10000 ** (torch.arange(0, dim_model, 2).float() / dim_model))
-        self.register_buffer("inv_freq", inv_freq)
+    def __init__(self, dim_model: int, seq_len: int, *_, **__):
+        super().__init__(dim_model, seq_len)
+        self._has_warned = False
 
-        self._seq_len_cached = None
-        self._cos_cached = None
-        self._sin_cached = None
+    def forward(self, q: torch.Tensor, k: torch.Tensor, offset: int = 0) -> Tuple[torch.Tensor, torch.Tensor]:
+        self._cos_cached, self._sin_cached = self._update_cos_sin_tables(k.shape[2], device=k.device, dtype=k.dtype)
 
-    def _update_cos_sin_tables(self, x, seq_dimension=1):
-        seq_len = x.shape[seq_dimension]
+        if not self._has_warned and (offset != 0):
+            print("Warning. HeadRotaryEmbedding does not support offset, I am not applying it.")
+            self._has_warned = True
 
-        # Reset the tables if the sequence length has changed,
-        # or if we're on a new device (possibly due to tracing for instance)
-        if seq_len != self._seq_len_cached or self._cos_cached.device != x.device or self._cos_cached.dtype != x.dtype:
-            self._seq_len_cached = seq_len
-            t = torch.arange(x.shape[seq_dimension], device=x.device, dtype=torch.float32)
-            freqs = torch.einsum("i,j->ij", t, self.inv_freq.to(x.dtype))
-            emb = torch.cat((freqs, freqs), dim=-1).to(x.device)
-
-            self._cos_cached = emb.cos()[None, None, :, :].to(x.dtype)
-            self._sin_cached = emb.sin()[None, None, :, :].to(x.dtype)
-
-        return self._cos_cached, self._sin_cached
-
-    def forward(self, q: torch.Tensor, k: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
-        self._cos_cached, self._sin_cached = self._update_cos_sin_tables(k, seq_dimension=-2)
-
-        return (
-            apply_rotary_pos_emb(q, self._cos_cached, self._sin_cached),
-            apply_rotary_pos_emb(k, self._cos_cached, self._sin_cached),
-        )
+        out_q = apply_rotary_pos_emb(q.transpose(1, 2), self._cos_cached, self._sin_cached).transpose(1, 2)
+        out_k = apply_rotary_pos_emb(k.transpose(1, 2), self._cos_cached, self._sin_cached).transpose(1, 2)
+        return out_q, out_k
 
 
 class HeadRotaryWithCast(HeadRotaryEmbedding):
     # NOTE: this version has the bug, but we trained the 7B model with it so it's default
-    def forward(self, q, k, v):
-        q, k = super().forward(q, k)
+    def forward(self, q, k, v, offset: int = 0):
+        q, k = super().forward(q, k, offset)
         return q.to(v.dtype), k.to(v.dtype), v

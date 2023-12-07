@@ -68,8 +68,7 @@ def download_val_data(name: str, root: str = None):
 
 
 def download_dl_test_data(root: str = "./tests/assets"):
-    """Downloads test files if the data doesn't exist in HF cache.
-    """
+    """Downloads test files if the data doesn't exist in HF cache."""
 
     snapshot_args = dict(
         repo_id="mlfoundations/open_lm_test_data_v2",

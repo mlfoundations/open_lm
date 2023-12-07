@@ -63,43 +63,35 @@ def reshape_for_broadcast(freqs_cis: torch.Tensor, x: torch.Tensor):
 
 @torch.jit.script
 def apply_llama_rotary_pos_emb(
-    xq: torch.Tensor,
-    xk: torch.Tensor,
+    x: torch.Tensor,
     freqs_cis: torch.Tensor,
-) -> Tuple[torch.Tensor, torch.Tensor]:
+) -> torch.Tensor:
     """
     Apply llama rotary embeddings to input tensors using the given frequency tensor.
 
-    This function applies rotary embeddings to the given query 'xq' and key 'xk' tensors using the provided
-    frequency tensor 'freqs_cis'. The input tensors are reshaped as complex numbers, and the frequency tensor
-    is reshaped for broadcasting compatibility. The resulting tensors contain rotary embeddings and are
+    This function applies rotary embeddings to the given 'x' tensors using the provided
+    frequency tensor 'freqs_cis'. The input tensor is reshaped as complex numbers, and the frequency tensor
+    is reshaped for broadcasting compatibility. The resulting tensor contain rotary embeddings and is
     returned as real tensors.
 
     Args:
-        xq (torch.Tensor): Query tensor to apply rotary embeddings.
-        xk (torch.Tensor): Key tensor to apply rotary embeddings.
+        x (torch.Tensor): tensor to apply rotary embeddings.
         freqs_cis (torch.Tensor): Precomputed frequency tensor for complex exponentials.
 
     Returns:
-        Tuple[torch.Tensor, torch.Tensor]: Tuple of modified query tensor and key tensor with rotary embeddings.
+        torch.Tensor: Tuple of modified query tensor and key tensor with rotary embeddings.
 
     """
-    xq_even = xq[..., ::2]
-    xq_odd = xq[..., 1::2]
-
-    xk_even = xk[..., ::2]
-    xk_odd = xk[..., 1::2]
+    x_even = x[..., ::2]
+    x_odd = x[..., 1::2]
 
     # Stack them along the last dimension to make it [N, ..., D, 2]
-    xq_ = torch.stack([xq_even, xq_odd], dim=-1)
-    xk_ = torch.stack([xk_even, xk_odd], dim=-1)
-    xq_ = torch.view_as_complex(xq_.float())
-    xk_ = torch.view_as_complex(xk_.float())
+    x_ = torch.stack([x_even, x_odd], dim=-1)
+    x_ = torch.view_as_complex(x_.float())
 
-    freqs_cis = reshape_for_broadcast(freqs_cis, xq_)
-    xq_out = torch.view_as_real(xq_ * freqs_cis).flatten(3)
-    xk_out = torch.view_as_real(xk_ * freqs_cis).flatten(3)
-    return xq_out.type_as(xq), xk_out.type_as(xk)
+    freqs_cis = reshape_for_broadcast(freqs_cis, x_)
+    x_out = torch.view_as_real(x_ * freqs_cis).flatten(3)
+    return x_out.type_as(x)
 
 
 class LLaMARotaryEmbedding(torch.nn.Module):
@@ -130,15 +122,31 @@ class LLaMARotaryEmbedding(torch.nn.Module):
             seq_len * 2,
         )
 
-    def forward(self, q: torch.Tensor, k: torch.Tensor, start_pos: int = 0) -> Tuple[torch.Tensor, torch.Tensor]:
-        seq_len = q.shape[1]
-        self.freqs_cis = self.freqs_cis.to(q.device)
-        freqs_cis = self.freqs_cis[start_pos : start_pos + seq_len]
+    def reset_parameters(self):
+        pass
 
-        return apply_llama_rotary_pos_emb(q, k, freqs_cis)
+    def forward(self, q: torch.Tensor, k: torch.Tensor, offset: int = 0) -> Tuple[torch.Tensor, torch.Tensor]:
+        assert (
+            q.shape[1] + offset <= self.freqs_cis.shape[0]
+        ), f"offset {offset} or query sequence length {q.shape[1]}\
+            \n is too large for the precomputed frequency tensor {self.freqs_cis.shape}"
+        assert (
+            k.shape[1] + offset <= self.freqs_cis.shape[0]
+        ), f"offset {offset} or key sequence length {k.shape[1]}\
+            \n is too large for the precomputed frequency tensor {self.freqs_cis.shape}"
+        q_seq_len = q.shape[1]
+        k_seq_len = k.shape[1]
+        self.freqs_cis = self.freqs_cis.to(q.device)
+        q_freqs_cis = self.freqs_cis[offset : offset + q_seq_len]
+        k_freqs_cis = self.freqs_cis[offset : offset + k_seq_len]
+
+        return (
+            apply_llama_rotary_pos_emb(q, q_freqs_cis),
+            apply_llama_rotary_pos_emb(k, k_freqs_cis),
+        )
 
 
 class LLaMARotaryWithCast(LLaMARotaryEmbedding):
-    def forward(self, q, k, v):
-        q, k = super().forward(q, k)
+    def forward(self, q, k, v, offset: int = 0):
+        q, k = super().forward(q, k, offset)
         return q.to(v.dtype), k.to(v.dtype), v
