@@ -24,7 +24,7 @@ def test_tokenize_shuffle_simple():
         total += len(x["json.gz"])
     assert total == NUM_TOKENS
 
-@pytest.mark.parametrize("content_key,NUM_TOKENS", [("npy", 6905130), ("txt", 2069490), ("json:url", 2102274)])
+@pytest.mark.parametrize("content_key,NUM_TOKENS", [("npy", 6905130), ("txt", 2069490), ("json:duration", 2055147)])
 def test_tokenize_shuffle_tar(content_key, NUM_TOKENS):
     content_len = 2048
 
