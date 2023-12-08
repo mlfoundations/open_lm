@@ -78,7 +78,7 @@ def retrieve_dataset_once(
         weights=weights,
         num_workers_per_gpu=num_workers,
         world_size=1,
-        multi_epoch=False,
+        multi_epoch=False
     )
 
     args.train_num_samples = total_seqs
@@ -94,6 +94,7 @@ def retrieve_dataset_once(
     args.rank = 0
     data = get_wds_dataset(args, is_train=True, epoch=epoch, force_num_samples=[total_seqs])
     return data
+
 
 
 # ======================================================
@@ -171,6 +172,7 @@ def test_singleSource_singleWorker_imperfectBatch(num_samples, next_shard, batch
 
     assert len(set(data_ids)) == len(data_ids)  # Check no repeats
     assert len(data_ids) == batch_size * (num_samples // batch_size)  #
+
 
 
 def test_singleSource_multiWorker_0():
@@ -332,6 +334,7 @@ def test_singleSource_multiWorker_3():
     assert sorted(target_data_ids) == sorted(data_ids)
 
 
+
 def test_singleSource_multiWorker_4():
     """
     Asking for 256 samples from 2 workers
@@ -369,3 +372,6 @@ def test_singleSource_multiWorker_4():
             data_ids.append(tuple(seq[:3]))
     target_data_ids = [(0, i, j) for i in range(2) for j in range(100)]  # all of shard 000, 001
     assert sorted(target_data_ids) == sorted(data_ids)
+
+
+

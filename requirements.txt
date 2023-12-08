@@ -10,11 +10,12 @@ jsonlines
 boto3==1.26.90
 Pillow
 zstandard
-llm-foundry
 pysimdjson
 cloudpathlib
-apache_beam
-datasets~=2.5.2
+datasets
+multiprocess>=0.70.11
+dill
+llm-foundry
 huggingface_hub
 pre-commit
 ray[all]
@@ -23,4 +24,5 @@ jsonlines
 transformers
 s3fs
 wikipedia
+ipython
  

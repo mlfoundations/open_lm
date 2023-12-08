@@ -30,11 +30,13 @@ def args():
     )
     return args
 
+
 @pytest.fixture(scope="module")
 def tiny_open_lm(args):
     tiny_open_lm = OpenLMforCausalLM(OpenLMConfig(create_params(args)))
     tiny_open_lm.model.eval()
     return tiny_open_lm
+
 
 # Create a mock tokenizer with a tiny vocab
 @pytest.fixture(scope="module")
