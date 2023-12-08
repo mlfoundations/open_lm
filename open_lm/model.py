@@ -19,9 +19,10 @@ from open_lm.positional_embedding.head_rotary import HeadRotaryWithCast
 from open_lm.positional_embedding.rotary import RotaryWithCast
 from open_lm.positional_embedding.llama_rotary import LLaMARotaryWithCast
 
-
-from mamba_ssm import MambaLMHeadModel
-
+try:  # optional import
+    from mamba_ssm import MambaLMHeadModel
+except ImportError:
+    MambaLMHeadModel = None
 
 # from openclip
 _MODEL_CONFIG_PATHS = [Path(__file__).parent / f"model_configs/"]
@@ -334,6 +335,7 @@ def create_params(args):
 
 
 class OpenLMMamba(nn.Module):
+    # Experimental architecture, please "pip install mamba_ssm"
     def __init__(self, params):
         super().__init__()
         self.seq_len = params.pop("seq_len")
