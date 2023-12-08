@@ -54,4 +54,4 @@ blanc 0.3.3 requires torch<2.0,>=1.0, but you have torch 2.1.0 which is incompat
 crfm-helm 0.3.0 requires transformers~=4.33.1, but you have transformers 4.34.1 which is incompatible.
 Successfully installed accelerate-0.20.3 datasets-2.14.7 open-lm-0.0.16 tokenizers-0.14.1 torch-2.1.0 torchvision-0.16.0 transformers-4.34.1
 ```
-
+- LLM-Foundry is not yet removed 

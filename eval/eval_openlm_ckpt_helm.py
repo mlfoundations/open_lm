@@ -89,9 +89,9 @@ if __name__ == "__main__":
         "--tokenizer", type=str, default="EleutherAI/gpt-neox-20b", help="Name of the tokenizer to use."
     )
     parser.add_argument("--copy-model", action="store_true", help="Copy the model to the evaluation directory.")
-    parser.add_argument("--overwrite-model", action="store_true", help="Overwrite the wrapper if it already exists.")
+    parser.add_argument("--overwrite-wrapper", action="store_true", help="Overwrite the wrapper if it already exists.")
     parser.add_argument(
-        "--use-existing-model", action="store_true", help="Use the existing wrapper if it already exists."
+        "--use-existing-wrapper", action="store_true", help="Use the existing wrapper if it already exists."
     )
     add_model_args(parser)
     args = parser.parse_args()
@@ -102,12 +102,12 @@ if __name__ == "__main__":
     out_dir = MODEL_WRAPPER_PATH / experiment / model
     model_name = f'open_lm/{experiment}-{model.replace("/", "_")}'
 
-    if os.path.exists(out_dir) and args.overwrite_model:
-        print(f"Overwriting model {out_dir}...")
+    if os.path.exists(out_dir) and args.overwrite_wrapper:
+        print(f"Overwriting wrapper {out_dir}...")
         shutil.rmtree(out_dir)
 
     if os.path.exists(out_dir):
-        if not args.ignore_existing_model:
+        if not args.use_existing_wrapper:
             raise ValueError(f"Output directory {out_dir} already exists.")
     else:
         # Model not found. Generate all necessary files to run HELM on this model
