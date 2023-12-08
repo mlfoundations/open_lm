@@ -330,6 +330,8 @@ def evaluate(model, data, start_epoch, args, writer):
 
     data["val"].set_epoch(start_epoch)  # set epoch in process safe manner via sampler or shared_epoch
     dataloader = data["val"].dataloader
+
+    # NOTE: max_num_batches = 0 corresponds to exhausting iterator
     max_num_batches = dataloader.num_batches
 
     losses_m = AverageMeter()
@@ -343,7 +345,7 @@ def evaluate(model, data, start_epoch, args, writer):
     end = time.time()
     loss = torch.nn.CrossEntropyLoss(reduction="none")
     for i, batch in enumerate(dataloader):
-        if i == max_num_batches:
+        if i == max_num_batches and max_num_batches != 0:
             break
 
         (texts,) = batch
