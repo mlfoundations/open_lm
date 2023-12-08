@@ -36,7 +36,7 @@ python eval/eval_openlm_ckpt_helm.py --model open_lm_11m --checkpoint /mmfs1/gsc
 
 python eval/eval_openlm_ckpt_helm.py --model open_lm_1b --positional-embedding-type head_rotary --checkpoint /mmfs1/home/rx31/projects/open_lm/open_lm_1b.pt --experiment default
 ```
-To evaluate a 1b or 11m model.
+To evaluate a 1b or 11m model. Don't forget to add flags such as `--qk-norm`
 
 There are ways to better use multi-gpu, such as there's a built-in slurm runner. To use that, you need to change 
 `https://github.com/ruixin31/helm/blob/a6a0cc8667d7e46e4b7a5a609de9d62652a221d4/src/helm/benchmark/slurm_runner.py#L257-L284`, as well as uncomment

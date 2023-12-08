@@ -88,10 +88,10 @@ if __name__ == "__main__":
     parser.add_argument(
         "--tokenizer", type=str, default="EleutherAI/gpt-neox-20b", help="Name of the tokenizer to use."
     )
-    parser.add_argument("--copy_model", action="store_true", help="Copy the model to the evaluation directory.")
-    parser.add_argument("--overwrite_model", action="store_true", help="Overwrite the wrapper if it already exists.")
+    parser.add_argument("--copy-model", action="store_true", help="Copy the model to the evaluation directory.")
+    parser.add_argument("--overwrite-model", action="store_true", help="Overwrite the wrapper if it already exists.")
     parser.add_argument(
-        "--use_existing_model", action="store_true", help="Use the existing wrapper if it already exists."
+        "--use-existing-model", action="store_true", help="Use the existing wrapper if it already exists."
     )
     add_model_args(parser)
     args = parser.parse_args()
