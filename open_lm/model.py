@@ -335,7 +335,8 @@ def create_params(args):
 
 
 class OpenLMMamba(nn.Module):
-    # Experimental architecture, please "pip install mamba_ssm"
+    # Experimental architecture, please "pip install mamba-ssm"
+    # https://arxiv.org/abs/2312.00752
     def __init__(self, params):
         super().__init__()
         self.seq_len = params.pop("seq_len")
