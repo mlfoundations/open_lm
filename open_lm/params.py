@@ -1,5 +1,9 @@
 import argparse
 import ast
+import copy
+import json
+import logging
+import yaml
 
 
 def get_default_params(model_name):
@@ -54,11 +58,66 @@ def add_model_args(parser):
         help="apply --model-norm to qk as in: https://arxiv.org/abs/2302.05442. This might be overridden by the model config.",
     )
     parser.add_argument(
-        "--positional_embedding_type",
+        "--positional-embedding-type",
         type=str,
         default="rotary",
         help="Type of positional embedding to use. This might be overridden by the model config.",
     )
+
+
+def check_replacement_type(replacement, original):
+    """Checks that `replacement`, which is intended to replace `original` is of
+    the right type. The type is correct if it matches exactly or is one of a few
+    cases in which the type can be easily coerced.
+
+    Taken from YACS: https://github.com/rbgirshick/yacs/blob/32d5e4ac300eca6cd3b839097dde39c4017a1070/yacs/config.py#L494
+    """
+    # The types must match (with some exceptions)
+    if type(original) == type(replacement):
+        return True
+
+    # If either of them is None, accept the type.
+    if replacement is None or original is None:
+        return True
+
+    return False
+
+
+def maybe_load_config(parser, args):
+    config_parser = argparse.ArgumentParser()
+    config_parser.add_argument("--config", type=str)
+    args, unknown_args = config_parser.parse_known_args(args)
+    if not args.config:
+        return None
+
+    assert not unknown_args, "No arguments can be passed if --config is provided."
+    logging.info(f"Loading config from: {args.config}")
+    with open(args.config, "r") as f:
+        if args.config.endswith(".yaml") or args.config.endswith(".yml"):
+            config = yaml.safe_load(f)
+        elif args.config.endswith(".json"):
+            config = json.load(f)
+        else:
+            raise ValueError(f"Unknown config format: {args.config}")
+
+    default_args = vars(parser.parse_args([]))
+    default_arg_keys = default_args.keys()
+    updated_args = copy.deepcopy(default_args)
+
+    for config_key, config_value in config.items():
+        config_key = config_key.replace("-", "_")
+        if config_key not in default_arg_keys:
+            raise ValueError(f"Unknown config key: {config_key}")
+        default_value = default_args[config_key]
+        is_valid = check_replacement_type(replacement=config_value, original=default_value)
+        if not is_valid:
+            raise ValueError(
+                f"Type mismatch (config: {type(config_value)} vs. argparse: {type(default_value)}) with values "
+                f"(config: {config_value} vs. argparse: {default_value}) for config. key: {config_key}"
+            )
+        updated_args[config_key] = config_value
+
+    return updated_args
 
 
 def parse_args(args):
@@ -240,6 +299,18 @@ def parse_args(args):
         type=int,
         default=1,
         help="How often to run evaluation with val-data (in epochs). Last epoch validated if val-data provided.",
+    )
+    parser.add_argument(
+        "--val-batch-size",
+        type=int,
+        default=None,
+        help="Batch size to be used with val-data.",
+    )
+    parser.add_argument(
+        "--val-data-key",
+        type=str,
+        default="txt",
+        help="what is the extension for val-data.",
     )
     parser.add_argument(
         "--resume",
@@ -487,18 +558,6 @@ def parse_args(args):
         help="Mask the loss for a special pad token. Useful for sequences shorter than sequence lenght.",
     )
     parser.add_argument(
-        "--no-skip-tokens",
-        action="store_true",
-        default=False,
-        help="Use as many tokens from the data as possible. Requires --dataset-manifest and takes precedence over --train-num-samples. Using --accurate-total-tokens is recommended.",
-    )
-    parser.add_argument(
-        "--accurate-total-tokens",
-        action="store_true",
-        default=False,
-        help="If true, will end training early if the desired token count is reached. Requires --no-skip-tokens.",
-    )
-    parser.add_argument(
         "--ignore-parse-errors",
         action="store_true",
         default=False,
@@ -507,7 +566,12 @@ def parse_args(args):
 
     add_model_args(parser)
 
-    args = parser.parse_args(args)
+    config = maybe_load_config(parser, args)
+    if config is not None:
+        args = argparse.Namespace(**config)
+        logging.info(f"Loaded config from file: {args=}")
+    else:
+        args = parser.parse_args(args)
 
     # If some params are not passed, we use the default values based on model name.
     default_params = get_default_params(args.model)
@@ -518,5 +582,10 @@ def parse_args(args):
     if args.dataset_type == "synthetic":
         assert args.train_data is None, "--train-data must not be specified if --dataset-type='synthetic'"
         assert args.dataset_manifest is None, "--dataset-manifest must not be specified if --dataset-type='synthetic'"
+
+    if args.val_data is not None and args.val_batch_size is None:
+        # if not set explicitly make sure that the val batch size is set to the micro batch size
+
+        args.val_batch_size = args.batch_size // args.accum_freq
 
     return args

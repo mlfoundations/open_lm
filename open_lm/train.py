@@ -1,4 +1,5 @@
 import ast
+import itertools
 import json
 import logging
 import math
@@ -8,7 +9,9 @@ from contextlib import nullcontext
 
 import numpy as np
 import torch
+import torch.distributed as dist
 import torch.nn.functional as F
+from torch.distributed.distributed_c10d import ReduceOp
 from torch.nn.parallel.distributed import DistributedDataParallel
 from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
 
@@ -38,6 +41,43 @@ class AverageMeter(object):
         self.sum += val * n
         self.count += n
         self.avg = self.sum / self.count
+
+
+class ConfidenceIntervalMeter(object):
+    def __init__(self):
+        self.reset()
+
+    def reset(self):
+        self.weights = []
+        self.sums = []
+
+    def update(self, val, n=1):
+        self.weights.append(n)
+        self.sums.append(val * n)
+
+    def compute_bootstrap_ci(self, num_samples=2000, interval=95):
+        lower = None
+        upper = None
+
+        estimates = []
+        for _ in range(num_samples):
+            acc = 0
+            denom = 0
+            i = np.random.choice(len(self.sums), size=len(self.sums)).tolist()
+            for ii in i:
+                acc += self.sums[ii]
+                denom += self.weights[ii]
+
+            acc /= denom
+
+            estimates.append(acc)
+
+        half = (100 - interval) / 2
+
+        lower = np.percentile(estimates, half).item()
+        upper = np.percentile(estimates, 100 - half).item()
+
+        return lower, upper
 
 
 def unwrap_model(model):
@@ -132,12 +172,24 @@ def train_one_epoch(model, data, loss, epoch, step, optimizer, scaler, scheduler
 
     end = time.time()
 
-    for i, batch in enumerate(dataloader):
+    data_iterator = iter(dataloader)
+    for i in itertools.count():
         if not args.skip_scheduler:
             scheduler(step)
 
-        if step > total_steps:
-            logging.warning(f"step: {step} exceeds total_steps: {total_steps}. ending training.")
+        if step >= total_steps:
+            logging.warning(f"step: {step} has reached/exceeded total_steps: {total_steps}. ending training.")
+            break
+
+        try:
+            batch = next(data_iterator)
+            has_data = torch.tensor(1, dtype=torch.long, device=device)
+        except StopIteration:
+            has_data = torch.tensor(0, dtype=torch.long, device=device)
+
+        if args.world_size > 1:
+            dist.all_reduce(has_data, op=ReduceOp.SUM)
+        if has_data < args.world_size:
             break
 
         (texts,) = batch
@@ -207,9 +259,17 @@ def train_one_epoch(model, data, loss, epoch, step, optimizer, scaler, scheduler
 
         batch_time_m.update(time.time() - end)
         end = time.time()
+
+        global_loss_tensor = total_loss.detach().clone()
+        if args.world_size > 1:
+            dist.all_reduce(global_loss_tensor, op=ReduceOp.AVG)
+
         batch_count = i + 1
         step += 1
-        if is_master(args) and (i % args.log_every_n_steps == 0 or batch_count == num_batches_per_epoch):
+
+        if is_master(args) and (
+            i % args.log_every_n_steps == 0 or batch_count == num_batches_per_epoch or step == total_steps - 1
+        ):
             batch_size = len(inputs)
             num_samples = batch_count * batch_size * args.world_size
             samples_per_epoch = dataloader.num_samples
@@ -218,7 +278,7 @@ def train_one_epoch(model, data, loss, epoch, step, optimizer, scaler, scheduler
             # gathered_loss = [torch.zeros_like(total_loss) for _ in range(args.world_size)]
             # torch.distributed.all_gather(gathered_loss, total_loss)
             # losses_m.update(sum(gathered_loss).item() / args.world_size, batch_size * args.world_size)
-            losses_m.update(total_loss.item(), batch_size)
+            losses_m.update(global_loss_tensor.item(), batch_size)
             samples_per_second = inputs.numel() * args.world_size / batch_time_m.val
             samples_per_second_per_gpu = inputs.numel() / batch_time_m.val
             logging.info(
@@ -286,6 +346,8 @@ def evaluate(model, data, start_epoch, args, writer):
     data_time_m = AverageMeter()
     sps_m = AverageMeter()
     spspg_m = AverageMeter()
+    losses_ci_m = ConfidenceIntervalMeter()
+
     end = time.time()
     loss = torch.nn.CrossEntropyLoss()
     for i, batch in enumerate(dataloader):
@@ -299,11 +361,13 @@ def evaluate(model, data, start_epoch, args, writer):
 
             out, _ = model(inputs)
             total_loss = loss(out.reshape(-1, args.vocab_size), targets.reshape(-1))
-            losses_m.update(total_loss.item(), inputs.shape[0])
+            losses_m.update(total_loss.item(), n=inputs.shape[0])
+            losses_ci_m.update(total_loss.item(), n=inputs.shape[0])
         batch_time_m.update(time.time() - end)
         sps_m.update(inputs.numel() * args.world_size / batch_time_m.val)
         spspg_m.update(inputs.numel() / batch_time_m.val)
 
+    lower, upper = losses_ci_m.compute_bootstrap_ci()
     # Save eval loss / etc.
     log_data = {
         "loss": losses_m.avg,
@@ -311,6 +375,8 @@ def evaluate(model, data, start_epoch, args, writer):
         "batch_time": batch_time_m.avg,
         "samples_per_second": sps_m.avg,
         "samples_per_second_per_gpu": spspg_m.avg,
+        "loss_lower_95": lower,
+        "loss_upper_95": upper,
     }
     if args.train_num_samples is not None:
         log_data["tokens"] = start_epoch * args.train_num_samples * args.seq_len
@@ -323,5 +389,6 @@ def evaluate(model, data, start_epoch, args, writer):
             assert wandb is not None, "Please install wandb."
             wandb.log({name: val, "epoch": start_epoch, "tokens": log_data["tokens"]})
     if is_master(args):
+        print(f"evaluation loss: {losses_m.avg}")
         print(f"evaluation perplexity: {math.exp(losses_m.avg)}")
     return log_data
