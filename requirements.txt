@@ -14,7 +14,7 @@ llm-foundry
 pysimdjson
 cloudpathlib
 apache_beam
-datasets
+datasets~=2.5.2
 huggingface_hub
 pre-commit
 ray[all]
