@@ -2,14 +2,6 @@ import argparse
 import ast
 
 
-def get_default_params(model_name):
-    model_name = model_name.lower()
-    if "vit" in model_name:
-        return {"lr": 5.0e-4, "beta1": 0.9, "beta2": 0.98, "eps": 1.0e-6}
-    else:
-        return {"lr": 5.0e-4, "beta1": 0.9, "beta2": 0.999, "eps": 1.0e-8}
-
-
 class ParseKwargs(argparse.Action):
     def __call__(self, parser, namespace, values, option_string=None):
         kw = {}
@@ -168,10 +160,10 @@ def parse_args(args):
         help="When scheduler w/ cooldown used, perform cooldown from total_epochs - cooldown_epochs onwards.",
     )
     parser.add_argument("--optimizer", default="adamw", help="Optimizer.")
-    parser.add_argument("--lr", type=float, default=None, help="Learning rate.")
-    parser.add_argument("--beta1", type=float, default=None, help="Adam beta 1.")
-    parser.add_argument("--beta2", type=float, default=None, help="Adam beta 2.")
-    parser.add_argument("--eps", type=float, default=None, help="Adam epsilon.")
+    parser.add_argument("--lr", type=float, default=5.0e-4, help="Learning rate.")
+    parser.add_argument("--beta1", type=float, default=0.9, help="Adam beta 1.")
+    parser.add_argument("--beta2", type=float, default=0.95, help="Adam beta 2.")
+    parser.add_argument("--eps", type=float, default=1.0e-8, help="Adam epsilon.")
     parser.add_argument("--wd", type=float, default=0.2, help="Weight decay.")
     parser.add_argument("--warmup", type=int, default=10000, help="Number of steps to warmup for.")
     parser.add_argument(
@@ -508,12 +500,6 @@ def parse_args(args):
     add_model_args(parser)
 
     args = parser.parse_args(args)
-
-    # If some params are not passed, we use the default values based on model name.
-    default_params = get_default_params(args.model)
-    for name, val in default_params.items():
-        if getattr(args, name) is None:
-            setattr(args, name, val)
 
     if args.dataset_type == "synthetic":
         assert args.train_data is None, "--train-data must not be specified if --dataset-type='synthetic'"

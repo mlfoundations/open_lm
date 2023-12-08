@@ -173,14 +173,14 @@ def save_checkpoint(
     if args.save_logs:
         loss_dict = {
             "evaluation_loss": -1,
-            "evaluation_loss_lower_95": -1,
-            "evaluation_loss_upper_95": -1,
         }
 
         if evaluation_metrics is not None:
-            loss_dict["evaluation_loss"] = evaluation_metrics["loss"]
-            loss_dict["evaluation_loss_lower_95"] = evaluation_metrics["loss_lower_95"]
-            loss_dict["evaluation_loss_upper_95"] = evaluation_metrics["loss_upper_95"]
+            for k in evaluation_metrics:
+                if "loss" in k:
+                    loss_dict[f"evaluation_{k}"] = evaluation_metrics[k]
+            loss_dict["evaluation_sequences"] = evaluation_metrics["sequences"]
+            loss_dict["evaluation_tokens"] = evaluation_metrics["tokens"]
 
         checkpoint_dict_model = {
             "epoch": completed_epoch,
@@ -646,9 +646,6 @@ def main(args):
         checkpoint_root = os.path.dirname(args.resume)
 
         metrics = evaluate(model, data, start_epoch, args, writer)
-        metrics["checkpoint_path"] = args.resume
-        metrics["val_data"] = args.val_data
-        metrics["model"] = args.hf_model if args.hf_model else args.model
 
         if is_master(args):
             with fsspec.open(os.path.join(checkpoint_root, "results.jsonl"), "a") as f:
@@ -735,6 +732,12 @@ def main(args):
             # validate based on frequency and always validate the last checkpoint
             try:
                 evaluation_metrics = evaluate(model, data, epoch, args, writer)
+
+                if is_master(args):
+                    with fsspec.open(os.path.join(checkpoint_root, "results.jsonl"), "a") as f:
+                        f.write(json.dumps(evaluation_metrics))
+                        f.write("\n")
+
             except Exception as e:
                 if is_master(args):
                     logging.error(e)
