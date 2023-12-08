@@ -32,10 +32,8 @@ def test_tokenize_shuffle_tar(content_key, NUM_TOKENS):
     if content_key == "npy":
         params += " --vocab_size 16384"
 
-    # TODO: aws s3 cp s3://dcnlp-hub/tokenize_shuffle_test/webvid_tiny/00000.tar to s3://dcnlp-west-test/tokenize_shuffle_test/webvid_tiny/00000.tar
-    # replace in command below
     exit_value = os.system(
-            f"python open_lm/datapreprocess/ray/tokenize_shuffle.py --input s3://dcnlp-hub/tokenize_shuffle_test/webvid_tiny/ {params} --output test_output/ --seqlen {content_len}"
+            f"python open_lm/datapreprocess/ray/tokenize_shuffle.py --input s3://dcnlp-west-test/tokenize_shuffle_test/webvid_tiny/ {params} --output test_output/ --seqlen {content_len}"
     )
     assert exit_value == 0
     ds = wds.WebDataset("test_output/00000001.tar").decode()
