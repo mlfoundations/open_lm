@@ -16,7 +16,7 @@ import torch
 from typing import List, Optional
 from tqdm import tqdm
 
-from .distributed import is_master
+from open_lm.distributed import is_master
 
 
 def remote_sync_s3(local_dir, remote_dir):

@@ -45,13 +45,13 @@ except ImportError:
 
 from open_lm.model import create_model
 from open_lm.utils.transformers.hf_wrapper import create_wrapped_hf_model
-from .data import get_data, get_wds_dataset
-from .distributed import is_master, init_distributed_device, broadcast_object
-from .logger import setup_logging
-from .params import parse_args
-from .scheduler import cosine_lr
-from .train import train_one_epoch, evaluate
-from .file_utils import (
+from open_lm.data import get_data, get_wds_dataset
+from open_lm.distributed import is_master, init_distributed_device, broadcast_object
+from open_lm.logger import setup_logging
+from open_lm.params import parse_args
+from open_lm.scheduler import cosine_lr
+from open_lm.train import train_one_epoch, evaluate
+from open_lm.file_utils import (
     pt_load,
     check_exists,
     start_sync_process,
