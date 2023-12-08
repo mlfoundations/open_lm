@@ -107,7 +107,10 @@ def load_model(args, model):
         global_step = checkpoint.get("step", None)
         if next(iter(sd.items()))[0].startswith("module"):
             sd = {k[len("module.") :]: v for k, v in sd.items()}
-        model.load_state_dict(sd)
+        if args.distributed:
+            model.module.load_state_dict(sd)
+        else:
+            model.load_state_dict(sd)
         logging.info(f"=> resuming checkpoint '{args.resume}' (epoch {start_epoch})")
     else:
         # loading a bare (model only) checkpoint for fine-tune or evaluation
@@ -457,7 +460,8 @@ def main(args):
                 fsdp_kwargs["sharding_strategy"] = ShardingStrategy._HYBRID_SHARD_ZERO2
             print("=> FSDP kwargs: ", fsdp_kwargs)
 
-            # init FSDP
+            # Initialize FSDP. Use the same seed across workers to ensure reset_parameters is the same across workers.
+            random_seed(args.seed, rank=0)
             model = FSDP(
                 model,
                 auto_wrap_policy=transformer_auto_wrapper_policy,
