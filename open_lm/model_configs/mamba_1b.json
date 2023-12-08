@@ -1,0 +1,6 @@
+{
+    "d_model": 2048,
+    "n_layer": 36,
+    "vocab_size": 50432,
+    "seq_len": 2048
+}

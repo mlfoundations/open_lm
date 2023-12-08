@@ -201,10 +201,7 @@ def train_one_epoch(model, data, loss, epoch, step, optimizer, scaler, scheduler
             with autocast():
                 inputs, targets = sample_chunk(texts, args)
 
-                if "mamba" in args.model:
-                    out = model(inputs).logits
-                else:
-                    out, _ = model(inputs)
+                out, _ = model(inputs)
 
                 if args.log_logit_mean:
                     logit_m.update(torch.mean(out).item())
@@ -232,10 +229,7 @@ def train_one_epoch(model, data, loss, epoch, step, optimizer, scaler, scheduler
                             break
                         targets_ii = targets[ii * per_batch : (ii + 1) * per_batch]
 
-                        if "mamba" in args.model:
-                            out = model(inputs).logits
-                        else:
-                            out, _ = model(inputs)
+                        out, _ = model(inputs)
 
                         if args.log_logit_mean:
                             logit_m.update(torch.mean(out).item())
@@ -368,6 +362,7 @@ def evaluate(model, data, start_epoch, args, writer):
             inputs, targets = sample_chunk(texts, args)
 
             out, _ = model(inputs)
+
             total_loss = loss(out.reshape(-1, args.vocab_size), targets.reshape(-1))
             losses_m.update(total_loss.item(), n=inputs.shape[0])
             losses_ci_m.update(total_loss.item(), n=inputs.shape[0])

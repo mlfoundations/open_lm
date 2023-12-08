@@ -333,18 +333,26 @@ def create_params(args):
         )
 
 
+class OpenLMMamba(nn.Module):
+    def __init__(self, params):
+        super().__init__()
+        self.seq_len = params.pop('seq_len')
+        self.vocab_size = params['vocab_size']
+
+        self.model = MambaLMHeadModel(**params)
+
+    def reset_parameters(self):
+        return
+
+    def forward(self, x):
+        out = self.model(x).logits
+        return out, None
+
+
 def create_model(args):
     if 'mamba' in args.model:
-        params = create_params(args)
-        seq_len = params.pop('seq_len')
-
-        model = MambaLMHeadModel(**params)
-
-        model.vocab_size = params['vocab_size']
-        model.seq_len = seq_len
-        model.type = "mamba"
+        model = OpenLMMamba(create_params(args))
         return model
     else:
         model = Transformer(create_params(args)) 
-        model.type = "transformer"
         return model
