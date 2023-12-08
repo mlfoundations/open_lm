@@ -310,12 +310,12 @@ def create_params(args):
     # If a parameter is in the model config, regardless of the args, we use the config parameters
     # If a parameter is not in the model config, we use the args parameter
 
-    if 'mamba' in args.model:
+    if "mamba" in args.model:
         return {
-            "d_model": cfg['d_model'],
-            "n_layer": cfg['n_layer'],
-            "vocab_size": cfg['vocab_size'],
-            "seq_len": cfg['seq_len'],
+            "d_model": cfg["d_model"],
+            "n_layer": cfg["n_layer"],
+            "vocab_size": cfg["vocab_size"],
+            "seq_len": cfg["seq_len"],
         }
     else:
         return Params(
@@ -336,8 +336,8 @@ def create_params(args):
 class OpenLMMamba(nn.Module):
     def __init__(self, params):
         super().__init__()
-        self.seq_len = params.pop('seq_len')
-        self.vocab_size = params['vocab_size']
+        self.seq_len = params.pop("seq_len")
+        self.vocab_size = params["vocab_size"]
 
         self.model = MambaLMHeadModel(**params)
 
@@ -350,9 +350,9 @@ class OpenLMMamba(nn.Module):
 
 
 def create_model(args):
-    if 'mamba' in args.model:
+    if "mamba" in args.model:
         model = OpenLMMamba(create_params(args))
         return model
     else:
-        model = Transformer(create_params(args)) 
+        model = Transformer(create_params(args))
         return model
