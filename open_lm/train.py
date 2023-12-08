@@ -1,18 +1,14 @@
-import ast
 import itertools
-import json
 import logging
 import math
-import os
 import time
 from contextlib import nullcontext
+import copy
 
 import numpy as np
 import torch
 import torch.distributed as dist
-import torch.nn.functional as F
 from torch.distributed.distributed_c10d import ReduceOp
-from torch.nn.parallel.distributed import DistributedDataParallel
 from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
 
 try:
@@ -334,6 +330,7 @@ def evaluate(model, data, start_epoch, args, writer):
 
     data["val"].set_epoch(start_epoch)  # set epoch in process safe manner via sampler or shared_epoch
     dataloader = data["val"].dataloader
+    max_num_batches = dataloader.num_batches
 
     losses_m = AverageMeter()
     batch_time_m = AverageMeter()
@@ -345,7 +342,10 @@ def evaluate(model, data, start_epoch, args, writer):
 
     end = time.time()
     loss = torch.nn.CrossEntropyLoss(reduction="none")
-    for _, batch in enumerate(dataloader):
+    for i, batch in enumerate(dataloader):
+        if i == max_num_batches:
+            break
+
         (texts,) = batch
         texts = torch.LongTensor(texts).to(device)
 
@@ -410,6 +410,7 @@ def evaluate(model, data, start_epoch, args, writer):
             assert wandb is not None, "Please install wandb."
             wandb.log({name: val, "epoch": start_epoch, "tokens": log_data["tokens"]})
     if is_master(args):
+        print(f"evaluation on: {args.val_data}")
         print(f"evaluation loss: {losses_m.avg}")
         print(f"evaluation perplexity: {math.exp(losses_m.avg)}")
         print(f"num seqs: {num_seqs}")
@@ -420,3 +421,15 @@ def evaluate(model, data, start_epoch, args, writer):
     log_data["model"] = args.hf_model if args.hf_model else args.model
 
     return log_data
+
+
+def evaluate_loop(model, data_list, start_epoch, args, writer):
+    log_data_list = []
+    for i, data in enumerate(data_list):
+        args_copy = copy.deepcopy(args)
+        args_copy.val_data = [args.val_data[i]]
+        args_copy.val_data_key = args.val_data_key[i]
+
+        log_data_list.append(evaluate(model, data, start_epoch, args_copy, writer))
+
+    return log_data_list

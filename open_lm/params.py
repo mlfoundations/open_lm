@@ -86,8 +86,12 @@ def parse_args(args):
     parser.add_argument(
         "--val-data",
         type=str,
+        nargs="+",
         default=None,
-        help="Path to file(s) with validation data",
+        help=(
+            "Path to file(s) with validation data. Note: each space seperated entry will be processed seperately an writen as seperate entries in"
+            " a results.jsonl file."
+        ),
     )
     parser.add_argument(
         "--data-key",
@@ -242,8 +246,9 @@ def parse_args(args):
     parser.add_argument(
         "--val-data-key",
         type=str,
-        default="txt",
-        help="what is the extension for val-data.",
+        nargs="+",
+        default=None,
+        help="what is the extension fore each val-data source.",
     )
     parser.add_argument(
         "--resume",

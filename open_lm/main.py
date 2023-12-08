@@ -50,7 +50,7 @@ from .distributed import is_master, init_distributed_device, broadcast_object
 from .logger import setup_logging
 from .params import parse_args
 from .scheduler import cosine_lr
-from .train import train_one_epoch, evaluate
+from .train import train_one_epoch, evaluate_loop
 from .file_utils import (
     pt_load,
     check_exists,
@@ -569,8 +569,7 @@ def main(args):
 
     # initialize datasets
     # use tokenizer=None because the data is already pre-tokenized.
-    if args.val_data is not None:
-        args.val_data = [args.val_data]
+
     data = get_data(
         args,
         epoch=start_epoch,
@@ -627,8 +626,7 @@ def main(args):
     if args.wandb and is_master(args):
         assert wandb is not None, "Please install wandb."
         logging.debug("Starting wandb.")
-        if args.val_data is not None:
-            args.val_sz = data["val"].dataloader.num_samples
+
         wandb.init(
             project=args.wandb_project_name,
             name=args.name,
@@ -645,7 +643,7 @@ def main(args):
     if not requires_training:
         checkpoint_root = os.path.dirname(args.resume)
 
-        metrics = evaluate(model, data, start_epoch, args, writer)
+        metrics = evaluate_loop(model, data["val_list"], start_epoch, args, writer)
 
         if is_master(args):
             with fsspec.open(os.path.join(checkpoint_root, "results.jsonl"), "a") as f:
@@ -728,10 +726,10 @@ def main(args):
 
         epoch = epoch + 1
         evaluation_metrics = None
-        if "val" in data and (epoch % args.val_frequency == 0 or done_training):
+        if "val_list" in data and (epoch % args.val_frequency == 0 or done_training):
             # validate based on frequency and always validate the last checkpoint
             try:
-                evaluation_metrics = evaluate(model, data, epoch, args, writer)
+                evaluation_metrics = evaluate_loop(model, data["val_list"], epoch, args, writer)
 
                 if is_master(args):
                     with fsspec.open(os.path.join(checkpoint_root, "results.jsonl"), "a") as f:
