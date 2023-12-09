@@ -334,10 +334,13 @@ def create_params(args):
         )
 
 
-class OpenLMMamba(nn.Module):
+class Mamba(nn.Module):
     # Experimental architecture, please "pip install mamba-ssm"
     # https://arxiv.org/abs/2312.00752
     def __init__(self, params):
+        if MambaLMHeadModel is None:
+            raise ImportError("MambaLMHeadModel is not available. Please install the 'mamba_ssm' package by running 'pip install mamba-ssm'.")
+
         super().__init__()
         self.seq_len = params.pop("seq_len")
         self.vocab_size = params["vocab_size"]
@@ -354,7 +357,7 @@ class OpenLMMamba(nn.Module):
 
 def create_model(args):
     if "mamba" in args.model:
-        model = OpenLMMamba(create_params(args))
+        model = Mamba(create_params(args))
         return model
     else:
         model = Transformer(create_params(args))
