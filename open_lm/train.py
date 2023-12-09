@@ -416,7 +416,7 @@ def evaluate(model, data, start_epoch, args, writer):
         print(f"evaluation loss: {losses_m.avg}")
         print(f"evaluation perplexity: {math.exp(losses_m.avg)}")
         print(f"num seqs: {num_seqs}")
-        print(f"num tokens: {losses_tok_ci_m.points.shape[0]}")
+        print(f"num tokens: {num_toks}")
 
     log_data["checkpoint_path"] = args.resume
     log_data["val_data"] = args.val_data

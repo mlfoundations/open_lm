@@ -171,22 +171,11 @@ def save_checkpoint(
             optim_state = FSDP.optim_state_dict(model, optimizer)
 
     if args.save_logs:
-        loss_dict = {
-            "evaluation_loss": -1,
-        }
-
-        if evaluation_metrics is not None:
-            for k in evaluation_metrics:
-                if "loss" in k:
-                    loss_dict[f"evaluation_{k}"] = evaluation_metrics[k]
-            loss_dict["evaluation_sequences"] = evaluation_metrics["sequences"]
-            loss_dict["evaluation_tokens"] = evaluation_metrics["tokens"]
-
         checkpoint_dict_model = {
             "epoch": completed_epoch,
             "name": args.name,
             "state_dict": cpu_state if args.fsdp else model.state_dict(),
-            **loss_dict,
+            "evaluation_metrics": evaluation_metrics,
         }
         if next_shard_per_source is not None:
             checkpoint_dict_model["next_shard_per_source"] = next_shard_per_source
@@ -201,7 +190,7 @@ def save_checkpoint(
             "epoch": completed_epoch,
             "name": args.name,
             "optimizer": optim_state if args.fsdp else optimizer.state_dict(),
-            **loss_dict,
+            "evaluation_metrics": evaluation_metrics,
         }
 
         if scaler is not None:
@@ -211,7 +200,7 @@ def save_checkpoint(
             "epoch": completed_epoch,
             "name": args.name,
             "is_final_checkpoint": is_final_checkpoint,
-            **loss_dict,
+            "evaluation_metrics": evaluation_metrics,
         }
 
         prefixes = {
@@ -725,14 +714,14 @@ def main(args):
             break
 
         epoch = epoch + 1
-        evaluation_metrics = None
+        evaluation_metrics = []
         if "val_list" in data and (epoch % args.val_frequency == 0 or done_training):
             # validate based on frequency and always validate the last checkpoint
             try:
                 evaluation_metrics = evaluate_loop(model, data["val_list"], epoch, args, writer)
 
                 if is_master(args):
-                    with fsspec.open(os.path.join(checkpoint_root, "results.jsonl"), "a") as f:
+                    with fsspec.open(os.path.join(args.checkpoint_path, "results.jsonl"), "a") as f:
                         f.write(json.dumps(evaluation_metrics))
                         f.write("\n")
 

@@ -89,8 +89,8 @@ def parse_args(args):
         nargs="+",
         default=None,
         help=(
-            "Path to file(s) with validation data. Note: each space seperated entry will be processed seperately an writen as seperate entries in"
-            " a results.jsonl file."
+            "Path to file(s) with validation data. Note: each space seperated entry will be processed seperately and writen as seperate entries "
+            "in a results.jsonl file."
         ),
     )
     parser.add_argument(
