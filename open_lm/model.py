@@ -339,7 +339,9 @@ class Mamba(nn.Module):
     # https://arxiv.org/abs/2312.00752
     def __init__(self, params):
         if MambaLMHeadModel is None:
-            raise ImportError("MambaLMHeadModel is not available. Please install the 'mamba_ssm' package by running 'pip install mamba-ssm'.")
+            raise ImportError(
+                "MambaLMHeadModel is not available. Please install the 'mamba_ssm' package by running 'pip install mamba-ssm'."
+            )
 
         super().__init__()
         self.seq_len = params.pop("seq_len")
