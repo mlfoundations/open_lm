@@ -163,7 +163,6 @@ def save_checkpoint(
         with FSDP.state_dict_type(model, StateDictType.FULL_STATE_DICT, save_policy):
             cpu_state = model.state_dict()
             optim_state = FSDP.optim_state_dict(model, optimizer)
-    print("CHECKING SAVE OF ARGS", args)
     if args.save_logs:
         checkpoint_dict_model = {
             "epoch": completed_epoch,
