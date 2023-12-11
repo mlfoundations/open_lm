@@ -50,7 +50,7 @@ from open_lm.distributed import is_master, init_distributed_device, broadcast_ob
 from open_lm.logger import setup_logging
 from open_lm.params import parse_args
 from open_lm.scheduler import cosine_lr
-from open_lm.train import train_one_epoch, evaluate
+from open_lm.train import train_one_epoch, evaluate_loop
 from open_lm.file_utils import (
     pt_load,
     check_exists,
@@ -171,22 +171,11 @@ def save_checkpoint(
             optim_state = FSDP.optim_state_dict(model, optimizer)
 
     if args.save_logs:
-        loss_dict = {
-            "evaluation_loss": -1,
-            "evaluation_loss_lower_95": -1,
-            "evaluation_loss_upper_95": -1,
-        }
-
-        if evaluation_metrics is not None:
-            loss_dict["evaluation_loss"] = evaluation_metrics["loss"]
-            loss_dict["evaluation_loss_lower_95"] = evaluation_metrics["loss_lower_95"]
-            loss_dict["evaluation_loss_upper_95"] = evaluation_metrics["loss_upper_95"]
-
         checkpoint_dict_model = {
             "epoch": completed_epoch,
             "name": args.name,
             "state_dict": cpu_state if args.fsdp else model.state_dict(),
-            **loss_dict,
+            "evaluation_metrics": evaluation_metrics,
         }
         if next_shard_per_source is not None:
             checkpoint_dict_model["next_shard_per_source"] = next_shard_per_source
@@ -201,7 +190,7 @@ def save_checkpoint(
             "epoch": completed_epoch,
             "name": args.name,
             "optimizer": optim_state if args.fsdp else optimizer.state_dict(),
-            **loss_dict,
+            "evaluation_metrics": evaluation_metrics,
         }
 
         if scaler is not None:
@@ -211,7 +200,7 @@ def save_checkpoint(
             "epoch": completed_epoch,
             "name": args.name,
             "is_final_checkpoint": is_final_checkpoint,
-            **loss_dict,
+            "evaluation_metrics": evaluation_metrics,
         }
 
         prefixes = {
@@ -569,8 +558,7 @@ def main(args):
 
     # initialize datasets
     # use tokenizer=None because the data is already pre-tokenized.
-    if args.val_data is not None:
-        args.val_data = [args.val_data]
+
     data = get_data(
         args,
         epoch=start_epoch,
@@ -627,8 +615,7 @@ def main(args):
     if args.wandb and is_master(args):
         assert wandb is not None, "Please install wandb."
         logging.debug("Starting wandb.")
-        if args.val_data is not None:
-            args.val_sz = data["val"].dataloader.num_samples
+
         wandb.init(
             project=args.wandb_project_name,
             name=args.name,
@@ -645,15 +632,11 @@ def main(args):
     if not requires_training:
         checkpoint_root = os.path.dirname(args.resume)
 
-        metrics = evaluate(model, data, start_epoch, args, writer)
-        metrics["checkpoint_path"] = args.resume
-        metrics["val_data"] = args.val_data
-        metrics["model"] = args.hf_model if args.hf_model else args.model
+        metrics = evaluate_loop(model, data["val_list"], start_epoch, args, writer)
 
         if is_master(args):
             with fsspec.open(os.path.join(checkpoint_root, "results.jsonl"), "a") as f:
-                f.write(json.dumps(metrics))
-                f.write("\n")
+                f.write(f"{json.dumps(metrics)}\n")
 
         return
 
@@ -730,11 +713,16 @@ def main(args):
             break
 
         epoch = epoch + 1
-        evaluation_metrics = None
-        if "val" in data and (epoch % args.val_frequency == 0 or done_training):
+        evaluation_metrics = []
+        if "val_list" in data and (epoch % args.val_frequency == 0 or done_training):
             # validate based on frequency and always validate the last checkpoint
             try:
-                evaluation_metrics = evaluate(model, data, epoch, args, writer)
+                evaluation_metrics = evaluate_loop(model, data["val_list"], epoch, args, writer)
+
+                if is_master(args):
+                    with fsspec.open(os.path.join(args.checkpoint_path, "results.jsonl"), "a") as f:
+                        f.write(f"{json.dumps(evaluation_metrics)}\n")
+
             except Exception as e:
                 if is_master(args):
                     logging.error(e)

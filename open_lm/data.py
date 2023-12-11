@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from multiprocessing import Value
 from functools import partial
 from itertools import islice
+import copy
 
 import numpy as np
 import pandas as pd
@@ -557,7 +558,7 @@ def get_synthetic_dataset(args, is_train, epoch, tokenizer, data_key, floor):
     return DataInfo(dataloader, sampler)
 
 
-def get_dataset_fn(data_path, dataset_type):
+def get_dataset_fn(dataset_type):
     if dataset_type == "synthetic":
         return get_synthetic_dataset
     else:
@@ -571,13 +572,22 @@ def get_data(args, epoch=0, tokenizer=None, skip_train=False, floor=True):
         data["train"] = None
     else:
         if args.train_data or args.dataset_type == "synthetic":
-            data["train"] = get_dataset_fn(args.train_data, args.dataset_type)(
+            # train data is treated as a shard list where all data is combined and tained on
+            data["train"] = get_dataset_fn(args.dataset_type)(
                 args, is_train=True, epoch=epoch, tokenizer=tokenizer, data_key=args.data_key, floor=floor
             )
 
     if args.val_data:
-        data["val"] = get_dataset_fn(args.val_data, args.dataset_type)(
-            args, is_train=False, tokenizer=tokenizer, data_key=args.val_data_key
-        )
+        # val data is treated as independent val sets to be evaluated
+        data["val_list"] = []
+        for i, val_data in enumerate(args.val_data):
+            args_copy = copy.deepcopy(args)
+            args_copy.val_data = [val_data]
+            data_val = {
+                "val": get_dataset_fn(args.dataset_type)(
+                    args_copy, is_train=False, tokenizer=tokenizer, data_key=args.val_data_key[i]
+                )
+            }
+            data["val_list"].append(data_val)
 
     return data
