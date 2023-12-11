@@ -2,6 +2,32 @@ from open_lm.main import main, train_one_epoch
 import shutil
 import pytest
 import numpy as np
+from tensorboard.backend.event_processing import event_accumulator
+import pandas as pd
+import glob
+import os
+
+# ==============================================================
+# =                 Testing utilities                          =
+# ==============================================================
+
+def parse_tensorboard(tb_path):
+    ea = event_accumulator.EventAccumulator(
+        tb_path,
+        size_guidance={event_accumulator.SCALARS: 0},
+    )    
+    _absorb_print = ea.Reload()
+    return {k: pd.DataFrame(ea.Scalars(k)) for k in ea.Tags()['scalars']}    
+
+
+
+# ==============================================================
+# =                    Simple Test                             =
+# ==============================================================
+
+
+
+
 
 def test_train_simple():
     seq_len = 16
@@ -229,4 +255,52 @@ def test_lr_multi_epoch_cyclic():
         if global_step >= 100:
             assert all(abs(lr - compute_lr(global_step - 1)) < 1e-8 for lr in lrs)
 
+
+
+# =========================================================
+# =                main.py tests for LR                   =
+# =========================================================
+
+
+def test_lr_scheduling_from_main():
+    # First make sure we start from a clean slate
+    print("SETTING UP WITH PRINTS")
+    LOG_PATH = './logs/test_logs/test_lr_scheduling_from_main/'
+    def cleanup_test():
+        shutil.rmtree(LOG_PATH, ignore_errors=True)
+    cleanup_test()
+
+
+    # Then do a training run
+    seq_len = 16
+    batch_size = 5
+    num_epochs = 1
+    total_batches = 1000
+    num_batches = total_batches // num_epochs
+    args = ['--train-num-samples', str(num_batches * seq_len * batch_size),
+            '--batch-size', str(batch_size),
+            '--dataset-type', 'synthetic',
+            '--model', 'open_lm_test_tiny',
+            '--epochs', str(num_epochs),
+            '--debug',
+            '--lr', '1e0',  #artificially high LR
+            '--warmup', str(100), # short warmup
+            '--log-every-n-steps', str(1), 
+            '--report-to', 'tensorboard',
+            '--logs', LOG_PATH] 
+    output_args = main(args)
+
+
+    tb_data = parse_tensorboard(glob.glob(os.path.join(output_args.tensorboard_path, '*'))[0])
+    lr_array = np.array(tb_data['train/lr']['value'])
+    assert len(lr_array) == 1000 # Make sure we've flushed TB
+
+    compute_lr = lambda s: 0.5 * 1e0 * (1 + np.cos(np.pi * (s - 100) / (total_batches - 100)))
+    expected_lr = np.array([1e0 * i / 100 for i in range(1, 101)]  + 
+                           [compute_lr(_) for _ in range(100, 1000)])
+    max_diff = (abs(expected_lr - lr_array)).max()
+    assert max_diff < 1e-7 
+
+    # and cleanup when done
+    cleanup_test()
 

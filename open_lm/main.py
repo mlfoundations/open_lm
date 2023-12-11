@@ -30,9 +30,9 @@ from torch.distributed.fsdp import (
 )
 from torch.distributed.fsdp.wrap import transformer_auto_wrap_policy
 
-from .data import proc_token
-from .model import Block
-from .losses import CrossEntropyLossWithZLoss
+from open_lm.data import proc_token
+from open_lm.model import Block
+from open_lm.losses import CrossEntropyLossWithZLoss
 
 try:
     import wandb
@@ -46,13 +46,13 @@ except ImportError:
 
 from open_lm.model import create_model
 from open_lm.utils.transformers.hf_wrapper import create_wrapped_hf_model
-from .data import get_data, get_wds_dataset
-from .distributed import is_master, init_distributed_device, broadcast_object
-from .logger import setup_logging
-from .params import parse_args
-from .scheduler import cosine_lr
-from .train import train_one_epoch, evaluate
-from .file_utils import (
+from open_lm.data import get_data, get_wds_dataset
+from open_lm.distributed import is_master, init_distributed_device, broadcast_object
+from open_lm.logger import setup_logging
+from open_lm.params import parse_args
+from open_lm.scheduler import cosine_lr
+from open_lm.train import train_one_epoch, evaluate
+from open_lm.file_utils import (
     pt_load,
     check_exists,
     start_sync_process,
@@ -776,6 +776,7 @@ def main(args):
         else:
             logging.info("Final remote sync failed.")
 
+    return args
 
 def copy_codebase(args):
     from shutil import copytree, ignore_patterns
