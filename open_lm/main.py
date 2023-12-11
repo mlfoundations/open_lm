@@ -388,10 +388,7 @@ def main(args):
     if args.hf_model is not None:
         model = create_wrapped_hf_model(args)
     else:
-        with torch.device("meta" if args.fsdp else args.device):
-            model = create_model(args)
-        if not args.fsdp:
-            model.reset_parameters()
+        model = create_model(args)
 
     args.vocab_size = model.vocab_size
     args.seq_len = model.seq_len
@@ -399,6 +396,8 @@ def main(args):
         args.train_num_samples //= args.seq_len
     if args.val_num_samples is not None:
         args.val_num_samples //= args.seq_len
+
+    model = model.to(device)
 
     random_seed(args.seed, args.rank)
 
@@ -536,6 +535,82 @@ def main(args):
         next_shard_per_source, samples_seen = load_data_chunks(args)
         if samples_seen >= args.train_num_samples * args.epochs:
             raise RuntimeError("Loaded a checkpoint which has already seen the desired number of tokens.")
+
+    if args.distributed:
+        if args.fsdp:
+            transformer_layer_cls = None
+
+            if args.hf_model is not None:
+                # retrive the user specified block class for fsdp
+                for _, target_cls in model.named_modules():
+                    if args.hf_fsdp_block in type(target_cls).__name__:
+                        transformer_layer_cls = {type(target_cls)}
+                        break
+
+                if transformer_layer_cls is None:
+                    print(f"--hf-fsdp-block {args.hf_fsdp_block} not found in --hf-model {args.hf_model}")
+                    return -1
+
+            else:
+                transformer_layer_cls = {Block}
+            # from https://pytorch.org/blog/efficient-large-scale-training-with-pytorch/
+            transformer_auto_wrapper_policy = functools.partial(
+                transformer_auto_wrap_policy,
+                transformer_layer_cls=transformer_layer_cls,
+            )
+            # tries to follow gopher...
+            mp_policy = None
+            if args.fsdp_amp:
+                print("=> using bfloat16 params as part of fsdp amp policy.")
+                mp_policy = MixedPrecision(
+                    param_dtype=torch.bfloat16,
+                    reduce_dtype=torch.float32,
+                    buffer_dtype=torch.bfloat16,
+                )
+            elif args.fsdp_pure_bf16:
+                print("=> using pure bfloat16 params as part of fsdp amp policy.")
+                mp_policy = MixedPrecision(
+                    param_dtype=torch.bfloat16,
+                    reduce_dtype=torch.bfloat16,
+                    buffer_dtype=torch.bfloat16,
+                )
+
+            if args.rank == 0:
+                print(f"Before FSDP parameter num: {sum(p.numel() for p in model.parameters())}")
+                print(f"Before FSDP {torch.cuda.memory_allocated()/1024**3:.3} GB")
+
+            fsdp_kwargs = {}
+            assert not (
+                args.fsdp_hybrid and args.fsdp_hybrid_o2
+            ), "Only --fsdp-hybrid or --fsdp-hybrid-o2 should be set."
+            if args.fsdp_backward_prefetch:
+                fsdp_kwargs["backward_prefetch"] = BackwardPrefetch.BACKWARD_PRE
+            if args.fsdp_hybrid:
+                fsdp_kwargs["sharding_strategy"] = ShardingStrategy.HYBRID_SHARD
+            if args.fsdp_hybrid_o2:
+                fsdp_kwargs["sharding_strategy"] = ShardingStrategy._HYBRID_SHARD_ZERO2
+            print("=> FSDP kwargs: ", fsdp_kwargs)
+
+            # init FSDP
+            model = FSDP(
+                model,
+                auto_wrap_policy=transformer_auto_wrapper_policy,
+                device_id=device,
+                mixed_precision=mp_policy,
+                cpu_offload=CPUOffload(offload_params=args.fsdp_cpu_offload),
+                use_orig_params=args.fsdp_use_orig_params,
+                limit_all_gathers=args.fsdp_limit_all_gathers,
+                **fsdp_kwargs,
+            )
+
+            print(f"After FSDP parameter num: {sum(p.numel() for p in model.parameters())} on rank {args.rank}")
+            print(f"After FSDP {torch.cuda.memory_allocated()/1024**3:.3} GB on rank {args.rank}")
+        else:
+            ddp_args = {}
+            if args.ddp_static_graph:
+                # this doesn't exist in older PyTorch, arg only added if enabled
+                ddp_args["static_graph"] = True
+            model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[device], **ddp_args)
 
     # create optimizer and scaler
     optimizer = None

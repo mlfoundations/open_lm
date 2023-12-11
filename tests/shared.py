@@ -1,6 +1,5 @@
 import torch
 from torch import optim
-from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
 
 from open_lm.main import random_seed
 from open_lm.model import create_model
@@ -92,7 +91,7 @@ class MockDataArgs(object):
         self.ignore_parse_errors = False
 
 
-def create_train_fixtures(model="open_lm_11m", fsdp=False):
+def create_train_fixtures(model="open_lm_11m"):
     # Setup data, optimizer, and other basic settings
     args = MockTrainArgs(model)
 
@@ -105,14 +104,7 @@ def create_train_fixtures(model="open_lm_11m", fsdp=False):
 
     # create base models
     random_seed()
-    if fsdp:
-        with torch.device("meta"):
-            model = create_model(args)
-        model = FSDP(model)
-    else:
-        model = create_model(args)
-        model.reset_parameters()
-        model = model.to(args.device)
+    model = create_model(args).to(args.device)
 
     # create dataloader
     data = get_data(
