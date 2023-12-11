@@ -50,7 +50,7 @@ from open_lm.distributed import is_master, init_distributed_device, broadcast_ob
 from open_lm.logger import setup_logging
 from open_lm.params import parse_args
 from open_lm.scheduler import cosine_lr
-from open_lm.train import train_one_epoch, evaluate
+from open_lm.train import train_one_epoch, evaluate_loop
 from open_lm.file_utils import (
     pt_load,
     check_exists,
@@ -636,8 +636,7 @@ def main(args):
 
         if is_master(args):
             with fsspec.open(os.path.join(checkpoint_root, "results.jsonl"), "a") as f:
-                f.write(json.dumps(metrics))
-                f.write("\n")
+                f.write(f"{json.dumps(metrics)}\n")
 
         return
 
@@ -722,8 +721,7 @@ def main(args):
 
                 if is_master(args):
                     with fsspec.open(os.path.join(args.checkpoint_path, "results.jsonl"), "a") as f:
-                        f.write(json.dumps(evaluation_metrics))
-                        f.write("\n")
+                        f.write(f"{json.dumps(evaluation_metrics)}\n")
 
             except Exception as e:
                 if is_master(args):
