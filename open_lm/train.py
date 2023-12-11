@@ -44,22 +44,22 @@ class ConfidenceIntervalMeter(object):
         self.reset()
 
     def reset(self):
-        self.points = None
+        self.points = []
 
     def update(self, val):
-        if self.points is None:
-            self.points = val
-        else:
-            self.points = torch.cat([self.points, val])
+        self.points.append(val)
 
     def compute_bootstrap_ci(self, num_samples=10_000, interval=95):
         lower = None
         upper = None
 
+        points_tensor = torch.cat(self.points)
+        num_points = self.points.shape[0]
+
         estimates = []
         for _ in range(num_samples):
-            i = np.random.choice(self.points.shape[0], size=self.points.shape[0])
-            estimate = torch.sum(self.points[i]) / self.points.shape[0]
+            i = np.random.choice(num_points, size=num_points)
+            estimate = torch.sum(points_tensor[i]) / num_points
             estimates.append(estimate.item())
 
         half = (100 - interval) / 2
