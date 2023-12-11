@@ -243,7 +243,9 @@ def main(args):
     # fully initialize distributed device environment
     device = init_distributed_device(args)
 
-    assert args.global_batch_size % args.world_size == 0, "Global batch size is not divisible by number of GPUs, and thus cannot be respected."
+    assert (
+        args.global_batch_size % args.world_size == 0
+    ), "Global batch size is not divisible by number of GPUs, and thus cannot be respected."
 
     args.per_gpu_batch_size = args.global_batch_size // args.world_size
 
