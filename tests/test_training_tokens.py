@@ -33,7 +33,8 @@ def test_token_count(test_case):
 
     download_dl_test_data()
     args, model, _, optimizer, scheduler, loss = create_train_fixtures("open_lm_11m")
-    args.batch_size = batch_size
+    args.global_batch_size = batch_size
+    args.per_gpu_batch_size = args.global_batch_size // args.world_size
     args.workers = workers
     args.train_data = None
     args.dataset_manifest = SOURCE_MANIFEST
@@ -41,8 +42,7 @@ def test_token_count(test_case):
     args.train_num_samples = desired_sequences_per_epoch
 
     total_samples = desired_sequences_per_epoch * desired_epochs
-    global_batch_size = args.batch_size * args.world_size
-    total_steps = total_samples // (global_batch_size)
+    total_steps = total_samples // (args.global_batch_size)
     global_step = 0
     next_shard_per_source = [0]
     epoch = 0

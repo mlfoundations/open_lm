@@ -201,8 +201,8 @@ def train_one_epoch(model, data, loss, epoch, step, optimizer, scaler, scheduler
         else:
             # split up batch into accum_freq chunks -- if you have --batch-size 8 and --accum-freq 4
             # then you only process 2 items at a time. batch-size must be divisible by accume-freq.
-            assert args.batch_size % args.accum_freq == 0, "Batch size must be divisible by accum_freq"
-            per_batch = args.batch_size // args.accum_freq
+            assert args.per_gpu_batch_size % args.accum_freq == 0, "Per-GPU batch size must be divisible by accum_freq"
+            per_batch = args.per_gpu_batch_size // args.accum_freq
 
             inputs, targets = sample_chunk(texts, args)
 
@@ -287,7 +287,7 @@ def train_one_epoch(model, data, loss, epoch, step, optimizer, scaler, scheduler
                 "samples_per_second": samples_per_second,
                 "samples_per_second_per_gpu": samples_per_second_per_gpu,
                 "lr": optimizer.param_groups[0]["lr"],
-                "tokens": (step + 1) * args.batch_size * args.seq_len * args.world_size,
+                "tokens": (step + 1) * args.global_batch_size * args.seq_len,
             }
 
             if args.log_logit_mean:

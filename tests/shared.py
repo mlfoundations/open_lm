@@ -31,7 +31,7 @@ class MockTrainArgs:
         self.warmup = 2
         self.skip_scheduler = False
         self.accum_freq = 1
-        self.batch_size = 8
+        self.global_batch_size = 8
         self.grad_clip_norm = 1.0
         self.rank = 0
         self.local_rank = 0
@@ -64,6 +64,8 @@ class MockTrainArgs:
         self.target_mask_left = None
         self.target_mask_individual = None
         self.ignore_parse_errors = False
+        self.per_gpu_batch_size = self.global_batch_size // self.world_size
+
 
 
 class MockDataArgs(object):
@@ -81,7 +83,7 @@ class MockDataArgs(object):
         self.disable_buffer = True
         self.seq_len = 2048
         self.vocab_size = 50432
-        self.batch_size = 64
+        self.global_batch_size = 64
         self.world_size = 1
         self.rank = 0
         self.workers = 2
@@ -90,6 +92,7 @@ class MockDataArgs(object):
         self.target_mask_left = None
         self.target_mask_individual = None
         self.ignore_parse_errors = False
+        self.per_gpu_batch_size = self.global_batch_size // self.world_size
 
 
 def create_train_fixtures(model="open_lm_11m", fsdp=False):
