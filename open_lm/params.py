@@ -214,7 +214,8 @@ def parse_args(args):
         help="Optional identifier for the experiment when storing logs. Otherwise use current time.",
     )
     parser.add_argument("--workers", type=int, default=1, help="Number of dataloader workers per GPU.")
-    parser.add_argument("--batch-size", type=int, default=64, help="Batch size per GPU.")
+    parser.add_argument("--batch-size", type=int, default=None, help="Batch size per GPU.")
+    parser.add_argument("--global-batch-size", type=int, default=None, help="Batch size over all GPUs.")
     parser.add_argument("--epochs", type=int, default=32, help="Number of epochs to train for.")
     parser.add_argument(
         "--epochs-cooldown",
@@ -573,6 +574,9 @@ def parse_args(args):
     if args.dataset_type == "synthetic":
         assert args.train_data is None, "--train-data must not be specified if --dataset-type='synthetic'"
         assert args.dataset_manifest is None, "--dataset-manifest must not be specified if --dataset-type='synthetic'"
+
+    if args.batch_size is not None and args.global_batch_size is not None:
+        assert False, "specify --batch-size or --global-batch-size but not both"
 
     if args.val_data is not None and args.val_batch_size is None:
         # if not set explicitly make sure that the val batch size is set to the micro batch size

@@ -243,6 +243,13 @@ def main(args):
     # fully initialize distributed device environment
     device = init_distributed_device(args)
 
+    if args.global_batch_size is not None:
+        if args.global_batch_size % args.world_size != 0:
+            raise ValueError(f"World size: {args.world_size} must divide global batch size: {args.global_batch_size}")
+
+        # set batch_size accordingly
+        args.batch_size = args.global_batch_size // args.world_size
+
     if args.hf_model is not None and args.hf_seq_len is None:
         raise ValueError("If passing --hf-model, must also pass --hf-seq-len to be used for training/fine-tuning.")
 
