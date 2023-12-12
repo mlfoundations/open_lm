@@ -82,6 +82,8 @@ class Params:
 
 
 def get_rectangular_mask(shape, q_seq_len, k_seq_len, device, dtype):
+    # xformers requires the mask to be built with a shape that is a multiple of 8
+    # probably because of the way it is implemented in CUDA
     next_multiple_8 = (k_seq_len + 7) // 8 * 8  #
     mask = torch.ones((q_seq_len, next_multiple_8), device=device, dtype=bool)
     mask[:, -q_seq_len:] = torch.tril(mask[:, -q_seq_len:], diagonal=0)
@@ -92,9 +94,22 @@ def get_rectangular_mask(shape, q_seq_len, k_seq_len, device, dtype):
 
 def xformers_attn(queries, keys, values, is_causal):
     # xformers assumes q, k, v are [batch, seq_len, heads, embed_dim]
-    # We assume that queries match the last part of the key / value sequences 
+    # We assume that queries match the last part of the key / value sequences
     # see (https://facebookresearch.github.io/xformers/components/ops.html#xformers.ops.fmha.attn_bias.LowerTriangularFromBottomRightMask)
-    mask = xops.fmha.attn_bias.LowerTriangularFromBottomRightMask()
+    # we would like to replace the mask generation with: mask = xops.fmha.attn_bias.LowerTriangularFromBottomRightMask()
+    # sadly we cannot us this because it needs xformers>=0.0.23 and this is not compatible with torch<2.1.1 while llm-foundry requires torch<2.1.1
+
+    mask = None
+    # If queries have shape [batch, 1, heads, dim] it means there is only one query in the sequence.
+    # In this case, there is no notion of causal masking, so we can just set the mask to None.
+    # This is actually needed to get the desired behavior with seq_len=1.
+    if is_causal and queries.shape[1] == keys.shape[1]:
+        mask = xops.LowerTriangularMask()
+    elif is_causal and queries.shape[1] > 1:
+        # Build causal mask that assumes queries are in the end of the sequence.
+        batch, q_seq_len, heads, _ = queries.shape
+        k_seq_len = keys.shape[1]
+        mask = get_rectangular_mask((batch, heads), q_seq_len, k_seq_len, queries.device, queries.dtype)
     return xops.memory_efficient_attention(queries, keys, values, attn_bias=mask)
 
 
@@ -105,7 +120,9 @@ def torch_attn(queries, keys, values, is_causal):
     if is_causal and keys.shape[1] > queries.shape[1] > 1:
         q_seq_len = queries.shape[1]
         k_seq_len = keys.shape[1]
-        mask = xops.fmha.attn_bias.LowerTriangularFromBottomRightMask().materialize((1, 1, q_seq_len, k_seq_len), queries.dtype, queries.device)
+        # Same as above, we would like to use:
+        # mask = xops.fmha.attn_bias.LowerTriangularFromBottomRightMask().materialize((1, 1, q_seq_len, k_seq_len), queries.dtype, queries.device)
+        mask = get_rectangular_mask((1, 1), q_seq_len, k_seq_len, queries.device, queries.dtype)
         return (
             F.scaled_dot_product_attention(
                 queries.transpose(1, 2), keys.transpose(1, 2), values.transpose(1, 2), attn_mask=mask
