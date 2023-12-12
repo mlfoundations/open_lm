@@ -499,7 +499,7 @@ def main(args):
                 ddp_args["static_graph"] = True
 
             model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[device], **ddp_args)
-
+            print(f"After DDP parameter num: {sum(p.numel() for p in model.parameters())} on rank {args.rank}")
     # create optimizer and scaler
     optimizer = None
     scaler = None

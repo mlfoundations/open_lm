@@ -173,7 +173,7 @@ def train_one_epoch(model, data, loss, epoch, optimizer, scaler, scheduler, tota
                             break
                         targets_ii = targets[ii * per_batch : (ii + 1) * per_batch]
                         out, _ = model(inputs_ii)
-                            
+                        
                         if args.log_logit_mean:
                             logit_m.update(torch.mean(out).item())
 
