@@ -21,6 +21,7 @@ ENV SAGEMAKER_SUBMIT_DIRECTORY /opt/ml/code
 
 # /opt/ml and all subdirectories are utilized by SageMaker, use the /code subdirectory to store your user code.
 COPY . /opt/ml/code/
+RUN rm /opt/ml/code/setup.py
 
 RUN pip install -r /opt/ml/code/requirements.txt
 RUN pip uninstall flash-attn -y
