@@ -443,7 +443,7 @@ def main(args):
             transformer_auto_wrapper_policy = functools.partial(
                 transformer_auto_wrap_policy,
                 transformer_layer_cls={
-                    Block,
+                    Block, 
                 },
             )
             # tries to follow gopher...

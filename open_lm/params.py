@@ -73,7 +73,7 @@ def add_model_args(parser):
     )
     parser.add_argument(
         "--moe-dropout",
-        type=int,
+        type=float,
         default=0.0,
         help="Dropout for MoE experts",
     )

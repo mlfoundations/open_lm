@@ -19,6 +19,8 @@ from open_lm.positional_embedding.head_rotary import HeadRotaryWithCast
 from open_lm.positional_embedding.rotary import RotaryWithCast
 from open_lm.positional_embedding.llama_rotary import LLaMARotaryWithCast
 from open_lm.moe.mixture_of_experts import MoE
+from open_lm.moe.megablocks_moe import MoE, get_load_balancing_loss
+from megablocks.layers.arguments import Arguments as MoEArgs
 
 
 # from openclip
@@ -168,6 +170,7 @@ class Block(nn.Module):
         self.moe_num_experts = args.moe_num_experts
         self.moe_dropout = args.moe_dropout
         self.moe_gate = args.moe_gate
+        self.ffn_type = args.ffn_type
         if args.ffn_type == "swiglu":
             # this follows llama / lit llama -- go to multiple of 256
             hidden_dim = 256 * ((int(2 * 4 * args.dim / 3) + 256 - 1) // 256)
@@ -178,7 +181,10 @@ class Block(nn.Module):
             self._ff_w1 = nn.Linear(args.dim, hidden_dim, bias=False)
             self._ff_w2 = nn.Linear(hidden_dim, args.dim, bias=False)
             self.feed_forward = nn.Sequential(self._ff_w1, nn.GELU(approximate="none"), self._ff_w2)
-        elif args.ffn_type == "moe":
+        elif args.ffn_type == "megablocks_moe":
+            moe_args = MoEArgs(hidden_size=args.dim, ffn_hidden_size=args.dim * 4, moe_num_experts=self.moe_num_experts, moe_top_k = 1, moe_capacity_factor=2.0, fp16=False,moe_expert_model_parallelism=True )
+            self.feed_forward = MoE(moe_args)
+        elif args.ffn_type == "xformers_moe":
             self.feed_forward = MoE(dim_model=args.dim,
                                     dropout=self.moe_dropout,
                                     ffn_type="swiglu",
@@ -223,7 +229,14 @@ class Block(nn.Module):
 
     def forward(self, x):
         h = x + self.attention(self.attention_norm(x), is_causal=True)
-        out = h + self.feed_forward(self.ffn_norm(h))
+        if self.ffn_type == "moe":
+            ffn_out, _ = self.feed_forward(self.ffn_norm(h))
+        else:
+            ffn_out = self.feed_forward(self.ffn_norm(h))
+            num_tokens_per_expert = None
+        # if torch.distributed.get_rank() == 0:
+        #     print(get_load_balancing_loss()[0])
+        out = h + ffn_out
         return out
 
 
@@ -251,7 +264,7 @@ class Transformer(nn.Module, PyTorchModelHubMixin):
         ffn_type_ = params.ffn_type
         for layer_id in range(params.n_layers):
             if params.moe_freq > 0 and layer_id % params.moe_freq == 0:
-                params.ffn_type = "moe"
+                params.ffn_type = "megablocks_moe"
             else:
                 params.ffn_type = ffn_type_
             self.layers.append(Block(layer_id, params))

@@ -54,7 +54,9 @@ def top2gating(logits: torch.Tensor) -> Tuple[Tensor, Tensor, Tensor]:
 
     # Create a mask for 2nd's expert per token using Gumbel-max trick
     # https://timvieira.github.io/blog/post/2014/07/31/gumbel-max-trick/
-    logits_w_noise = logits + gumbel_rsample(logits.shape, device=logits.device)
+    logits_w_noise = logits 
+    
+    # + gumbel_rsample(logits.shape, device=logits.device)
     # Replace top-expert with min value
     logits_except1 = logits_w_noise.masked_fill(mask1.bool(), float("-inf"))
     indices2_s = torch.argmax(logits_except1, dim=1)

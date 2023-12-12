@@ -202,6 +202,7 @@ def train_one_epoch(model, data, loss, epoch, optimizer, scaler, scheduler, tota
                     torch.nn.utils.clip_grad_norm_(model.parameters(), args.grad_clip_norm, norm_type=2.0)
             optimizer.step()
 
+        
         batch_time_m.update(time.time() - end)
         end = time.time()
         batch_count = i + 1
