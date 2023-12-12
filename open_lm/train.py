@@ -45,6 +45,7 @@ class ConfidenceIntervalMeter(object):
 
     def reset(self):
         self.points = []
+        self.points_tensor = None
 
     def update(self, val):
         self.points.append(val)
@@ -53,13 +54,13 @@ class ConfidenceIntervalMeter(object):
         lower = None
         upper = None
 
-        points_tensor = torch.cat(self.points)
-        num_points = self.points.shape[0]
+        self.points_tensor = torch.cat(self.points)
+        num_points = self.points_tensor.shape[0]
 
         estimates = []
         for _ in range(num_samples):
             i = np.random.choice(num_points, size=num_points)
-            estimate = torch.sum(points_tensor[i]) / num_points
+            estimate = torch.sum(self.points_tensor[i]) / num_points
             estimates.append(estimate.item())
 
         half = (100 - interval) / 2
@@ -384,8 +385,8 @@ def evaluate(model, data, start_epoch, args, writer):
 
     lower_seq, upper_seq = losses_seq_ci_m.compute_bootstrap_ci()
     lower_tok, upper_tok = losses_tok_ci_m.compute_bootstrap_ci()
-    num_seqs = losses_seq_ci_m.points.shape[0]
-    num_toks = losses_tok_ci_m.points.shape[0]
+    num_seqs = losses_seq_ci_m.points_tensor.shape[0]
+    num_toks = losses_tok_ci_m.points_tensor.shape[0]
 
     # Save eval loss / etc.
     log_data = {
