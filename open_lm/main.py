@@ -29,9 +29,9 @@ from torch.distributed.fsdp import (
 )
 from torch.distributed.fsdp.wrap import transformer_auto_wrap_policy
 
-from .data import proc_token
-from .model import Block
-from .losses import CrossEntropyLossWithZLoss
+from open_lm.data import proc_token
+from open_lm.model import Block
+from open_lm.losses import CrossEntropyLossWithZLoss
 
 try:
     import wandb
