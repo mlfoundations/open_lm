@@ -1,5 +1,5 @@
 torch
-xformers
+xformers>=0.0.22
 tiktoken
 wandb
 webdataset
@@ -15,7 +15,6 @@ cloudpathlib
 datasets
 multiprocess>=0.70.11
 dill
-llm-foundry
 huggingface_hub
 pre-commit
 ray[all]
@@ -25,4 +24,4 @@ transformers
 s3fs
 wikipedia
 ipython
- 
+llm-foundry
