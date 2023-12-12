@@ -1,5 +1,7 @@
+ARG AWS_REGION
+
 # SageMaker PyTorch image
-FROM 763104351884.dkr.ecr.us-east-1.amazonaws.com/pytorch-training:2.1.0-gpu-py310-cu121-ubuntu20.04-sagemaker
+FROM 763104351884.dkr.ecr.${AWS_REGION}.amazonaws.com/pytorch-training:2.1.0-gpu-py310-cu121-ubuntu20.04-sagemaker
 
 # Run custom installation of libraries
 # RUN pip install xxx

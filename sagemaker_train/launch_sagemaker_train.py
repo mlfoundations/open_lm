@@ -11,6 +11,7 @@ from sagemaker import get_execution_role
 from sagemaker.pytorch import PyTorch
 from sagemaker.inputs import TrainingInput
 from sagemaker_ssh_helper.wrapper import SSHEstimatorWrapper
+from sagemaker_train.sm_utils import get_arn, get_remote_sync
 
 
 NAME = "openlm"
@@ -25,11 +26,12 @@ def run_command(command):
     subprocess.run(command, shell=True, check=True)
 
 
-def get_image(user, instance_type, build_image=False, update_image=False, profile="poweruser"):
+def get_image(user, region, instance_type, build_image=False, update_image=False, profile="poweruser"):
     os.environ["AWS_PROFILE"] = f"{profile}"
-    account = subprocess.getoutput(f"aws --profile {profile} sts get-caller-identity --query Account --output text")
+    account = subprocess.getoutput(
+        f"aws --region {region} --profile {profile} sts get-caller-identity --query Account --output text"
+    )
     algorithm_name = f"{user}-{NAME}"
-    region = "us-east-1"
     fullname = f"{account}.dkr.ecr.{region}.amazonaws.com/{algorithm_name}:latest"
     if not build_image and not update_image:
         return fullname
@@ -39,16 +41,16 @@ def get_image(user, instance_type, build_image=False, update_image=False, profil
     if build_image:
         print("Building container")
         commands = [
-            f"{login_cmd} 763104351884.dkr.ecr.us-east-1.amazonaws.com",
-            f"docker build -f sagemaker/Dockerfile --build-arg DOCKER_IGNORE_FILE=sagemaker/.dockerignore -t {algorithm_name} .",
+            f"{login_cmd} 763104351884.dkr.ecr.{region}.amazonaws.com",
+            f"docker build -f sagemaker_train/Dockerfile --build-arg AWS_REGION={region} --build-arg DOCKER_IGNORE_FILE=sagemaker_train/.dockerignore -t {algorithm_name} .",
             f"docker tag {algorithm_name} {fullname}",
             f"{login_cmd} {fullname}",
-            f"aws ecr describe-repositories --repository-names {algorithm_name} || aws ecr create-repository --repository-name {algorithm_name}",
+            f"aws --region {region} ecr describe-repositories --repository-names {algorithm_name} || aws --region {region} ecr create-repository --repository-name {algorithm_name}",
         ]
     elif update_image:
         print("Updating container")
         commands = [
-            f"docker build -f sagemaker/update.dockerfile --build-arg DOCKER_IGNORE_FILE=sagemaker/.dockerignore --build-arg BASE_DOCKER={algorithm_name} -t {algorithm_name} .",
+            f"docker build -f sagemaker_train/update.dockerfile --build-arg DOCKER_IGNORE_FILE=sagemaker_train/.dockerignore --build-arg BASE_DOCKER={algorithm_name} -t {algorithm_name} .",
             f"docker tag {algorithm_name} {fullname}",
             f"{login_cmd} {fullname}",
         ]
@@ -70,7 +72,14 @@ def main():
     parser.add_argument("--local", action="store_true")
     parser.add_argument("--user", required=True, help="User name")
     parser.add_argument("--cfg-path", required=True, help="Launch config")
+
+    # AWS profile args
+    parser.add_argument("--region", default="us-east-1", help="AWS region")
     parser.add_argument("--profile", default="poweruser", help="AWS profile to use")
+    parser.add_argument("--arn", default=None, help="If None, reads from SAGEMAKER_ARN env var")
+    parser.add_argument(
+        "--s3-remote-sync", default=None, help="S3 path to sync to. If none, reads from S3_REMOTE_SYNC env var"
+    )
 
     # Instance args
     parser.add_argument("--instance-count", default=1, type=int, help="Number of instances")
@@ -91,6 +100,7 @@ def main():
 def main_after_setup_move(args):
     image = get_image(
         args.user,
+        args.region,
         args.instance_type,
         build_image=args.build,
         update_image=args.update,
@@ -100,10 +110,10 @@ def main_after_setup_move(args):
     ##########
     # Create session and make sure of account and region
     ##########
-    sagemaker_session = sagemaker.Session()
+    sagemaker_session = sagemaker.Session(boto_session=boto3.session.Session(region_name=args.region))
 
     # provide a pre-existing role ARN as an alternative to creating a new role
-    role = "arn:aws:iam::124224456861:role/service-role/SageMaker-SageMakerAllAccess"
+    role = get_arn(args.arn)
     role_name = role.split(["/"][-1])
     print(f"SageMaker Execution Role:{role}")
     print(f"The name of the Execution role: {role_name[-1]}")
@@ -139,7 +149,8 @@ def main_after_setup_move(args):
 
     job_name = get_job_name(base_job_name, train_args)
 
-    output_root = f"s3://tri-ml-sandbox-16011-us-east-1-datasets/sagemaker/{args.user}/{NAME}/"
+    s3_remote_sync = get_remote_sync(args.s3_remote_sync)
+    output_root = f"{s3_remote_sync}/sagemaker/{args.user}/{NAME}/"
     output_s3 = os.path.join(output_root, job_name)
 
     estimator = PyTorch(
