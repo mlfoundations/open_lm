@@ -230,11 +230,11 @@ class Block(nn.Module):
             moe_args = MoEArgs(hidden_size=args.dim,
                                ffn_hidden_size=args.dim * 4,
                                moe_num_experts=self.moe_num_experts,
-                               moe_expert_model_parallelism=True,
+                               num_layers=6,
+                               moe_weight_parallelism=True,
                                moe_top_k = 1,
                                moe_capacity_factor=2,
                                moe_loss_weight=0.1,
-                               uniform_expert_assignment=False,
                                fp16=False)
             self.feed_forward = MoE(moe_args)
         elif args.ffn_type == "xformers_moe":
