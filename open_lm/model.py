@@ -270,7 +270,7 @@ class Transformer(nn.Module, PyTorchModelHubMixin):
         ffn_type_ = params.ffn_type
         for layer_id in range(params.n_layers):
             if params.moe_freq > 0 and layer_id % params.moe_freq == 0:
-                params.ffn_type = "xformers_moe"
+                params.ffn_type = "megablocks_moe"
             else:
                 params.ffn_type = ffn_type_
             self.layers.append(Block(layer_id, params))
