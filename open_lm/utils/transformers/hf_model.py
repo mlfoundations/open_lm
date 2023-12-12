@@ -79,7 +79,7 @@ class OpenLMforCausalLM(OpenLMModel):
         ```"""
         # decoder outputs consists of (dec_features, layer_state, dec_hidden, dec_attn)
         logits, _ = self.model(input_ids)
-        
+
         if labels is not None:
             # Shift so that tokens < n predict n
             shift_logits = logits[..., :-1, :].contiguous()
