@@ -18,9 +18,9 @@ from open_lm.norms import get_norm_class
 from open_lm.positional_embedding.head_rotary import HeadRotaryWithCast
 from open_lm.positional_embedding.rotary import RotaryWithCast
 from open_lm.positional_embedding.llama_rotary import LLaMARotaryWithCast
-from open_lm.moe.mixture_of_experts import MoE
-# from open_lm.moe.megablocks_moe import MoE, get_load_balancing_loss
-# from megablocks.layers.arguments import Arguments as MoEArgs
+# from open_lm.moe.mixture_of_experts import MoE
+from open_lm.moe.megablocks_moe import MoE, get_load_balancing_loss
+from megablocks.layers.arguments import Arguments as MoEArgs
 
 
 # from openclip
@@ -160,6 +160,49 @@ class CustomAttn(nn.Module):
 
         return self.out_proj(output)
 
+class SwitchMLP(nn.Module):
+    """
+    Routes input to one of N MLP "experts"
+    """
+    def __init__(self, args):
+        super().__init__()
+        self.router = torch.nn.Linear(args.dim, args.moe_num_experts)
+        self.experts = torch.nn.ModuleList()
+        hidden_dim = 256 * ((int(2 * 4 * args.dim / 3) + 256 - 1) // 256)
+        for i in range(args.moe_num_experts):
+            self.experts.append(xops.SwiGLU(args.dim, hidden_dim, args.dim, bias=False))
+
+    def forward(self, hidden_states):
+        # hidden_states: [s, b, h]
+        s = hidden_states.size(0)
+        b = hidden_states.size(1)
+        h = hidden_states.size(2)
+        route = self.router(hidden_states)
+        route = torch.nn.functional.softmax(route, dim=2)
+        max_prob, max_ind = torch.max(route, dim=2)
+        max_prob = torch.unsqueeze(max_prob, 2) # [s b 1]
+
+        # TODO (rprenger) TODO this could be made easier to read
+        # Converting [s, b, h] to [s*b, h].
+        # Each vector could be routed differently
+        hidden_states = hidden_states.view(-1, hidden_states.size(2)) # [s*b h]
+        max_prob = max_prob.view(-1, max_prob.size(2)) # [s*b 1]
+        max_ind = max_ind.view(-1) # [s*b]
+
+        output_total = torch.empty_like(hidden_states).bfloat16()
+        #TODO (rprenger) This does each expert in serial, but it could be parallelized
+
+        for expert_num, expert in enumerate(self.experts):
+            local_indices = (max_ind == expert_num).nonzero()
+            hidden = hidden_states[local_indices,:]
+            output = expert(hidden)
+            output_total[local_indices,:] = output
+
+        output_total = output_total*max_prob
+        output_total = output_total.view(s, b, h)
+
+        return output_total
+    
 class Block(nn.Module):
     def __init__(self, layer_id, args: Params):
         super().__init__()
@@ -181,6 +224,8 @@ class Block(nn.Module):
             self._ff_w1 = nn.Linear(args.dim, hidden_dim, bias=False)
             self._ff_w2 = nn.Linear(hidden_dim, args.dim, bias=False)
             self.feed_forward = nn.Sequential(self._ff_w1, nn.GELU(approximate="none"), self._ff_w2)
+        elif args.ffn_type == "switch_moe":
+            self.feed_forward = SwitchMLP(args)
         elif args.ffn_type == "megablocks_moe":
             moe_args = MoEArgs(hidden_size=args.dim,
                                ffn_hidden_size=args.dim * 4,
@@ -189,6 +234,7 @@ class Block(nn.Module):
                                moe_top_k = 1,
                                moe_capacity_factor=2,
                                moe_loss_weight=0.1,
+                               uniform_expert_assignment=False,
                                fp16=False)
             self.feed_forward = MoE(moe_args)
         elif args.ffn_type == "xformers_moe":
@@ -251,6 +297,7 @@ class Transformer(nn.Module, PyTorchModelHubMixin):
         super().__init__()
         # for convenience we often share param names with llama
         self.params = params
+        self.dim = params.dim
         self.vocab_size = params.vocab_size
         self.n_layers = params.n_layers
         self.seq_len = params.seq_len
@@ -270,7 +317,7 @@ class Transformer(nn.Module, PyTorchModelHubMixin):
         ffn_type_ = params.ffn_type
         for layer_id in range(params.n_layers):
             if params.moe_freq > 0 and layer_id % params.moe_freq == 0:
-                params.ffn_type = "xformers_moe"
+                params.ffn_type = "megablocks_moe"
             else:
                 params.ffn_type = ffn_type_
             self.layers.append(Block(layer_id, params))

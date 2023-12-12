@@ -11,6 +11,8 @@ import torch
 import torch.nn.functional as F
 from torch.nn.parallel.distributed import DistributedDataParallel
 from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
+from open_lm.moe.megablocks_moe import batched_load_balancing_loss, clear_load_balancing_loss
+from megablocks.layers.arguments import Arguments as MoEArgs
 
 try:
     import wandb
@@ -116,6 +118,7 @@ def train_one_epoch(model, data, loss, epoch, optimizer, scaler, scheduler, tota
     sample_digits = math.ceil(math.log(dataloader.num_samples + 1, 10))
 
     losses_m = AverageMeter()
+    load_balancing_losses_m = AverageMeter()
     batch_time_m = AverageMeter()
     data_time_m = AverageMeter()
 
@@ -182,11 +185,34 @@ def train_one_epoch(model, data, loss, epoch, optimizer, scaler, scheduler, tota
                             * inputs_ii.shape[0]
                             / inputs.shape[0]
                         )
+                    if args.moe_freq > 0:
+                        moe_args = MoEArgs(hidden_size=model.dim,
+                               ffn_hidden_size=model.dim * 4,
+                               moe_num_experts=32,
+                               moe_expert_model_parallelism=True,
+                               moe_top_k = 1,
+                               moe_capacity_factor=2,
+                               moe_loss_weight=0.1,
+                               uniform_expert_assignment=False,
+                               fp16=False)
+                        local_load_balancing_loss = batched_load_balancing_loss(moe_args)
+                        clear_load_balancing_loss()
+                        
+                        local_loss = local_load_balancing_loss + local_loss
+                        
                     backward(local_loss, scaler)
                 if ii == 0:
-                    total_loss = local_loss
+                    if args.moe_freq > 0:
+                        total_loss = local_loss - local_load_balancing_loss
+                        total_load_balancing_loss = local_load_balancing_loss
+                    else:
+                        total_loss = local_loss
                 else:
-                    total_loss += local_loss
+                    if args.moe_freq > 0:
+                        total_loss += local_loss - local_load_balancing_loss
+                        total_load_balancing_loss += local_load_balancing_loss
+                    else:
+                        total_loss += local_loss
 
         if scaler is not None:
             if args.grad_clip_norm is not None:
@@ -215,11 +241,15 @@ def train_one_epoch(model, data, loss, epoch, optimizer, scaler, scheduler, tota
             
             # losses_m.update(sum(gathered_loss).item() / args.world_size, batch_size * args.world_size)
             losses_m.update(total_loss.item(), batch_size)
+            if args.moe_freq > 0:
+                load_balancing_losses_m.update(total_load_balancing_loss.item(), batch_size)
             samples_per_second = inputs.numel() * args.world_size / batch_time_m.val
             samples_per_second_per_gpu = inputs.numel() / batch_time_m.val
+            loss_str = f"Loss: {losses_m.avg:.3f}"
+            loss_str += f" LB Loss: {load_balancing_losses_m.avg:.3f}" if args.moe_freq > 0 else ""
             logging.info(
                 f"Train Epoch: {epoch} [{num_samples:>{sample_digits}}/{samples_per_epoch} ({percent_complete:.0f}%)] "
-                f"Loss: {losses_m.avg:.3f} "
+                f"{loss_str} "
                 f"Data (t): {data_time_m.avg:.3f} "
                 f"Batch (t): {batch_time_m.avg:.3f}, {samples_per_second:#g}/s, {samples_per_second_per_gpu:#g}/s/gpu "
                 f"LR: {optimizer.param_groups[0]['lr']:5f} "
@@ -228,6 +258,7 @@ def train_one_epoch(model, data, loss, epoch, optimizer, scaler, scheduler, tota
             # Save train loss / etc. Using non avg meter values as loggers have their own smoothing
             log_data = {
                 "loss": losses_m.val,
+                "load_balancing_loss": load_balancing_losses_m.val,
                 "data_time": data_time_m.val,
                 "batch_time": batch_time_m.val,
                 "samples_per_second": samples_per_second,
@@ -278,6 +309,7 @@ def evaluate(model, data, start_epoch, args, writer):
     dataloader = data["val"].dataloader
 
     losses_m = AverageMeter()
+    
     batch_time_m = AverageMeter()
     data_time_m = AverageMeter()
     sps_m = AverageMeter()

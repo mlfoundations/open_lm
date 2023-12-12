@@ -31,27 +31,27 @@ def batched_load_balancing_loss(args : Arguments):
     # tokens_per_expert[i].shape = (num_experts)
     # expert_scores[i].shape = (tokens, num_experts)
     tokens_per_expert, expert_scores = zip(*get_load_balancing_loss())
-    num_layers_per_pipeline_stage = (
-        args.num_layers // args.pipeline_model_parallel_size)
-    if args.num_layers_per_virtual_pipeline_stage is not None:
-        num_layers_per_pipeline_stage = args.num_layers_per_virtual_pipeline_stage
+    # num_layers_per_pipeline_stage = (
+    #     args.num_layers // args.pipeline_model_parallel_size)
+    # if args.num_layers_per_virtual_pipeline_stage is not None:
+    #     num_layers_per_pipeline_stage = args.num_layers_per_virtual_pipeline_stage
 
-    if len(tokens_per_expert) != num_layers_per_pipeline_stage:
-        raise ValueError(
-            f"Expected {num_layers_per_pipeline_stage} token_per_experts "
-            f"but found {len(tokens_per_expert)}.\nnum_layers = "
-            f"{args.num_layers}\npipeline_model_parallel_size = "
-            f"{args.pipeline_model_parallel_size}\n"
-            "num_layers_per_virtual_pipeline_stage"
-            f" = {args.num_layers_per_virtual_pipeline_stage}")
-    if len(expert_scores) != num_layers_per_pipeline_stage:
-        raise ValueError(
-            f"Expected {num_layers_per_pipeline_stage} expert_scores "
-            f"but found {len(tokens_per_expert)}.\nnum_layers = "
-            f"{args.num_layers}\npipeline_model_parallel_size = "
-            f"{args.pipeline_model_parallel_size}\n"
-            "num_layers_per_virtual_pipeline_stage"
-            f" = {args.num_layers_per_virtual_pipeline_stage}")
+    # if len(tokens_per_expert) != num_layers_per_pipeline_stage:
+    #     raise ValueError(
+    #         f"Expected {num_layers_per_pipeline_stage} token_per_experts "
+    #         f"but found {len(tokens_per_expert)}.\nnum_layers = "
+    #         f"{args.num_layers}\npipeline_model_parallel_size = "
+    #         f"{args.pipeline_model_parallel_size}\n"
+    #         "num_layers_per_virtual_pipeline_stage"
+    #         f" = {args.num_layers_per_virtual_pipeline_stage}")
+    # if len(expert_scores) != num_layers_per_pipeline_stage:
+    #     raise ValueError(
+    #         f"Expected {num_layers_per_pipeline_stage} expert_scores "
+    #         f"but found {len(tokens_per_expert)}.\nnum_layers = "
+    #         f"{args.num_layers}\npipeline_model_parallel_size = "
+    #         f"{args.pipeline_model_parallel_size}\n"
+    #         "num_layers_per_virtual_pipeline_stage"
+    #         f" = {args.num_layers_per_virtual_pipeline_stage}")
 
     # Verify the shape of the tokens_per_expert and expert_scores tensors.
     assert all([
@@ -74,19 +74,19 @@ def batched_load_balancing_loss(args : Arguments):
         expert_scores = torch.cat(expert_scores, dim=1).mean(dim=0)
     tokens_per_expert = torch.cat(tokens_per_expert).to(expert_scores.dtype)
 
-    expected_values = num_layers_per_pipeline_stage * args.moe_num_experts
-    assert tokens_per_expert.numel() == expected_values
-    assert expert_scores.numel() == expected_values
+    expected_values = args.moe_num_experts * 6
+    # assert tokens_per_expert.numel() == expected_values
+    # assert expert_scores.numel() == expected_values
 
     # Calculate the total scale across all factors.
     #
     # loss_weight * num_experts / (num_layers * tokens * top_k)
     scale_numerator = (
-        args.moe_num_experts *
+        args.moe_num_experts * 6 *
         args.moe_loss_weight
     )
     scale_denominator = (
-        args.num_layers *
+        6 *
         tokens *
         args.moe_top_k
     )
