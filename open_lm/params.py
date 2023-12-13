@@ -66,18 +66,6 @@ def add_model_args(parser):
         help="if set > 0, we will add MoE layer to every moe_freq layer.",
     )
     parser.add_argument(
-        "--moe-activation",
-        type=str,
-        default="relu",
-        help="Activation for MoE experts",
-    )
-    parser.add_argument(
-        "--moe-dropout",
-        type=float,
-        default=0.0,
-        help="Dropout for MoE experts",
-    )
-    parser.add_argument(
         "--moe-num-experts",
         type=int,
         default=None,
@@ -85,12 +73,36 @@ def add_model_args(parser):
     )
 
     parser.add_argument(
-        "--moe-gate",
-        type=str,
-        default="top_2",
-        help="MoE gating algorithm",
+        "--moe-weight-parallelism",
+        action="store_true",
+        help="Add weight parallelism to MoE",
     )
 
+    parser.add_argument(
+        "--moe-expert-model-parallelism",
+        action="store_true",
+        help="Add expert model parallelism to MoE",
+    )
+    
+    parser.add_argument(
+        "--moe-capacity-factor",
+        type=float,
+        default=1.25,
+        help="MoE capacity factor",
+    )
+
+    parser.add_argument(
+        "--moe-loss-weight",
+        type=float,
+        default=0.1,
+        help="MoE loss weight",
+    )
+    parser.add_argument(
+        "--moe-top-k",
+        type=int,
+        default=2,
+        help="MoE top k experts",
+    )
 
 def parse_args(args):
     parser = argparse.ArgumentParser()

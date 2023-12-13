@@ -76,9 +76,12 @@ class Params:
     weight_tying: bool = False
     norm_type: nn.Module = nn.LayerNorm
     apply_qk_norm: bool = False
-    moe_dropout: float = 0.0
-    moe_gate: str = "top_2"
+    moe_loss_weight: float = 0.1
+    moe_capacity_factor: float = 1.25
+    moe_expert_model_parallelism: bool = False
+    moe_weight_parallelism: bool = False
     moe_num_experts: int = 8
+    moe_top_k: int = 2
     moe_freq : int = 0
     positional_embedding_type: str = "rotary"
     ffn_type: str = "swiglu"
@@ -212,8 +215,6 @@ class Block(nn.Module):
         self.head_dim = args.dim // args.n_heads
         self.attention = CustomAttn(layer_id, args)
         self.moe_num_experts = args.moe_num_experts
-        self.moe_dropout = args.moe_dropout
-        self.moe_gate = args.moe_gate
         self.ffn_type = args.ffn_type
         if args.ffn_type == "swiglu":
             # this follows llama / lit llama -- go to multiple of 256
@@ -225,33 +226,33 @@ class Block(nn.Module):
             self._ff_w1 = nn.Linear(args.dim, hidden_dim, bias=False)
             self._ff_w2 = nn.Linear(hidden_dim, args.dim, bias=False)
             self.feed_forward = nn.Sequential(self._ff_w1, nn.GELU(approximate="none"), self._ff_w2)
-        elif args.ffn_type == "switch_moe":
-            self.feed_forward = SwitchMLP(args)
-        elif args.ffn_type == "megablocks_moe":
+        elif args.ffn_type == "moe":
             moe_args = MoEArgs(hidden_size=args.dim,
                                ffn_hidden_size=args.dim * 4,
-                               moe_num_experts=self.moe_num_experts,
-                               moe_weight_parallelism=True,
-                               moe_expert_model_parallelism=True,
-                               moe_top_k = 1,
-                               moe_capacity_factor=2,
-                               moe_loss_weight=0.1,
+                               memory_optimized_mlp = True,
+                               moe_num_experts=args.moe_num_experts,
+                               moe_weight_parallelism=args.moe_weight_parallelism,
+                               moe_expert_model_parallelism=args.moe_expert_model_parallelism,
+                               moe_top_k=args.moe_top_k,
+                               moe_capacity_factor=args.moe_capacity_factor,
+                               moe_loss_weight=args.moe_loss_weight,
                                fp16=False)
             self.feed_forward = MoE(moe_args)
-        elif args.ffn_type == "xformers_moe":
-            self.feed_forward = MoE(dim_model=args.dim,
-                                    dropout=self.moe_dropout,
-                                    ffn_type="swiglu",
-                                    number_of_experts=self.moe_num_experts,
-                                    gate=self.moe_gate)
-            def div_by_num_experts(num_experts, tensor):
-                return tensor / num_experts
-            expert_normalization_term = math.sqrt(self.moe_num_experts)
-            for p in self.feed_forward.moe.experts.parameters():
-                p.expert = True
-                # Scale grads by world_size/pg_size so that grads match the equivalent replicated
-                # world size expected within Trainer
-                p.register_hook(functools.partial(div_by_num_experts, expert_normalization_term))
+        
+        # elif args.ffn_type == "xformers_moe":
+        #     self.feed_forward = MoE(dim_model=args.dim,
+        #                             dropout=self.moe_dropout,
+        #                             ffn_type="swiglu",
+        #                             number_of_experts=self.moe_num_experts,
+        #                             gate=self.moe_gate)
+        #     def div_by_num_experts(num_experts, tensor):
+        #         return tensor / num_experts
+        #     expert_normalization_term = math.sqrt(self.moe_num_experts)
+        #     for p in self.feed_forward.moe.experts.parameters():
+        #         p.expert = True
+        #         # Scale grads by world_size/pg_size so that grads match the equivalent replicated
+        #         # world size expected within Trainer
+        #         p.register_hook(functools.partial(div_by_num_experts, expert_normalization_term))
 
 
         self.layer_id = layer_id
@@ -283,7 +284,7 @@ class Block(nn.Module):
 
     def forward(self, x):
         h = x + self.attention(self.attention_norm(x), is_causal=True)
-        if self.ffn_type == "megablocks_moe":
+        if self.ffn_type == "moe":
             ffn_out, _ = self.feed_forward(self.ffn_norm(h))
         else:
             ffn_out = self.feed_forward(self.ffn_norm(h))
@@ -319,7 +320,7 @@ class Transformer(nn.Module, PyTorchModelHubMixin):
         ffn_type_ = params.ffn_type
         for layer_id in range(params.n_layers):
             if params.moe_freq > 0 and layer_id % params.moe_freq == 0:
-                params.ffn_type = "megablocks_moe"
+                params.ffn_type = "moe"
             else:
                 params.ffn_type = ffn_type_
             self.layers.append(Block(layer_id, params))
@@ -396,10 +397,13 @@ def create_params(args):
         apply_qk_norm=cfg.get("qk_norm", args.qk_norm),
         positional_embedding_type=cfg.get("positional_embedding_type", args.positional_embedding_type),
         ffn_type=cfg.get("ffn_type", args.ffn_type),
-        moe_dropout=cfg.get("moe_dropout", args.moe_dropout),
         moe_num_experts=cfg.get("moe_num_experts", args.moe_num_experts),
-        moe_gate=cfg.get("moe_gate", args.moe_gate),
+        moe_loss_weight=cfg.get("moe_loss_weight", args.moe_loss_weight),
+        moe_expert_model_parallelism=cfg.get("moe_expert_model_parallelism", args.moe_expert_model_parallelism),
+        moe_weight_parallelism=cfg.get("moe_weight_parallelism", args.moe_weight_parallelism),
+        moe_capacity_factor=cfg.get("moe_capacity_factor", args.moe_capacity_factor),
         moe_freq=cfg.get("moe_freq", args.moe_freq),
+        moe_top_k=cfg.get("moe_top_k", args.moe_top_k),
     )
 
 
