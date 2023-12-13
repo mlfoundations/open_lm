@@ -420,7 +420,7 @@ def get_wds_dataset(args, is_train, epoch=0, floor=True, tokenizer=None, data_ke
             )
 
         map_dict_handler = {"handler": log_and_continue} if args.ignore_parse_errors else {}
-        batch_size = args.per_gpu_batch_size if is_train else args.val_batch_size
+        batch_size = args.per_gpu_batch_size if is_train else args.per_gpu_val_batch_size
 
         if data_key == "json" or data_key == "json.gz":
             pipeline.extend(
