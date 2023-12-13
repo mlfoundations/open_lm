@@ -180,18 +180,7 @@ def main_after_setup_move(args):
         dependencies=[SSHEstimatorWrapper.dependency_dir()],
     )
 
-    # ssh_wrapper = SSHEstimatorWrapper.create(estimator, connection_wait_time_seconds=600)
-    # dataset_location = "s3://tri-ml-datasets/scratch/achal.dave/projects/lavis/data/"
-    estimator.fit(
-        # inputs={"datasets": TrainingInput(dataset_location, input_mode="FastFile")}
-    )
-    # print("Job name:", estimator.latest_training_job.name)
-    # print(f"To connect over SSH run: sm-local-ssh-training connect {ssh_wrapper.training_job_name()}")
-
-    # instance_ids = ssh_wrapper.get_instance_ids(timeout_in_sec=900)  # <--NEW--
-
-    # print(f"To connect over SSM run: aws ssm start-session --target {instance_ids[0]}")
-    # estimator.logs()
+    estimator.fit()
 
 
 if __name__ == "__main__":

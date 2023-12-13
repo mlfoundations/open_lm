@@ -17,7 +17,7 @@ precision: "amp_bfloat16"
 report-to: "wandb"
 seed: 124
 train-data-mix-weights: 0.725 0.275
-train-data: "openlm_mix_tri_s3"
+train-data: TODO
 train-num-samples: 25_000_000_000
 wandb-project-name: "lm1"
 workers: 4
