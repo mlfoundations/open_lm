@@ -4,7 +4,8 @@ import argparse
 from open_lm.utils.transformers.hf_model import OpenLMforCausalLM
 from open_lm.utils.transformers.hf_config import OpenLMConfig
 from open_lm.model import create_params
-from .utils import run_model, CharacterTokenizer
+from tests.utils import run_model, CharacterTokenizer
+
 
 # Download the checkpoint from HuggingFace Hub if it doesn't exist and set the args
 @pytest.mark.gpu
@@ -21,6 +22,7 @@ def args():
             "temperature": 0.0,
             "top_p": 1.0,
             "use_cache": False,
+            "num_beams": 1,
             # Model params that might not be in config:
             "model_norm": "default_layer_norm",
             "qk_norm": False,
@@ -49,12 +51,15 @@ def tiny_tokenizer():
 @pytest.mark.parametrize("wiki_page", ["Soil steam sterilization", "The Triumph of Death"])
 @pytest.mark.parametrize("context_len", [4, 8])
 @pytest.mark.parametrize("max_gen_len", [4, 8])
-def test_tiny_generate_kv_cache(tiny_open_lm, tiny_tokenizer, args, wiki_page, context_len, max_gen_len):
+@pytest.mark.parametrize("num_beams", [1, 4])
+def test_tiny_generate_kv_cache(tiny_open_lm, tiny_tokenizer, args, wiki_page, context_len, max_gen_len, num_beams):
     """
     This test checks that the results of the generation are the same with and without cache.
     """
     args.max_gen_len = max_gen_len
     args.context_len = context_len
+    args.num_beams = num_beams
+
     if max_gen_len + context_len > tiny_open_lm.model.seq_len:
         pytest.skip("The model cannot generate sequences that long")
 

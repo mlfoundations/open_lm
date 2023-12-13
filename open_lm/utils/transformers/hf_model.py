@@ -117,10 +117,10 @@ class OpenLMforCausalLM(OpenLMModel):
 
     @staticmethod
     def _reorder_cache(past_key_values, beam_idx):
-        reordered_past = ()
+        reordered_cache = ()
         for layer_past in past_key_values:
-            reordered_past += (tuple(past_state.index_select(1, beam_idx) for past_state in layer_past),)
-        return reordered_past
+            reordered_cache += (tuple(past_state.index_select(0, beam_idx) for past_state in layer_past),)
+        return reordered_cache
 
 
 if __name__ == "__main__":
