@@ -8,7 +8,8 @@ COPY . /opt/ml/code/
 
 # RUN pip install -e /opt/ml/code/
 
-# # Prevent sagemaker from installing requirements again.
+# Prevent sagemaker from installing requirements again.
+# RUN rm /opt/ml/code/setup.py
 RUN rm /opt/ml/code/requirements.txt
 
 ENV SAGEMAKER_PROGRAM open_lm/main.py
