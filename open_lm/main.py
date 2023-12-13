@@ -245,12 +245,10 @@ def check_args(args):
                 raise ValueError("Sync protocol not supported when using resume latest.")
 
     if args.target_mask_left is not None and args.target_mask_individual == args.target_mask_left:
-        logging.error(f"--target-mask-left and --target-mask-individual set to same value of {args.target_mask_left}.")
-        exit(1)
+        ValueError(f"--target-mask-left and --target-mask-individual set to same value of {args.target_mask_left}.")
 
     if args.lr_scheduler != "cosine":
-        logging.error(f"Unknown scheduler, {args.lr_scheduler}. Available options are: cosine, const, const-cooldown.")
-        exit(1)
+        ValueError(f"Unknown scheduler, {args.lr_scheduler}. Available options are: cosine, const, const-cooldown.")
 
 
 def main(args):
