@@ -191,7 +191,7 @@ def train_one_epoch(model, data, loss, epoch, step, optimizer, scaler, scheduler
         if args.accum_freq == 1:
             with autocast():
                 inputs, targets = sample_chunk(texts, args)
-                out, _ = model(inputs)
+                out, _, _ = model(inputs)
 
                 if args.log_logit_mean:
                     logit_m.update(torch.mean(out).item())
@@ -218,7 +218,7 @@ def train_one_epoch(model, data, loss, epoch, step, optimizer, scaler, scheduler
                         if inputs_ii.shape[0] == 0:
                             break
                         targets_ii = targets[ii * per_batch : (ii + 1) * per_batch]
-                        out, _ = model(inputs_ii)
+                        out, _, _ = model(inputs_ii)
 
                         if args.log_logit_mean:
                             logit_m.update(torch.mean(out).item())
@@ -357,7 +357,7 @@ def evaluate(model, data, start_epoch, args, writer):
         with autocast():
             inputs, targets = sample_chunk(texts, args)
 
-            out, _ = model(inputs)  # [bs, seq_len, vocab_size]
+            out, _, _ = model(inputs)  # [bs, seq_len, vocab_size]
 
             bs, seq_len = targets.shape
 
