@@ -379,7 +379,7 @@ def parse_args(args):
         "--accum-freq",
         type=int,
         default=1,
-        help="Update the model every --acum-freq steps.",
+        help="Update the model every --accum-freq steps.",
     )
     # arguments for distributed training
     parser.add_argument(
@@ -575,6 +575,7 @@ def parse_args(args):
         assert args.dataset_manifest is None, "--dataset-manifest must not be specified if --dataset-type='synthetic'"
 
     if args.val_data is not None and args.global_val_batch_size is None:
-        args.global_val_batch_size = args.global_batch_size
+        # Make sure that val batch size is set to micro batch size
+        args.global_val_batch_size = args.global_batch_size // args.accum_freq
 
     return args

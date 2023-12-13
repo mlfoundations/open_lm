@@ -245,12 +245,11 @@ def main(args):
 
     assert (
         args.global_batch_size % args.world_size == 0
-    ), "Global batch size is not divisible by number of GPUs, and thus cannot be respected."
+    ), f"Global batch size ({args.global_batch_size}) is not divisible by number of GPUs ({args.world_size}), and thus cannot be respected."
 
     args.per_gpu_batch_size = args.global_batch_size // args.world_size
     if args.val_data is not None:
-        # Make sure that val batch size is set to micro batch size
-        args.per_gpu_val_batch_size = args.global_val_batch_size // args.world_size // args.accum_freq
+        args.per_gpu_val_batch_size = args.global_val_batch_size // args.world_size
 
     if args.hf_model is not None and args.hf_seq_len is None:
         raise ValueError("If passing --hf-model, must also pass --hf-seq-len to be used for training/fine-tuning.")
