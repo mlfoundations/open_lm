@@ -40,7 +40,7 @@ The above command will add an MoE FFN layer to every other Transformer block. Yo
 You can evaluate the MoE in the same way as dense models:
 
 ```
-torchrun --nproc-per-node 1 -m open_lm.main \
+torchrun --nproc-per-node 8 -m open_lm.main \
                 --val-data "pipe:aws s3 cp s3://laion-west/lmdata/validation_data_tokenized/open_lm//shard_00000000.tar -" \
                 --workers 6 \
                 --precision amp_bfloat16 \
@@ -48,11 +48,11 @@ torchrun --nproc-per-node 1 -m open_lm.main \
                 --log-every-n-steps 1 \
                 --model open_lm_41m \
                 --fsdp --fsdp-amp \
-                --moe-num-experts 8 --moe-freq 2 \
+                --moe-num-experts 64 --moe-freq 2 \
                 --data-key json \
                 --train-num-samples 1000000000 \
                 --model-norm gain_only_layer_norm \
                 --name $RANDOM \
-                --resume /fsx/home-suching/experiments/mix_wo/test19434/checkpoints/epoch_1.pt \
+                --resume /fsx/home-suching/experiments/mix_wo/test8086/checkpoints/epoch_1.pt \
                 --logs /fsx/home-$USER/experiments/eval
 ```

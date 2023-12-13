@@ -208,6 +208,7 @@ class Block(nn.Module):
         super().__init__()
         self.n_heads = args.n_heads
         self.dim = args.dim
+        
         self.head_dim = args.dim // args.n_heads
         self.attention = CustomAttn(layer_id, args)
         self.moe_num_experts = args.moe_num_experts
@@ -230,8 +231,8 @@ class Block(nn.Module):
             moe_args = MoEArgs(hidden_size=args.dim,
                                ffn_hidden_size=args.dim * 4,
                                moe_num_experts=self.moe_num_experts,
-                               num_layers=6,
                                moe_weight_parallelism=True,
+                               moe_expert_model_parallelism=True,
                                moe_top_k = 1,
                                moe_capacity_factor=2,
                                moe_loss_weight=0.1,
@@ -300,6 +301,7 @@ class Transformer(nn.Module, PyTorchModelHubMixin):
         self.dim = params.dim
         self.vocab_size = params.vocab_size
         self.n_layers = params.n_layers
+        self.moe_num_experts = params.moe_num_experts
         self.seq_len = params.seq_len
         self.post_embed_norm = (
             params.norm_type(

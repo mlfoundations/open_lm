@@ -74,7 +74,7 @@ def batched_load_balancing_loss(args : Arguments):
         expert_scores = torch.cat(expert_scores, dim=1).mean(dim=0)
     tokens_per_expert = torch.cat(tokens_per_expert).to(expert_scores.dtype)
 
-    expected_values = args.moe_num_experts * 6
+    # expected_values = args.moe_num_experts * 6
     # assert tokens_per_expert.numel() == expected_values
     # assert expert_scores.numel() == expected_values
 
@@ -82,11 +82,11 @@ def batched_load_balancing_loss(args : Arguments):
     #
     # loss_weight * num_experts / (num_layers * tokens * top_k)
     scale_numerator = (
-        args.moe_num_experts * 6 *
+        args.moe_num_experts * args.num_layers *
         args.moe_loss_weight
     )
     scale_denominator = (
-        6 *
+        args.num_layers *
         tokens *
         args.moe_top_k
     )
