@@ -31,11 +31,11 @@ def get_image(user, instance_type, build_type=None, profile="poweruser", region=
     docker_dir = Path(__file__).parent
     if instance_type in ("p4", "p4de"):
         algorithm_name = f"{user}-{NAME}-p4"
-        dockerfile_base = docker_dir / "Dockerfile.p4"
+        dockerfile_base = docker_dir / "Dockerfile"
         dockerfile_update = docker_dir / "Dockerfile_update"
     elif instance_type == "p5":
         algorithm_name = f"{user}-{NAME}-p5"
-        dockerfile_base = docker_dir / "Dockerfile.p5"
+        dockerfile_base = docker_dir / "Dockerfile"
         dockerfile_update = docker_dir / "Dockerfile_update"
     else:
         raise ValueError(f"Unknown instance_type: {instance_type}")
@@ -99,23 +99,7 @@ def main():
     parser.add_argument("--spot-instance", action="store_true")
 
     args = parser.parse_args()
-
-    # We need to rename setup.py to avoid Sagemaker treating this as a module and causing errors.
-    setup_tmp_name = "./setup_renamed_for_sagemaker.py"
-    print(f"Renaming ./setup.py to {setup_tmp_name}")
-    try:
-        os.rename("./setup.py", setup_tmp_name)
-    except:
-        print("Failed to rename setup file")
-
-    try:
-        main_after_setup_move(args)
-    finally:
-        try:
-            os.rename(setup_tmp_name, "./setup.py")
-            print("Renamed setup.py back")
-        except:
-            pass
+    main_after_setup_move(args)
 
 
 def main_after_setup_move(args):
@@ -180,7 +164,7 @@ def main_after_setup_move(args):
         entry_point="open_lm/main.py",
         sagemaker_session=sagemaker_session,
         base_job_name=base_job_name,
-        hyperparameters={"config": "sagemaker_train/cfg_sample.yaml"},
+        hyperparameters={"config": args.cfg_path},
         role=role,
         image_uri=image,
         instance_count=args.instance_count,
