@@ -2,26 +2,26 @@ import torch
 from torch import optim
 from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
 
+from open_lm.data import get_data
+from open_lm.distributed import init_distributed_device
 from open_lm.main import random_seed
 from open_lm.model import create_model
-from open_lm.data import get_data
 from open_lm.scheduler import cosine_lr
 from tests.utils import download_val_data
 
 
 class MockTrainArgs:
-    def __init__(self, model):
+    def __init__(self, model, **kwargs):
         data_path = download_val_data("shard_00000000.tar", "./tests/assets/")
 
         self.model = model  # part of model config
         self.model_norm = "gain_only_layer_norm"
-        self.rotary_old = False
         self.qk_norm = False
         self.train_data = [
             data_path,
         ]
         self.log_logit_mean = False
-        self.device = 0
+        self.device = "cpu"
         self.precision = "float32"
         self.wd = 0.033
         self.lr = 3e-3
@@ -36,6 +36,9 @@ class MockTrainArgs:
         self.rank = 0
         self.local_rank = 0
         self.log_every_n_steps = 1e8
+        self.save_logs = False
+        self.logs = None
+        self.name = "test_model_name"
         self.dataset_type = "webdataset"
         self.data_key = "json"
         self.ffn_type = "swiglu"
@@ -46,6 +49,12 @@ class MockTrainArgs:
         self.seed = 1
         self.vocab_size = 50432
         self.seq_len = 300
+        self.epochs = 1
+        self.save_frequency = 1
+        self.checkpoint_path = "./tests/assets/checkpoints/"
+        self.resume = None
+        self.distributed = False
+        self.delete_previous_checkpoint = False
         self.workers = 1
         self.world_size = 1
         self.val_data = None
@@ -64,6 +73,10 @@ class MockTrainArgs:
         self.target_mask_left = None
         self.target_mask_individual = None
         self.ignore_parse_errors = False
+
+        for k, v in kwargs.items():
+            if hasattr(self, k):
+                setattr(self, k, v)
 
 
 class MockDataArgs(object):
@@ -92,9 +105,9 @@ class MockDataArgs(object):
         self.ignore_parse_errors = False
 
 
-def create_train_fixtures(model="open_lm_11m", fsdp=False):
+def create_train_fixtures(model="open_lm_11m", fsdp=False, **kwargs):
     # Setup data, optimizer, and other basic settings
-    args = MockTrainArgs(model)
+    args = MockTrainArgs(model, **kwargs)
 
     # only want to look at one batch
     args.train_num_samples = args.batch_size
@@ -106,8 +119,8 @@ def create_train_fixtures(model="open_lm_11m", fsdp=False):
     # create base models
     random_seed()
     if fsdp:
-        with torch.device("meta"):
-            model = create_model(args)
+        init_distributed_device(args)
+        model = create_model(args)
         model = FSDP(model)
     else:
         model = create_model(args)

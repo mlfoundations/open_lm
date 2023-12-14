@@ -29,9 +29,9 @@ from torch.distributed.fsdp import (
 )
 from torch.distributed.fsdp.wrap import transformer_auto_wrap_policy
 
-from .data import proc_token
-from .model import Block
-from .losses import CrossEntropyLossWithZLoss
+from open_lm.data import proc_token
+from open_lm.model import Block
+from open_lm.losses import CrossEntropyLossWithZLoss
 
 try:
     import wandb
@@ -44,6 +44,7 @@ except ImportError:
     tensorboard = None
 
 from open_lm.model import create_model
+
 from open_lm.utils.transformers.hf_wrapper import create_wrapped_hf_model
 from open_lm.data import get_data, get_wds_dataset
 from open_lm.distributed import is_master, init_distributed_device, broadcast_object
@@ -51,6 +52,7 @@ from open_lm.logger import setup_logging
 from open_lm.params import parse_args
 from open_lm.scheduler import cosine_lr
 from open_lm.train import train_one_epoch, evaluate_loop
+
 from open_lm.file_utils import (
     pt_load,
     check_exists,
@@ -215,9 +217,11 @@ def save_checkpoint(
             or (args.save_frequency > 0 and (completed_epoch % args.save_frequency) == 0)
         ):
             for prefix in prefixes:
+                path = os.path.join(args.checkpoint_path, f"{prefix}{completed_epoch}.pt")
+                print(f"Saving {prefix}{completed_epoch} in {path}...")
                 torch.save(
                     prefixes[prefix],
-                    os.path.join(args.checkpoint_path, f"{prefix}{completed_epoch}.pt"),
+                    path,
                 )
 
         if args.delete_previous_checkpoint:
