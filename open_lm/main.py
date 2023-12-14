@@ -217,9 +217,11 @@ def save_checkpoint(
             or (args.save_frequency > 0 and (completed_epoch % args.save_frequency) == 0)
         ):
             for prefix in prefixes:
+                path = os.path.join(args.checkpoint_path, f"{prefix}{completed_epoch}.pt")
+                print(f"Saving {prefix}{completed_epoch} in {path}...")
                 torch.save(
                     prefixes[prefix],
-                    os.path.join(args.checkpoint_path, f"{prefix}{completed_epoch}.pt"),
+                    path,
                 )
 
         if args.delete_previous_checkpoint:
