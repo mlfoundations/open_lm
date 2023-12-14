@@ -2,19 +2,15 @@ import argparse
 import time
 import os
 import subprocess
-import yaml
 from datetime import datetime
+from pathlib import Path
 
 import boto3
 import sagemaker
-from sagemaker import get_execution_role
 from sagemaker.pytorch import PyTorch
-from sagemaker.inputs import TrainingInput
-from sagemaker_ssh_helper.wrapper import SSHEstimatorWrapper
-from sagemaker_train.sm_utils import get_arn, get_remote_sync
 
 
-NAME = "openlm"
+NAME = "openlm-main"
 INSTANCE_MAPPER = {
     "p4": "ml.p4d.24xlarge",
     "p4de": "ml.p4de.24xlarge",
@@ -23,52 +19,68 @@ INSTANCE_MAPPER = {
 
 
 def run_command(command):
+    print(f"=> {command}")
     subprocess.run(command, shell=True, check=True)
 
 
-def get_image(user, region, instance_type, build_image=False, update_image=False, profile="poweruser"):
+def get_image(user, instance_type, build_type=None, profile="poweruser", region="us-east-1"):
     os.environ["AWS_PROFILE"] = f"{profile}"
     account = subprocess.getoutput(
         f"aws --region {region} --profile {profile} sts get-caller-identity --query Account --output text"
     )
-    algorithm_name = f"{user}-{NAME}"
+    docker_dir = Path(__file__).parent
+    if instance_type in ("p4", "p4de"):
+        algorithm_name = f"{user}-{NAME}-p4"
+        dockerfile_base = docker_dir / "Dockerfile.p4"
+        dockerfile_update = docker_dir / "Dockerfile_update"
+    elif instance_type == "p5":
+        algorithm_name = f"{user}-{NAME}-p5"
+        dockerfile_base = docker_dir / "Dockerfile.p5"
+        dockerfile_update = docker_dir / "Dockerfile_update"
+    else:
+        raise ValueError(f"Unknown instance_type: {instance_type}")
     fullname = f"{account}.dkr.ecr.{region}.amazonaws.com/{algorithm_name}:latest"
-    if not build_image and not update_image:
+    if build_type is None:
         return fullname
 
     login_cmd = f"aws ecr get-login-password --region {region} --profile {profile} | docker login --username AWS --password-stdin"
 
-    if build_image:
+    if build_type == "full":
         print("Building container")
         commands = [
+            # Log in to Sagemaker account to get image.
             f"{login_cmd} 763104351884.dkr.ecr.{region}.amazonaws.com",
-            f"docker build -f sagemaker_train/Dockerfile --build-arg AWS_REGION={region} --build-arg DOCKER_IGNORE_FILE=sagemaker_train/.dockerignore -t {algorithm_name} .",
+            f"docker build --progress=plain -f {dockerfile_base} --build-arg AWS_REGION={region} -t {algorithm_name} .",
             f"docker tag {algorithm_name} {fullname}",
             f"{login_cmd} {fullname}",
-            f"aws --region {region} ecr describe-repositories --repository-names {algorithm_name} || aws --region {region} ecr create-repository --repository-name {algorithm_name}",
+            (
+                f"aws --region {region} ecr describe-repositories --repository-names {algorithm_name} || "
+                f"aws --region {region} ecr create-repository --repository-name {algorithm_name}"
+            ),
         ]
-    elif update_image:
+    elif build_type == "update":
         print("Updating container")
         commands = [
-            f"docker build -f sagemaker_train/update.dockerfile --build-arg DOCKER_IGNORE_FILE=sagemaker_train/.dockerignore --build-arg BASE_DOCKER={algorithm_name} -t {algorithm_name} .",
+            f"docker build --progress=plain -f {dockerfile_update} --build-arg BASE_DOCKER={algorithm_name} -t {algorithm_name} .",
             f"docker tag {algorithm_name} {fullname}",
             f"{login_cmd} {fullname}",
         ]
+    else:
+        raise ValueError(f"Unknown build_type: {build_type}")
 
-    print("\n".join(commands))
-    subprocess.run("\n".join(commands), shell=True)
+    # Create command, making sure to exit if any part breaks.
+    command = "\n".join([f"{x} || exit 1" for x in commands])
+    run_command(command)
     run_command(f"docker push {fullname}")
     print("Sleeping for 5 seconds to ensure push succeeded")
     time.sleep(5)
-
     return f"{account}.dkr.ecr.{region}.amazonaws.com/{algorithm_name}:latest"
 
 
 def main():
     # Use first line of file docstring as description if it exists.
     parser = argparse.ArgumentParser()
-    parser.add_argument("--build", action="store_true", help="Build image from scratch")
-    parser.add_argument("--update", action="store_true", help="Update code in image, don't re-build")
+    parser.add_argument("--build-type", choices=["full", "update"], help="Build image from scratch")
     parser.add_argument("--local", action="store_true")
     parser.add_argument("--user", required=True, help="User name")
     parser.add_argument("--cfg-path", required=True, help="Launch config")
@@ -85,25 +97,41 @@ def main():
     parser.add_argument("--instance-count", default=1, type=int, help="Number of instances")
     parser.add_argument("--instance-type", default="p4de", choices=list(INSTANCE_MAPPER.keys()))
     parser.add_argument("--spot-instance", action="store_true")
+
     args = parser.parse_args()
 
+    # We need to rename setup.py to avoid Sagemaker treating this as a module and causing errors.
     setup_tmp_name = "./setup_renamed_for_sagemaker.py"
-    # print(f"Renaming ./setup.py to {setup_tmp_name}")
-    # os.rename("./setup.py", setup_tmp_name)
+    print(f"Renaming ./setup.py to {setup_tmp_name}")
+    try:
+        os.rename("./setup.py", setup_tmp_name)
+    except:
+        print("Failed to rename setup file")
+
     try:
         main_after_setup_move(args)
-    except:
-        # os.rename(setup_tmp_name, "./setup.py")
-        raise
+    finally:
+        try:
+            os.rename(setup_tmp_name, "./setup.py")
+            print("Renamed setup.py back")
+        except:
+            pass
 
 
 def main_after_setup_move(args):
+    if args.arn is None:
+        assert "SAGEMAKER_ARN" in os.environ, "Please specify --arn or set the SAGEMAKER_ARN environment variable"
+        args.arn = os.environ["SAGEMAKER_ARN"]
+
+    if args.s3_remote_sync is None:
+        assert "S3_REMOTE_SYNC" in os.environ, "Please specify --s3-remote-sync or set the S3_REMOTE_SYNC environment variable"
+        args.s3_remote_sync = os.environ["S3_REMOTE_SYNC"]
+
     image = get_image(
         args.user,
-        args.region,
         args.instance_type,
-        build_image=args.build,
-        update_image=args.update,
+        region=args.region,
+        build_type=args.build_type,
         profile=args.profile,
     )
 
@@ -112,8 +140,8 @@ def main_after_setup_move(args):
     ##########
     sagemaker_session = sagemaker.Session(boto_session=boto3.session.Session(region_name=args.region))
 
+    role = args.arn
     # provide a pre-existing role ARN as an alternative to creating a new role
-    role = get_arn(args.arn)
     role_name = role.split(["/"][-1])
     print(f"SageMaker Execution Role:{role}")
     print(f"The name of the Execution role: {role_name[-1]}")
@@ -133,11 +161,7 @@ def main_after_setup_move(args):
 
     checkpoint_local_path = "/opt/ml/checkpoints"
 
-    with open(args.cfg_path, "r") as f:
-        train_args = yaml.safe_load(f)
-    train_args["logs"] = checkpoint_local_path if not args.local else "./logs/debug"
-
-    def get_job_name(base, train_args):
+    def get_job_name(base):
         now = datetime.now()
         # Format example: 2023-03-03-10-14-02-324
         now_ms_str = f"{now.microsecond // 1000:03d}"
@@ -147,22 +171,21 @@ def main_after_setup_move(args):
 
         return job_name
 
-    job_name = get_job_name(base_job_name, train_args)
+    job_name = get_job_name(base_job_name)
 
-    s3_remote_sync = get_remote_sync(args.s3_remote_sync)
-    output_root = f"{s3_remote_sync}/sagemaker/{args.user}/{NAME}/"
+    output_root = f"{args.s3_remote_sync}/sagemaker/{args.user}/{NAME}/"
     output_s3 = os.path.join(output_root, job_name)
 
     estimator = PyTorch(
         entry_point="open_lm/main.py",
+        sagemaker_session=sagemaker_session,
         base_job_name=base_job_name,
-        hyperparameters=train_args,
+        hyperparameters={"config": "sagemaker_train/cfg_sample.yaml"},
         role=role,
         image_uri=image,
-        instance_count=int(args.instance_count),
+        instance_count=args.instance_count,
         instance_type="local_gpu" if args.local else INSTANCE_MAPPER[args.instance_type],
-        train_use_spot_instances=True if args.spot_instance else False,
-        # sagemaker_session=sagemaker_session,
+        train_use_spot_instances=args.spot_instance,
         output_path=output_s3,
         job_name=job_name,
         checkpoint_s3_uri=None if args.local else f"{output_s3}/checkpoint",
@@ -170,14 +193,12 @@ def main_after_setup_move(args):
         code_location=output_s3,
         # Training using SMDataParallel Distributed Training Framework
         distribution={"torch_distributed": {"enabled": True}},
-        # Max run 10 days
+        # Max run 5 days
         max_run=5 * 24 * 60 * 60,
         max_wait=5 * 24 * 60 * 60 if args.spot_instance else None,
-        # max_run=60 * 60,  # 60 minutes
         input_mode="FastFile",
         # environment={"TORCH_DISTRIBUTED_DEBUG": "DETAIL", "TORCH_CPP_LOG_LEVEL": "INFO"},
         keep_alive_period_in_seconds=30 * 60 if not args.spot_instance else None,  # 30 minutes
-        dependencies=[SSHEstimatorWrapper.dependency_dir()],
     )
 
     estimator.fit()

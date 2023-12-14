@@ -139,3 +139,4 @@ weights*
 out*
 tests/assets/*
 .vscode/
+secrets.env
