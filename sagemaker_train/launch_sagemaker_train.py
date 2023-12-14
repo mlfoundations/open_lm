@@ -108,7 +108,9 @@ def main_after_setup_move(args):
         args.arn = os.environ["SAGEMAKER_ARN"]
 
     if args.s3_remote_sync is None:
-        assert "S3_REMOTE_SYNC" in os.environ, "Please specify --s3-remote-sync or set the S3_REMOTE_SYNC environment variable"
+        assert (
+            "S3_REMOTE_SYNC" in os.environ
+        ), "Please specify --s3-remote-sync or set the S3_REMOTE_SYNC environment variable"
         args.s3_remote_sync = os.environ["S3_REMOTE_SYNC"]
 
     image = get_image(

@@ -140,3 +140,4 @@ out*
 tests/assets/*
 .vscode/
 secrets.env
+checkpoints/
