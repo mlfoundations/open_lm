@@ -192,7 +192,7 @@ class Block(nn.Module):
                                moe_top_k=args.moe_top_k,
                                moe_capacity_factor=args.moe_capacity_factor,
                                moe_loss_weight=args.moe_loss_weight,
-                               device=torch.distributed.get_rank(),
+                               device=torch.cuda.current_device(),
                                bf16=False,
                                fp16=False)
             self.feed_forward = MoE(moe_args)
