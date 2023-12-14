@@ -466,7 +466,7 @@ def main(args):
             if args.rank == 0:
                 print(f"Before FSDP parameter num: {sum(p.numel() for p in model.parameters())}")
                 print(f"Before FSDP {torch.cuda.memory_allocated()/1024**3:.3} GB")
-
+            
             fsdp_kwargs = {}
             assert not (
                 args.fsdp_hybrid and args.fsdp_hybrid_o2

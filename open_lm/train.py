@@ -188,12 +188,13 @@ def train_one_epoch(model, data, loss, epoch, optimizer, scaler, scheduler, tota
                     if args.moe_freq > 0:
                         moe_args = MoEArgs(hidden_size=model.dim,
                                ffn_hidden_size=model.dim * 4,
-                               moe_num_experts=model.moe_num_experts,
-                               num_layers = model.n_layers,
+                               moe_num_experts=args.moe_num_experts,
+                               num_layers=model.n_layers // 2,
                                moe_expert_model_parallelism=True,
-                               moe_top_k = 1,
-                               moe_capacity_factor=2,
-                               moe_loss_weight=0.1,
+                               moe_top_k=args.moe_top_k,
+                               device=torch.distributed.get_rank(),
+                               moe_capacity_factor=args.moe_capacity_factor,
+                               moe_loss_weight=args.moe_loss_weight,
                                fp16=False)
                         local_load_balancing_loss = batched_load_balancing_loss(moe_args)
                         clear_load_balancing_loss()
