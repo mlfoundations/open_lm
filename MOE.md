@@ -9,7 +9,7 @@ pip install xformers==0.0.22.post4
 
 ## Train MoE
 
-To train an MoE, add the `--moe-` related arguments to the training command:
+To train an MoE, add the `--moe-X` related arguments to the training command:
 
 ```
 torchrun --nproc-per-node 8 -m open_lm.main \
@@ -28,7 +28,6 @@ torchrun --nproc-per-node 8 -m open_lm.main \
     --beta2 0.95 \
     --epochs 4 \
     --report-to wandb \
-    
     --wandb-project-name moe \
     --name test_moe \
     --logs /fsx/home-$USER/experiments/moe \
@@ -44,17 +43,13 @@ torchrun --nproc-per-node 8 -m open_lm.main \
     --moe-freq 2 \
     --moe-num-experts 8 \
     --moe-top-k 2 \
-    --moe-expert-model-parallelism --moe-weight-parallelism \
-    --moe-capacity-factor 1.25 --moe-loss-weight 0.1 \
+    --moe-capacity-factor 1.25 --moe-loss-weight 0.1
 ```
 
 The above command will add an MoE FFN layer to every other Transformer block. You can use an arbitrary number of experts; you are only limited by total RAM across all GPUs. 
 
 
-`moe_expert_model_parallelism` distributes experts across different GPUs. However, if the #GPU is larger than #Expert, additional #GPU/#Expert tensor parallelism is applied.
-
-`moe_weight_parallelism` is ZeRO-DP parallelism, where model parameters need to be synchronized during each training forward and backward pass.
-
+You can also add the `moe_expert_model_parallelism` which will distribute experts across different GPUs. However, if the #GPU is larger than #Expert, additional #GPU/#Expert tensor parallelism is applied. Currently this is not eval-friendly though, so I would not recommend using it yet.
 
 You can evaluate the MoE in the same way as dense models:
 
