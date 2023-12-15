@@ -4,6 +4,7 @@ import os
 import torch
 import torch.distributed as dist
 
+
 def is_global_master(args):
     return args.rank == 0
 
@@ -22,6 +23,7 @@ def is_using_distributed():
     if "SLURM_NTASKS" in os.environ:
         return int(os.environ["SLURM_NTASKS"]) >= 1
     return False
+
 
 def world_info_from_env():
     local_rank = 0

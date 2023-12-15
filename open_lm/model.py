@@ -18,6 +18,7 @@ from open_lm.norms import get_norm_class
 from open_lm.positional_embedding.head_rotary import HeadRotaryWithCast
 from open_lm.positional_embedding.rotary import RotaryWithCast
 from open_lm.positional_embedding.llama_rotary import LLaMARotaryWithCast
+
 # from open_lm.moe.mixture_of_experts import MoE
 from megablocks.layers.moe import MoE
 from megablocks.layers.arguments import Arguments as MoEArgs
@@ -87,7 +88,7 @@ class Params:
     moe_weight_parallelism: bool = False
     moe_num_experts: int = 8
     moe_top_k: int = 2
-    moe_freq : int = 0
+    moe_freq: int = 0
     positional_embedding_type: str = "rotary"
     ffn_type: str = "swiglu"
 
@@ -242,12 +243,13 @@ class CustomAttn(nn.Module):
 
         return self.out_proj(output), past_key_value
 
+
 class Block(nn.Module):
     def __init__(self, layer_id, args: Params):
         super().__init__()
         self.n_heads = args.n_heads
         self.dim = args.dim
-        
+
         self.head_dim = args.dim // args.n_heads
         self.attention = CustomAttn(layer_id, args)
         self._ffn_type = args.ffn_type
@@ -262,20 +264,20 @@ class Block(nn.Module):
             self._ff_w2 = nn.Linear(self.hidden_dim, args.dim, bias=False)
             self.feed_forward = nn.Sequential(self._ff_w1, nn.GELU(approximate="none"), self._ff_w2)
         elif args.ffn_type == "moe":
-            moe_args = MoEArgs(hidden_size=args.dim,
-                               ffn_hidden_size=args.dim * 4,
-                               moe_num_experts=args.moe_num_experts,
-                               moe_weight_parallelism=args.moe_weight_parallelism,
-                               moe_expert_model_parallelism=args.moe_expert_model_parallelism,
-                               moe_top_k=args.moe_top_k,
-                               moe_capacity_factor=args.moe_capacity_factor,
-                               moe_loss_weight=args.moe_loss_weight,
-                               device=torch.cuda.current_device(),
-                               bf16=False,
-                               fp16=False)
+            moe_args = MoEArgs(
+                hidden_size=args.dim,
+                ffn_hidden_size=args.dim * 4,
+                moe_num_experts=args.moe_num_experts,
+                moe_weight_parallelism=args.moe_weight_parallelism,
+                moe_expert_model_parallelism=args.moe_expert_model_parallelism,
+                moe_top_k=args.moe_top_k,
+                moe_capacity_factor=args.moe_capacity_factor,
+                moe_loss_weight=args.moe_loss_weight,
+                device=torch.cuda.current_device(),
+                bf16=False,
+                fp16=False,
+            )
             self.feed_forward = MoE(moe_args)
-
-
 
         self.layer_id = layer_id
         self.attention_norm = args.norm_type(

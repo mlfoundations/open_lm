@@ -391,13 +391,6 @@ def main(args):
         model = create_model(args)
         model.reset_parameters()
 
-
-
-
-
-
-
-
     args.vocab_size = model.vocab_size
     args.seq_len = model.seq_len
     if args.train_num_samples is not None:
@@ -449,7 +442,7 @@ def main(args):
             if args.rank == 0:
                 print(f"Before FSDP parameter num: {sum(p.numel() for p in model.parameters()):,}")
                 print(f"Before FSDP {torch.cuda.memory_allocated()/1024**3:.3} GB")
-            
+
             fsdp_kwargs = {}
             assert not (
                 args.fsdp_hybrid and args.fsdp_hybrid_o2

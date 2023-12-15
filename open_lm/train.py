@@ -232,21 +232,23 @@ def train_one_epoch(model, data, loss, epoch, step, optimizer, scaler, scheduler
                             / inputs.shape[0]
                         )
                     if args.moe_freq > 0:
-                        moe_args = MoEArgs(hidden_size=model.dim,
-                               ffn_hidden_size=model.dim * 4,
-                               moe_num_experts=args.moe_num_experts,
-                               num_layers=model.n_layers // 2,
-                               moe_expert_model_parallelism=True,
-                               moe_top_k=args.moe_top_k,
-                               device=torch.distributed.get_rank(),
-                               moe_capacity_factor=args.moe_capacity_factor,
-                               moe_loss_weight=args.moe_loss_weight,
-                               fp16=False)
+                        moe_args = MoEArgs(
+                            hidden_size=model.dim,
+                            ffn_hidden_size=model.dim * 4,
+                            moe_num_experts=args.moe_num_experts,
+                            num_layers=model.n_layers // 2,
+                            moe_expert_model_parallelism=True,
+                            moe_top_k=args.moe_top_k,
+                            device=torch.distributed.get_rank(),
+                            moe_capacity_factor=args.moe_capacity_factor,
+                            moe_loss_weight=args.moe_loss_weight,
+                            fp16=False,
+                        )
                         local_load_balancing_loss = batched_load_balancing_loss(moe_args)
                         clear_load_balancing_loss()
-                        
+
                         local_loss = local_load_balancing_loss + local_loss
-                        
+
                     backward(local_loss, scaler)
                 if ii == 0:
                     if args.moe_freq > 0:
@@ -274,7 +276,7 @@ def train_one_epoch(model, data, loss, epoch, step, optimizer, scaler, scheduler
                 else:
                     torch.nn.utils.clip_grad_norm_(model.parameters(), args.grad_clip_norm, norm_type=2.0)
             optimizer.step()
-        
+
         batch_time_m.update(time.time() - end)
         end = time.time()
 
@@ -295,7 +297,7 @@ def train_one_epoch(model, data, loss, epoch, step, optimizer, scaler, scheduler
 
             # gathered_loss = [torch.zeros_like(total_loss) for _ in range(args.world_size)]
             # torch.distributed.all_gather(gathered_loss, total_loss)
-            
+
             # losses_m.update(sum(gathered_loss).item() / args.world_size, batch_size * args.world_size)
             losses_m.update(global_loss_tensor.item(), batch_size)
             if args.moe_freq > 0:
