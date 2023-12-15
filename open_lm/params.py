@@ -561,12 +561,6 @@ def parse_args(args):
         default=False,
         help="If true, ignore parse errors in data loading. This should ideally be False, as errors in dataloading can point to bigger issues in your dataset. However, this can be useful when training on a large dataset which has a couple errors.",
     )
-    parser.add_argument(
-        "--init-meta-device",
-        action="store_true",
-        default=False,
-        help="If true, initialize the model on the meta device. This allows creating models larger than CPU memory. Can only be specified if --fsdp is also specified."
-    )
 
     add_model_args(parser)
 
