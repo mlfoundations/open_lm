@@ -249,10 +249,13 @@ def check_args(args):
                 raise ValueError("Sync protocol not supported when using resume latest.")
 
     if args.target_mask_left is not None and args.target_mask_individual == args.target_mask_left:
-        ValueError(f"--target-mask-left and --target-mask-individual set to same value of {args.target_mask_left}.")
+        raise ValueError(f"--target-mask-left and --target-mask-individual set to same value of {args.target_mask_left}.")
 
     if args.lr_scheduler != "cosine":
-        ValueError(f"Unknown scheduler, {args.lr_scheduler}. Available options are: cosine, const, const-cooldown.")
+        raise ValueError(f"Unknown scheduler, {args.lr_scheduler}. Available options are: cosine, const, const-cooldown.")
+
+    if args.init_meta_device and not args.fsdp:
+        raise ValueError("--init-meta-device can only be specified if --fsdp is specified.")
 
 
 def main(args):
@@ -399,10 +402,8 @@ def main(args):
     if args.hf_model is not None:
         model = create_wrapped_hf_model(args)
     else:
-        with torch.device("meta" if args.fsdp else args.device):
+        with torch.device("meta" if args.init_meta_device else args.device):
             model = create_model(args)
-        if not args.fsdp:
-            model.reset_parameters()
 
     args.vocab_size = model.vocab_size
     args.seq_len = model.seq_len
