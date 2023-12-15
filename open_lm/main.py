@@ -384,6 +384,10 @@ def main(args):
     if args.hf_model is not None:
         model = create_wrapped_hf_model(args)
     else:
+        # with torch.device("meta" if args.fsdp else args.device):
+        #     model = create_model(args)
+        # if not args.fsdp:
+        #     model.reset_parameters()
         model = create_model(args)
         model.reset_parameters()
 
@@ -392,10 +396,7 @@ def main(args):
 
 
 
-        # with torch.device("meta" if args.fsdp else args.device):
-        #     model = create_model(args)
-        # if not args.fsdp:
-        #     model.reset_parameters()
+
 
     args.vocab_size = model.vocab_size
     args.seq_len = model.seq_len
