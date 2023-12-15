@@ -388,8 +388,10 @@ def main(args):
         #     model = create_model(args)
         # if not args.fsdp:
         #     model.reset_parameters()
-        model = create_model(args)
-        model.reset_parameters()
+        with torch.device(args.device):
+            model = create_model(args)
+        if not args.fsdp:
+            model.reset_parameters()
 
     args.vocab_size = model.vocab_size
     args.seq_len = model.seq_len
