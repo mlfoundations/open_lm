@@ -314,22 +314,12 @@ class Block(nn.Module):
             use_cache=use_cache,
         )
         h = x + h
-        if self.ffn_type == "moe":
+        if self._ffn_type == "moe":
             ffn_out, _ = self.feed_forward(self.ffn_norm(h))
         else:
             ffn_out = self.feed_forward(self.ffn_norm(h))
         out = h + ffn_out
         return out, past_key_value
-    
-
-    def forward(self, x):
-        h = x + self.attention(self.attention_norm(x), is_causal=True)
-        if self.ffn_type == "moe":
-            ffn_out, _ = self.feed_forward(self.ffn_norm(h))
-        else:
-            ffn_out = self.feed_forward(self.ffn_norm(h))
-        out = h + ffn_out
-        return out
 
 
 class Transformer(nn.Module, PyTorchModelHubMixin):
