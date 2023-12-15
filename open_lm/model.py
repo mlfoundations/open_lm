@@ -306,14 +306,28 @@ class Block(nn.Module):
             std = std / math.sqrt(2 * (self._layer_id + 1))
             torch.nn.init.trunc_normal_(self._ff_w2.weight, std=std, a=-3 * std, b=3 * std)
 
+    def forward(self, x, past_key_value=None, use_cache=False):
+        h, past_key_value = self.attention(
+            self.attention_norm(x),
+            is_causal=True,
+            past_key_value=past_key_value,
+            use_cache=use_cache,
+        )
+        h = x + h
+        if self.ffn_type == "moe":
+            ffn_out, _ = self.feed_forward(self.ffn_norm(h))
+        else:
+            ffn_out = self.feed_forward(self.ffn_norm(h))
+        out = h + ffn_out
+        return out, past_key_value
+    
+
     def forward(self, x):
         h = x + self.attention(self.attention_norm(x), is_causal=True)
         if self.ffn_type == "moe":
             ffn_out, _ = self.feed_forward(self.ffn_norm(h))
         else:
             ffn_out = self.feed_forward(self.ffn_norm(h))
-        # if torch.distributed.get_rank() == 0:
-        #     print(get_load_balancing_loss()[0])
         out = h + ffn_out
         return out
 
