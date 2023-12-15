@@ -20,8 +20,11 @@ from open_lm.positional_embedding.rotary import RotaryWithCast
 from open_lm.positional_embedding.llama_rotary import LLaMARotaryWithCast
 
 # from open_lm.moe.mixture_of_experts import MoE
-from megablocks.layers.moe import MoE
-from megablocks.layers.arguments import Arguments as MoEArgs
+try:
+    from megablocks.layers.moe import MoE
+    from megablocks.layers.arguments import Arguments as MoEArgs
+except ImportError:
+    pass
 
 
 try:  # optional import
