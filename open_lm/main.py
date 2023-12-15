@@ -27,7 +27,6 @@ from torch.distributed.fsdp import (
     StateDictType,
     CPUOffload,
 )
-
 from torch.distributed.fsdp.wrap import transformer_auto_wrap_policy
 
 from open_lm.data import proc_token
@@ -152,6 +151,7 @@ def load_data_chunks(args):
             "first shard."
         )
         return [0 for _ in range(len(args.dataset_manifest))], 0
+
 
 def save_checkpoint(
     args,
@@ -473,6 +473,7 @@ def main(args):
             if args.ddp_static_graph:
                 # this doesn't exist in older PyTorch, arg only added if enabled
                 ddp_args["static_graph"] = True
+            model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[device], **ddp_args)
 
     if args.grad_checkpointing:
         model.set_grad_checkpointing()
