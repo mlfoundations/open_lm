@@ -249,10 +249,14 @@ def check_args(args):
                 raise ValueError("Sync protocol not supported when using resume latest.")
 
     if args.target_mask_left is not None and args.target_mask_individual == args.target_mask_left:
-        raise ValueError(f"--target-mask-left and --target-mask-individual set to same value of {args.target_mask_left}.")
+        raise ValueError(
+            f"--target-mask-left and --target-mask-individual set to same value of {args.target_mask_left}."
+        )
 
     if args.lr_scheduler != "cosine":
-        raise ValueError(f"Unknown scheduler, {args.lr_scheduler}. Available options are: cosine, const, const-cooldown.")
+        raise ValueError(
+            f"Unknown scheduler, {args.lr_scheduler}. Available options are: cosine, const, const-cooldown."
+        )
 
     if args.init_meta_device and not args.fsdp:
         raise ValueError("--init-meta-device can only be specified if --fsdp is specified.")
