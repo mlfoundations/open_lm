@@ -258,9 +258,6 @@ def check_args(args):
             f"Unknown scheduler, {args.lr_scheduler}. Available options are: cosine, const, const-cooldown."
         )
 
-    if args.init_meta_device and not args.fsdp:
-        raise ValueError("--init-meta-device can only be specified if --fsdp is specified.")
-
 
 def main(args):
     args = parse_args(args)
@@ -280,6 +277,8 @@ def main(args):
 
     # fully initialize distributed device environment
     device = init_distributed_device(args)
+    if args.fsdp and not args.distributed:
+        raise ValueError(f"--fsdp can only be specified in distributed mode.")
 
     # get the name of the experiments
     if args.name is None:
@@ -406,7 +405,8 @@ def main(args):
     if args.hf_model is not None:
         model = create_wrapped_hf_model(args)
     else:
-        with torch.device("meta" if args.init_meta_device else args.device):
+        # Use meta device when FSDP is provided, unless user explicitly requests not to.
+        with torch.device("meta" if args.fsdp and not args.disable_meta_device else args.device):
             model = create_model(args)
 
     args.vocab_size = model.vocab_size
