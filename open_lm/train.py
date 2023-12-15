@@ -274,7 +274,6 @@ def train_one_epoch(model, data, loss, epoch, step, optimizer, scaler, scheduler
                 else:
                     torch.nn.utils.clip_grad_norm_(model.parameters(), args.grad_clip_norm, norm_type=2.0)
             optimizer.step()
-
         
         batch_time_m.update(time.time() - end)
         end = time.time()
@@ -294,15 +293,17 @@ def train_one_epoch(model, data, loss, epoch, step, optimizer, scaler, scheduler
             samples_per_epoch = dataloader.num_samples
             percent_complete = 100.0 * batch_count / num_batches_per_epoch
 
+            # gathered_loss = [torch.zeros_like(total_loss) for _ in range(args.world_size)]
+            # torch.distributed.all_gather(gathered_loss, total_loss)
             
             # losses_m.update(sum(gathered_loss).item() / args.world_size, batch_size * args.world_size)
-            losses_m.update(total_loss.item(), batch_size)
+            losses_m.update(global_loss_tensor.item(), batch_size)
             if args.moe_freq > 0:
                 load_balancing_losses_m.update(total_load_balancing_loss.item(), batch_size)
             samples_per_second = inputs.numel() * args.world_size / batch_time_m.val
             samples_per_second_per_gpu = inputs.numel() / batch_time_m.val
             loss_str = f"Loss: {losses_m.avg:.3f}"
-            loss_str += f" LB Loss: {load_balancing_losses_m.avg:.3f}" if args.moe_freq > 0 else ""
+            loss_str += f" LB-Loss: {load_balancing_losses_m.avg:.3f}" if args.moe_freq > 0 else ""
             logging.info(
                 f"Train Epoch: {epoch} [{num_samples:>{sample_digits}}/{samples_per_epoch} ({percent_complete:.0f}%)] "
                 f"{loss_str} "
@@ -368,7 +369,6 @@ def evaluate(model, data, start_epoch, args, writer):
     max_num_batches = dataloader.num_batches
 
     losses_m = AverageMeter()
-    
     batch_time_m = AverageMeter()
     data_time_m = AverageMeter()
     sps_m = AverageMeter()

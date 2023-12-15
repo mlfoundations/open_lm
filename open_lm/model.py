@@ -460,6 +460,7 @@ def create_params(args):
             moe_top_k=cfg.get("moe_top_k", args.moe_top_k),
         )
 
+
 class Mamba(nn.Module):
     # Experimental architecture, please "pip install mamba-ssm"
     # https://arxiv.org/abs/2312.00752
