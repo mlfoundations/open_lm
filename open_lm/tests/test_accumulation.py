@@ -19,7 +19,7 @@ class SimpleModel(torch.nn.Module):
 
     def forward(self, x):
         out = self.fc(self.tok_embeddings(x))
-        return out, None
+        return out, None, None
 
 
 # Dummy dataset
@@ -54,6 +54,8 @@ class TestGradientAccumulation(unittest.TestCase):
             "world_size": 1,
             "wandb": False,
             "log_every_n_steps": 1,
+            "target_mask_left": None,
+            "target_mask_individual": None,
         }
 
         model1 = SimpleModel(vocab_size=args["vocab_size"])
@@ -84,6 +86,7 @@ class TestGradientAccumulation(unittest.TestCase):
             model=model1,
             data={"train": data},
             loss=loss_fn,
+            step=0,
             epoch=0,
             optimizer=optimizer1,
             scaler=scaler,
@@ -97,6 +100,7 @@ class TestGradientAccumulation(unittest.TestCase):
             model=model2,
             data={"train": data},
             loss=loss_fn,
+            step=0,
             epoch=0,
             optimizer=optimizer2,
             scaler=scaler,

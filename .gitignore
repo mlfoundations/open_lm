@@ -139,4 +139,4 @@ weights*
 out*
 tests/assets/*
 .vscode/
-experiments/
+checkpoints/

@@ -13,14 +13,18 @@ def rotate_half(x):
 
 
 @torch.jit.script
-def apply_rotary_pos_emb(x, cos, sin):
+def apply_rotary_pos_emb(x, cos, sin, offset: int = 0):
     # NOTE: This could probably be moved to Triton
+    assert (
+        cos.shape[1] >= offset + x.shape[1]
+    ), f"Offset and/or input sequence is too large,\
+        \n offset: {offset}, seq_len: {x.shape[1]}, max: {cos.shape[1]}"
 
     # Handle a possible sequence length mismatch in between q and k
-    cos = cos[:, : x.shape[1], :, :]
-    sin = sin[:, : x.shape[1], :, :]
+    cos_out = cos[:, offset : offset + x.shape[1], :, :]
+    sin_out = sin[:, offset : offset + x.shape[1], :, :]
 
-    return (x * cos) + (rotate_half(x) * sin)
+    return (x * cos_out) + (rotate_half(x) * sin_out)
 
 
 class RotaryEmbedding(torch.nn.Module):
@@ -41,42 +45,46 @@ class RotaryEmbedding(torch.nn.Module):
         (it does not create the embedding dimension) and will likely be picked up (imported) on a ad-hoc basis
     """
 
-    def __init__(self, dim_model: int, *_, **__):
+    def __init__(self, dim_model: int, seq_len: int, *_, **__):
         super().__init__()
         # Generate and save the inverse frequency buffer (non trainable)
-        inv_freq = 1.0 / (10000 ** (torch.arange(0, dim_model, 2).float() / dim_model))
-        self.register_buffer("inv_freq", inv_freq)
+        self.dim_model = dim_model
+        self.register_buffer("inv_freq", torch.zeros(self.dim_model // 2))
 
-        self._seq_len_cached = None
         self._cos_cached = None
         self._sin_cached = None
+        self._seq_len_cached = 0
+        self._update_cos_sin_tables(seq_len)
 
-    def _update_cos_sin_tables(self, x, seq_dimension=1):
-        seq_len = x.shape[seq_dimension]
+    def reset_parameters(self):
+        self.inv_freq = 1.0 / (10000 ** (torch.arange(0, self.dim_model, 2).float() / self.dim_model))
 
-        # Reset the tables if the sequence length has changed,
+    def _update_cos_sin_tables(self, seq_len: int = None, device: torch.device = None, dtype: torch.dtype = None):
+        # If no seq_len is provided, use the cached one
+        # If the seq_len is smaller than the cached one it is included in the cached one so no need to update
+        if seq_len is None or seq_len < self._seq_len_cached:
+            seq_len = self._seq_len_cached
+
+        # Reset the tables if the sequence length has increased,
         # or if we're on a new device (possibly due to tracing for instance)
-        if seq_len != self._seq_len_cached or self._cos_cached.device != x.device or self._cos_cached.dtype != x.dtype:
+        if seq_len > self._seq_len_cached or self._cos_cached.device != device or self._cos_cached.dtype != dtype:
             self._seq_len_cached = seq_len
-            t = torch.arange(x.shape[seq_dimension], device=x.device, dtype=torch.float32)
-            freqs = torch.einsum("i,j->ij", t, self.inv_freq.to(x.dtype))
-            emb = torch.cat((freqs, freqs), dim=-1).to(x.device)
+            t = torch.arange(seq_len, device=device, dtype=torch.float32)
+            freqs = torch.einsum("i,j->ij", t, self.inv_freq.to(dtype))
+            emb = torch.cat((freqs, freqs), dim=-1).to(device)
 
-            self._cos_cached = emb.cos()[None, :, None, :].to(x.dtype)
-            self._sin_cached = emb.sin()[None, :, None, :].to(x.dtype)
+            self._cos_cached = emb.cos()[None, :, None, :].to(dtype)
+            self._sin_cached = emb.sin()[None, :, None, :].to(dtype)
 
-        return self._cos_cached, self._sin_cached
-
-    def forward(self, q: torch.Tensor, k: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
-        self._cos_cached, self._sin_cached = self._update_cos_sin_tables(k)
-
+    def forward(self, q: torch.Tensor, k: torch.Tensor, offset: int = 0) -> Tuple[torch.Tensor, torch.Tensor]:
+        self._update_cos_sin_tables(k.shape[1] + offset, device=k.device, dtype=k.dtype)
         return (
-            apply_rotary_pos_emb(q, self._cos_cached, self._sin_cached),
-            apply_rotary_pos_emb(k, self._cos_cached, self._sin_cached),
+            apply_rotary_pos_emb(q, self._cos_cached, self._sin_cached, offset),
+            apply_rotary_pos_emb(k, self._cos_cached, self._sin_cached, offset),
         )
 
 
 class RotaryWithCast(RotaryEmbedding):
-    def forward(self, q, k, v):
-        q, k = super().forward(q, k)
+    def forward(self, q, k, v, offset: int = 0):
+        q, k = super().forward(q, k, offset)
         return q.to(v.dtype), k.to(v.dtype), v

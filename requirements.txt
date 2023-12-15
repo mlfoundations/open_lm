@@ -1,5 +1,5 @@
 torch
-xformers
+xformers>=0.0.22
 tiktoken
 wandb
 webdataset
@@ -10,10 +10,18 @@ jsonlines
 boto3==1.26.90
 Pillow
 zstandard
-llm-foundry
 pysimdjson
 cloudpathlib
-apache_beam
 datasets
+multiprocess>=0.70.11
+dill
 huggingface_hub
 pre-commit
+ray[all]
+loguru
+jsonlines
+transformers
+s3fs
+wikipedia
+ipython
+llm-foundry

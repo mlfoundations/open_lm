@@ -1,3 +1,4 @@
+import copy
 import io
 import json
 import logging
@@ -6,11 +7,16 @@ import os
 import subprocess
 import sys
 import time
+from itertools import cycle, islice
 
 import fsspec
 import numpy as np
 import torch
+
+from typing import List, Optional
 from tqdm import tqdm
+
+from open_lm.distributed import is_master
 
 
 def remote_sync_s3(local_dir, remote_dir):
@@ -78,6 +84,12 @@ def start_sync_process(sync_every, local_dir, remote_dir, protocol):
     return p
 
 
+def terminate_sync_process(p: multiprocessing.Process):
+    if p is not None and p.is_alive():
+        logging.info(f"Terminating remote sync process.")
+        p.terminate()
+
+
 # Note: we are not currently using this save function.
 def pt_save(pt_obj, file_path):
     of = fsspec.open(file_path, "wb")
@@ -134,7 +146,11 @@ def get_shards_for_chunk(num_samples, chunk, path):
     chunk_count_list = []
     curr_chunk_count = 0
     for m in metadata:
-        curr_chunk_count += m["num_chunks"]
+        try:
+            curr_chunk_count += m["num_sequences"]
+        except KeyError:
+            curr_chunk_count += m["num_chunks"]
+
         curr_shard_list.append(m["shard"])
         if curr_chunk_count >= num_samples:
             shard_list.append(curr_shard_list)
@@ -153,16 +169,16 @@ def get_shards_for_chunk(num_samples, chunk, path):
     )
 
 
-def enough_shards(shard_lists, min_shards_needed):
+def enough_shards(shard_lists: List[List[str]], min_shards_needed: int):
     for sl in shard_lists:
         if len(sl) < min_shards_needed:
             return False
     return True
 
 
-def enough_samples(num_samples_per_source, needed_samples_per_source):
-    for i, number in enumerate(num_samples_per_source):
-        if number < needed_samples_per_source[i]:
+def enough_samples(num_samples_per_source: List[List[int]], needed_samples_per_source: List[int]):
+    for i, number_per_shard in enumerate(num_samples_per_source):
+        if sum(number_per_shard) < needed_samples_per_source[i]:
             return False
     return True
 
@@ -175,7 +191,112 @@ def source_exhausted(paths, shard_list_per_source):
     return False
 
 
-def get_string_for_epoch(num_samples, starting_chunk, paths, weights, min_shards_needed):
+def count_small_shards(path, ratio=0.9):
+    """Count the number of shards with significantly fewer sequences than the largest shard.
+
+    Small shards are defined as those that have size less than a ratio (default 90%) of the size of the largest shard.
+    """
+    shard_sizes = []
+    data = get_metadata_file(path)
+    for item in data:
+        try:
+            shard_sizes.append(item["num_sequences"])
+        except KeyError:
+            shard_sizes.append(item["num_chunks"])
+
+    shard_sizes = np.array(shard_sizes)
+
+    return np.sum(shard_sizes < ratio * max(shard_sizes))
+
+
+def are_sources_imbalanced_with_each_other(paths, ratio=2):
+    median_shard_size_per_source = []
+    for p in paths:
+        shard_sizes = []
+        data = get_metadata_file(p)
+        for item in data:
+            try:
+                shard_sizes.append(item["num_sequences"])
+            except KeyError:
+                shard_sizes.append(item["num_chunks"])
+
+        median_shard_size_per_source.append(np.median(shard_sizes))
+
+    return max(median_shard_size_per_source) > ratio * min(median_shard_size_per_source)
+
+
+def log_num_checkpoints(total_steps, args):
+    """Log the number of checkpoints that will be made.
+
+    This function counts the number of checkpoints to be made, and logs that number, printing out a warning if that
+    number is different than expected.
+    """
+
+    steps_done = 0
+    tokens_seen = 0
+    next_shard_per_source = [0 for _ in range(len(args.dataset_manifest))] if args.dataset_manifest is not None else 0
+    checkpoints_made = 0
+
+    if is_master(args):
+        logging.info("Precounting number of steps / tokens seen per checkpoint:")
+
+    while steps_done < total_steps:
+        _, num_samples_per_source, next_shard_per_source = get_string_for_epoch(
+            args.train_num_samples,
+            next_shard_per_source,
+            args.dataset_manifest,
+            args.train_data_mix_weights,
+            args.workers,
+            args.world_size,
+        )
+        global_batch_size = args.world_size * args.batch_size
+        steps_epoch = sum([(n // (args.workers * global_batch_size)) * args.workers for n in num_samples_per_source])
+        steps_done += steps_epoch
+        if steps_done > total_steps:
+            steps_done = total_steps
+        tokens_seen = steps_done * global_batch_size * args.seq_len
+        checkpoints_made += 1
+
+        if is_master(args):
+            logging.info(f"==> Checkpoint {checkpoints_made}, steps {steps_done}, tokens seen {tokens_seen}")
+
+    if is_master(args):
+        logging.info(
+            f"Number of checkpoints to be made: {checkpoints_made}."
+            f"Number will be greater in case of unexpected failures leading to the use of more shards"
+        )
+
+        if checkpoints_made != args.epochs:
+            logging.warning(
+                f"{args.epochs} were requested, but {checkpoints_made} will be made. This behavior is a best effort in "
+                f"checkpointing for the desired amount of epochs, and depends on the number of workers and gpus used, "
+                f"as well as the size of the shards themselves."
+            )
+
+    return
+
+
+def get_string_for_epoch(
+    num_samples: int,
+    starting_points: List[int],
+    paths: List[str],
+    weights: Optional[List[float]],
+    num_workers_per_gpu: int,
+    world_size: int,
+    multi_epoch=False,
+):
+    """See _single_epoch_string for full docstring."""
+    if multi_epoch:
+        raise NotImplementedError("Multiple passes over the dataset not fully supported yet.")
+    else:
+        return _single_epoch_string(num_samples, starting_points, paths, weights, num_workers_per_gpu, world_size)
+
+
+def _multi_epoch_string(num_samples, starting_chunk, paths, weights, min_shards_needed):
+    """Multi epoch string training."""
+
+    raise NotImplementedError("Function not fully supported yet.")
+
     if weights is None:
         weights = [1.0 / len(paths) for _ in range(len(paths))]
     needed_samples_per_source = [int(np.ceil(weights[i] * num_samples / sum(weights))) for i in range(len(weights))]
@@ -194,17 +315,20 @@ def get_string_for_epoch(num_samples, starting_chunk, paths, weights, min_shards
             num_samples_per_source[i] += num_samples_source
         next_chunk += 1
         if source_exhausted(paths, shard_list_per_source):
-            print(shard_list_per_source)
-            raise ValueError(
-                "Number of shards requested is more than the number of shards available."
-                "Consider lowering the number of workers and / or the number of GPUs."
+            logging.warning(
+                "Number of shards requested for a single epoch is more than the number of shards available. "
+                "Consider lowering the number of workers and / or the number of GPUs, to avoid continuous "
+                "reuse of samples."
             )
 
     for i, source_path in enumerate(paths):
         shard_list_source = shard_list_per_source[i]
         num_samples_source = num_samples_per_source[i]
         shard_root_source = "/".join(source_path.split("/")[:-1]) + "/"
-        shard_string_source = shard_root_source + "{" + ",".join(shard_list_source) + "}.tar"
+        if len(shard_list_source) == 1:
+            shard_string_source = shard_root_source + shard_list_source[0] + ".tar"
+        else:
+            shard_string_source = shard_root_source + "{" + ",".join(shard_list_source) + "}.tar"
         if source_path.startswith("s3"):
             shard_string_source = f"pipe:aws s3 cp {shard_string_source} -"
         shard_strings_per_source.append(shard_string_source)
@@ -212,10 +336,119 @@ def get_string_for_epoch(num_samples, starting_chunk, paths, weights, min_shards
     return shard_strings_per_source, num_samples_per_source, next_chunk
 
 
-if __name__ == "__main__":
-    print(sys.argv)
-    # path = 's3://s-laion/open_lm_shuffle/rpj_shuffled_mosaic_upsampled_tiktoken_100k_shards_try2/shard_metadata.jsonl'
-    # out = get_string_for_epoch(10000000000 // 2048, 10, path)
+def _single_epoch_string(
+    num_samples: int,
+    starting_shard_per_source: List[int],
+    paths: List[str],
+    weights: Optional[List[float]],
+    num_workers_per_gpu: int,
+    world_size: int,
+):
+    """Retrieve shards to train on for a particular checkpoint.
 
+    Currently only a single source is fully supported yet.
 
-# 10000000000
+    Args:
+        num_samples: Total number of samples required.
+        starting_shard_per_source: First shard per source that has not been consumed yet.
+        paths: Paths to source manifests.
+        weights: Weighting between sources. If None, it is assumed to be uniform.
+        num_workers_per_gpu: Number of workers per gpu process.
+        world_size: Total number of gpus used for training.
+    """
+
+    num_sources = len(paths)
+
+    if num_sources > 1:
+        logging.warning(
+            "Multiple sources are not supported fully as of now. It is advised to combine the data into a single "
+            "source, by using datapreprocess/ray/tokenize_shuffle.py. Best effort will be done to mix data at the "
+            "desired ratio."
+        )
+        if are_sources_imbalanced_with_each_other(paths):
+            logging.warning(
+                "Sources contain highly imbalanced shards (largest median shard size of a source is >2x the smallest "
+                "median size of a source). This will lead to deteriorated performance (less frequent checkpoints, "
+                "data being skipped, and inaccurate mixing). It is STRONGLY advised to combine into one source."
+            )
+
+    for path in paths:
+        num_small_shards = count_small_shards(path)
+        if num_small_shards > 0:
+            logging.warning(
+                f"Source defined by {path} contains {num_small_shards} shards that are smaller than 90% the size of "
+                f"the largest shard. These shards might cause deterioration in performance, with more samples being "
+                f"skipped than necessary. It is advised to make the shards more uniform."
+            )
+
+    if weights is None:
+        weights = [1.0 / num_sources for _ in range(num_sources)]
+
+    assert len(weights) == num_sources, "One weight is needed per source."
+
+    needed_samples_per_source = [int(np.ceil(weights[i] * num_samples / sum(weights))) for i in range(num_sources)]
+
+    manifests = [get_metadata_file(path) for path in paths]
+    shard_strings_per_source = []
+    next_shard_per_source = copy.deepcopy(starting_shard_per_source)
+    shard_list_per_source = [[] for _ in range(num_sources)]
+    num_samples_per_source = [[] for _ in range(num_sources)]
+
+    total_num_workers = num_workers_per_gpu * world_size
+    while not enough_shards(shard_list_per_source, total_num_workers) or not enough_samples(
+        num_samples_per_source, needed_samples_per_source
+    ):
+        try:
+            for i in range(num_sources):
+                # Add shards incrementally
+                shard_name = manifests[i][next_shard_per_source[i]]["shard"]
+                try:
+                    num_samples_shard = manifests[i][next_shard_per_source[i]]["num_sequences"]
+                except KeyError:
+                    num_samples_shard = manifests[i][next_shard_per_source[i]]["num_chunks"]
+
+                shard_list_per_source[i].append(shard_name)
+                num_samples_per_source[i].append(num_samples_shard)
+
+                next_shard_per_source[i] += 1
+
+        except IndexError as e:
+            logging.error(
+                "Number of shards requested for a single epoch is more than the number of shards available. This means "
+                "that the amount of data requested to train on is more than the dataloader can serve. This can either "
+                "happen because there are not enough data to begin with, or data being skipped due to rounding errors. "
+                "To alleviate the latter, consider making more uniform shards, and using less workers/GPUs. This will "
+                "allow for better use of the dataset."
+            )
+            raise e
+
+    for i in range(num_sources):
+        # Ensure the number of shards is a multiple of number of workers, so each worker has the same
+        # number of shards.
+        #
+        # This is a heuristic to minimize how much data we discard when trying to ensure each worker has
+        # the same number of samples. Shards tend to have similar number of samples, so an extra shard
+        # in a worker will likely get discarded.
+        num_multiples = len(shard_list_per_source[i]) // total_num_workers
+
+        shard_list_per_source[i] = shard_list_per_source[i][: num_multiples * total_num_workers]
+        num_samples_per_source[i] = num_samples_per_source[i][: num_multiples * total_num_workers]
+
+        # Put back unused shards.
+        next_shard_per_source[i] = starting_shard_per_source[i] + len(shard_list_per_source[i])
+
+    num_samples_per_source = [sum(n) for n in num_samples_per_source]
+
+    for i, source_path in enumerate(paths):
+        # Combine into a single shard string for training
+        shard_list_source = shard_list_per_source[i]
+        shard_root_source = "/".join(source_path.split("/")[:-1]) + "/"
+        if len(shard_list_source) == 1:
+            shard_string_source = shard_root_source + shard_list_source[0] + ".tar"
+        else:
+            shard_string_source = shard_root_source + "{" + ",".join(shard_list_source) + "}.tar"
+        if source_path.startswith("s3"):
+            shard_string_source = f"pipe:aws s3 cp {shard_string_source} -"
+        shard_strings_per_source.append(shard_string_source)
+
+    return shard_strings_per_source, num_samples_per_source, next_shard_per_source
