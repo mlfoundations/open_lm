@@ -80,7 +80,7 @@ def add_model_args(parser):
         action="store_true",
         help="Add expert model parallelism to MoE",
     )
-    
+
     parser.add_argument(
         "--moe-capacity-factor",
         type=float,
@@ -100,6 +100,7 @@ def add_model_args(parser):
         default=2,
         help="MoE top k experts",
     )
+
 
 def check_replacement_type(replacement, original):
     """Checks that `replacement`, which is intended to replace `original` is of
