@@ -1,5 +1,6 @@
 import math
 import json
+import logging
 import re
 from copy import deepcopy
 from pathlib import Path
@@ -19,12 +20,13 @@ from open_lm.positional_embedding.head_rotary import HeadRotaryWithCast
 from open_lm.positional_embedding.rotary import RotaryWithCast
 from open_lm.positional_embedding.llama_rotary import LLaMARotaryWithCast
 
+
 # from open_lm.moe.mixture_of_experts import MoE
 try:
     from megablocks.layers.moe import MoE
     from megablocks.layers.arguments import Arguments as MoEArgs
 except ImportError:
-    pass
+    logging.warning(f"Megablocks not installed. To train MoE, install with pip install megablocks.")
 
 
 try:  # optional import
