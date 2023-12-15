@@ -430,12 +430,13 @@ def create_params(args):
     # These args are managed separately by the argparser
     # If a parameter is in the model config, regardless of the args, we use the config parameters
     # If a parameter is not in the model config, we use the args parameter
+
     if "mamba" in args.model:
         return {
-            "d_model": cfg['d_model'],
-            "n_layer": cfg['n_layer'],
-            "vocab_size": cfg['vocab_size'],
-            "seq_len": cfg['seq_len'],
+            "d_model": cfg["d_model"],
+            "n_layer": cfg["n_layer"],
+            "vocab_size": cfg["vocab_size"],
+            "seq_len": cfg["seq_len"],
         }
     else:
         return Params(
