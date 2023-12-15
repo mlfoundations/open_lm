@@ -4,7 +4,6 @@ import re
 from copy import deepcopy
 from pathlib import Path
 from dataclasses import dataclass
-import functools
 
 import torch
 from torch import nn
@@ -20,7 +19,7 @@ from open_lm.positional_embedding.head_rotary import HeadRotaryWithCast
 from open_lm.positional_embedding.rotary import RotaryWithCast
 from open_lm.positional_embedding.llama_rotary import LLaMARotaryWithCast
 # from open_lm.moe.mixture_of_experts import MoE
-from open_lm.moe.megablocks_moe import MoE
+from megablocks.layers.moe import MoE
 from megablocks.layers.arguments import Arguments as MoEArgs
 
 
@@ -251,8 +250,7 @@ class Block(nn.Module):
         
         self.head_dim = args.dim // args.n_heads
         self.attention = CustomAttn(layer_id, args)
-        self.moe_num_experts = args.moe_num_experts
-        self.ffn_type = args.ffn_type
+        self._ffn_type = args.ffn_type
         if args.ffn_type == "swiglu":
             # this follows llama / lit llama -- go to multiple of 256
             self.hidden_dim = 256 * ((int(2 * 4 * args.dim / 3) + 256 - 1) // 256)
