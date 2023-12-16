@@ -42,6 +42,7 @@ def args():
             "qk_norm": False,
             "positional_embedding_type": "head_rotary",
             "ffn_type": "swiglu",
+            "num_beams": 1,
         }
     )
     return args

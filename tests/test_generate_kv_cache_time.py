@@ -33,6 +33,7 @@ def test_generate_kv_cache(wiki_page, context_len, max_gen_len):
             "qk_norm": False,
             "positional_embedding_type": "rotary",
             "ffn_type": "swiglu",
+            "num_beams": 1,
         }
     )
 
