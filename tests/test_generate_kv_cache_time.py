@@ -33,7 +33,6 @@ def test_generate_kv_cache(wiki_page, context_len, max_gen_len):
             "qk_norm": False,
             "positional_embedding_type": "rotary",
             "ffn_type": "swiglu",
-<<<<<<< HEAD
             "moe_num_experts": None,
             "moe_freq": 0,
             "moe_weight_parallelism": False,
@@ -41,9 +40,7 @@ def test_generate_kv_cache(wiki_page, context_len, max_gen_len):
             "moe_capacity_factor": 1.25,
             "moe_loss_weight": 0.1,
             "moe_top_k": 2,
-=======
             "num_beams": 1,
->>>>>>> b65ad6b46217fa2193cbc27d4451318ef7c3bfbe
         }
     )
 
