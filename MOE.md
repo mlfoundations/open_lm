@@ -70,3 +70,41 @@ torchrun --nproc-per-node 8 -m open_lm.main \
                 --resume /fsx/home-suching/experiments/mix_wo/test8086/checkpoints/epoch_1.pt \
                 --logs /fsx/home-$USER/experiments/eval
 ```
+
+
+## Benchmarking
+
+To benchmark your results, here are perplexities we obtain with our implementation across a number of compute budgets and model sizes on A100s:
+
+### Compute budgets
+
+| Compute type | 41M  | 87M  | 160M | 410M | 830M |
+|--------------|------|------|------|------|------|
+| Number of nodes | 1   | 1    | 1    | 2 | 4 |
+| Number of tokens | 20.0B | 20.0B | 20.0B | 20.0B | 20.0B | 
+
+| Performance | Model ppl | toks/sec/gpu |
+|-|-|-|
+| Number of Experts | 41M | 87M | 160M | 410M | 830M | 410M, 1 node | 
+| 1 | 27.61 | 18.68 | 14.87 | 10.54 | 9.39 | 830M, 1 node |  
+| 8 | 19.85 | 14.66 | 12.26 | 9.82 | 8.84 |
+
+### Tokens/sec/GPU 
+
+| Number of Experts | 41M | 87M | 160M | 410M | 830M |
+|:-:|:-:|:-:|:-:|:-:|:-:|
+| 1 | 141.2K | 106.0K | 95.5K | 30.3K | 16.0K |  
+| 8 | 69.5K | 66.6K | 66.2K | 18.5K | 9.2K |
+
+### Training Parameters
+
+| Number of Experts | 41M | 87M | 160M | 410M | 830M |
+|-|-|-|-|-|-|
+| 8 experts | 68.9M | 165.4M | 360.6M | 1.1B | 2.4B |
+| 32 experts | 164.5M | 439.9M | 1.0B | 3.5B | 7.9B |
+
+### Inference Parameters  
+
+| Number of Experts | 41M | 87M | 160M | 410M | 830M |  
+|-|-|-|-|-|-|
+| 2 experts | 45.0M | 96.8M | 190.7M | 509.2M | 1.1B |
