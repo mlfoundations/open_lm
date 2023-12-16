@@ -76,6 +76,7 @@ torchrun --nproc-per-node 8 -m open_lm.main \
 
 To benchmark your results, here are perplexities we obtain with our implementation across a number of compute budgets and model sizes on A100s:
 
+
 ### Compute budgets
 
 | Compute type | 41M  | 87M  | 160M | 410M | 830M |
@@ -83,7 +84,9 @@ To benchmark your results, here are perplexities we obtain with our implementati
 | Number of nodes | 1   | 1    | 1    | 2 | 4 |
 | Number of tokens | 20.0B | 20.0B | 20.0B | 20.0B | 20.0B | 
 
-| Performance | Model ppl | toks/sec/gpu |
+### Performance
+
+| Perplexity | Model ppl | toks/sec/gpu |
 |-|-|-|
 | Number of Experts | 41M | 87M | 160M | 410M | 830M | 410M, 1 node | 
 | 1 | 27.61 | 18.68 | 14.87 | 10.54 | 9.39 | 830M, 1 node |  
