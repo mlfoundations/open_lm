@@ -2,7 +2,6 @@ import shutil
 import os
 
 import pytest
-import argparse
 import torch
 
 from huggingface_hub import hf_hub_download
@@ -11,6 +10,7 @@ from transformers import GPTNeoXTokenizerFast
 from open_lm.utils.transformers.hf_model import OpenLMforCausalLM
 from open_lm.utils.transformers.hf_config import OpenLMConfig
 from open_lm.model import create_params
+from tests.shared import MockTrainArgs
 from .utils import run_model
 
 
@@ -26,10 +26,10 @@ def args():
         model_path = hf_hub_download("mlfoundations/open_lm_1B", filename="open_lm_1b.pt")
         shutil.copy2(model_path, "checkpoints/open_lm_1b_old.pt")
 
-    args = argparse.Namespace(
+    args = MockTrainArgs(
+        model="open_lm_1b_old",
         **{
             # Generation params:
-            "model": "open_lm_1b_old",
             "input_text": "random",
             "max_gen_len": None,
             "context_len": None,
