@@ -2,6 +2,8 @@
 
 ## Dependencies
 
+Our implementation of mixture of experts depends on [megablocks](https://github.com/stanford-futuredata/megablocks) and a newer version of xformers, which is compatible with torch 2.1:
+
 ```
 pip install megablocks
 pip install xformers==0.0.22.post4
@@ -13,43 +15,43 @@ To train an MoE, add the `--moe-X` related arguments to the training command:
 
 ```
 torchrun --nproc-per-node 8 -m open_lm.main \
-    --train-num-samples 1000000000 \
+    --train-num-samples 10000000000 \
     --workers 2 \
     --dataset-manifest "s3://laion-west/rpj_tokenized_upsampled_eleutherai/manifest.jsonl" "s3://laion-west/2T_no_rpj_tokenized_upsampled_25k_shards/manifest.jsonl" \
     --train-data-mix-weights 0.725 0.275 \
     --precision amp_bfloat16 \
     --batch-size 8 \
+    --accum-freq 4 \
     --log-every-n-steps 20 \
     --grad-clip-norm 1 \
-    --lr 6e-4 \
+    --lr 5e-4 \
     --warmup 200 \
-    --model aphid_neox \
-    --wd 0.01 \
+    --model open_lm_41m \
+    --wd 0.1 \
     --beta2 0.95 \
-    --epochs 4 \
+    --epochs 50 \
     --report-to wandb \
+    --moe-freq 2 \
+    --moe-num-experts 8 \
+    --moe-top-k 2 \
+    --moe-capacity-factor 1.25 --moe-loss-weight 0.1 \
+    --disable-meta-device \
     --wandb-project-name moe \
-    --name test_moe \
+    --name test$RANDOM \
     --logs /fsx/home-$USER/experiments/moe \
     --resume latest \
     --seed 124 \
     --data-key 'json' \
-    --accum-freq 4 \
-    --model-norm gain_only_layer_norm \
     --fsdp --fsdp-amp \
-    --lr-cooldown-end 1e-5 \
-    --no-skip-tokens \
-    --accurate-total-tokens \
-    --moe-freq 2 \
-    --moe-num-experts 8 \
-    --moe-top-k 2 \
-    --moe-capacity-factor 1.25 --moe-loss-weight 0.1
+    --model-norm gain_only_layer_norm \
+    --lr-scheduler cosine \
+    --lr-cooldown-end 0.00001
 ```
 
 The above command will add an MoE FFN layer to every other Transformer block. You can use an arbitrary number of experts; you are only limited by total RAM across all GPUs. 
 
 
-You can also add the `moe_expert_model_parallelism` which will distribute experts across different GPUs. However, if the #GPU is larger than #Expert, additional #GPU/#Expert tensor parallelism is applied. Currently this is not eval-friendly though, so I would not recommend using it yet.
+You can also add the `moe_expert_model_parallelism` which will distribute experts across different GPUs. However, if the number of GPUs is larger than number of experts, an additional num_gpu/num_expert tensor parallelism is applied. Currently this is not eval-friendly though, so I would not recommend using it yet.
 
 You can evaluate the MoE in the same way as dense models:
 
