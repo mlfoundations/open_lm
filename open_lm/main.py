@@ -277,6 +277,21 @@ def main(args):
 
     # fully initialize distributed device environment
     device = init_distributed_device(args)
+
+    assert (
+        args.global_batch_size % args.world_size == 0
+    ), f"Global batch size ({args.global_batch_size}) is not divisible by number of GPUs ({args.world_size}), and thus cannot be respected."
+
+    args.per_gpu_batch_size = max(args.global_batch_size // args.world_size, 1)
+    if args.val_data is not None:
+        args.per_gpu_val_batch_size = max(args.global_val_batch_size // args.world_size, 1)
+
+    if args.hf_model is not None and args.hf_seq_len is None:
+        raise ValueError("If passing --hf-model, must also pass --hf-seq-len to be used for training/fine-tuning.")
+
+    if args.hf_model is not None and args.fsdp and args.hf_fsdp_block is None:
+        raise ValueError("If passing --hf-model and --fsdp, must also pass --hf-fspd-block.")
+
     if args.fsdp and not args.distributed:
         raise ValueError(f"--fsdp can only be specified in distributed mode.")
 
@@ -301,7 +316,7 @@ def main(args):
                 date_str,
                 f"model_{model_name_safe}",
                 f"lr_{args.lr}",
-                f"b_{args.batch_size}",
+                f"b_{args.per_gpu_batch_size}",  # Per gpu to respect old naming convention
             ]
         )
 
@@ -607,7 +622,7 @@ def main(args):
     scheduler = None
     if requires_training:
         if args.dataset_manifest is not None:
-            total_steps = (args.train_num_samples * args.epochs) // (args.batch_size * args.world_size)
+            total_steps = (args.train_num_samples * args.epochs) // args.global_batch_size
         else:
             total_steps = (data["train"].dataloader.num_batches) * args.epochs
 
@@ -720,7 +735,7 @@ def main(args):
 
         done_training = global_step >= total_steps
         steps_done_epoch = global_step - prev_step
-        samples_seen = samples_seen + steps_done_epoch * args.batch_size * args.world_size
+        samples_seen = samples_seen + steps_done_epoch * args.global_batch_size
 
         if not success:
             logging.info("Training exiting due to NaN value")

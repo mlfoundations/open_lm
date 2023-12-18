@@ -36,7 +36,7 @@ def retrieve_dataset(epoch, next_shard, weights, seed, disable_buffer, min_shard
     args.train_num_samples = NUM_SAMPLES
     args.train_data = train_data_string_per_source
     args.workers = 2
-    args.batch_size = 2
+    args.global_batch_size = 2
     args.seed = seed
     args.dataset_resampled = False
     args.disable_buffer = disable_buffer
@@ -44,6 +44,7 @@ def retrieve_dataset(epoch, next_shard, weights, seed, disable_buffer, min_shard
     args.seq_len = _MODEL_CONFIGS[args.model]["seq_len"]
     args.world_size = 1
     args.rank = 0
+    args.per_gpu_batch_size = 2
     data = get_wds_dataset(args, is_train=True, epoch=epoch, force_num_samples=num_samples_per_source)
     dl = data.dataloader
 
@@ -58,13 +59,14 @@ def retrieve_dataset_resampled(epoch, next_shard, weights, seed, min_shards_need
     args.train_num_samples = NUM_SAMPLES
     args.train_data = train_data_string_per_source
     args.num_workers = 2
-    args.batch_size = 2
+    args.global_batch_size = 2
     args.seed = seed
     args.dataset_resampled = True
     args.vocab_size = _MODEL_CONFIGS[args.model]["vocab_size"]
     args.seq_len = _MODEL_CONFIGS[args.model]["seq_len"]
     args.world_size = 1
     args.rank = 0
+    args.per_gpu_batch_size = 2
     data = get_wds_dataset(args, is_train=True, epoch=epoch)
     dl = data.dataloader
 
