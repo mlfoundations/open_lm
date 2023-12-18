@@ -478,7 +478,7 @@ class Mamba(nn.Module):
 
     def forward(self, x):
         out = self.model(x).logits
-        return out, None
+        return out, None, None
 
 
 def create_model(args):

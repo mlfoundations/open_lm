@@ -1,13 +1,12 @@
 import time
 import pytest
 
-import argparse
-
 from transformers import GPTNeoXTokenizerFast
 
 from open_lm.utils.transformers.hf_model import OpenLMforCausalLM
 from open_lm.utils.transformers.hf_config import OpenLMConfig
 from open_lm.model import create_params
+from tests.shared import MockTrainArgs
 from .utils import run_model
 
 
@@ -18,10 +17,10 @@ from .utils import run_model
 @pytest.mark.parametrize("max_gen_len", [1024, 1792])
 def test_generate_kv_cache(wiki_page, context_len, max_gen_len):
     """Test that the model generates faster with cache than without."""
-    args = argparse.Namespace(
+    args = MockTrainArgs(
+        model="open_lm_160m",
         **{
             # Generation params:
-            "model": "open_lm_160m",
             "input_text": "random",
             "max_gen_len": max_gen_len,
             "context_len": context_len,
