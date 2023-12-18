@@ -606,10 +606,10 @@ def parse_args(args):
         help="If true, ignore parse errors in data loading. This should ideally be False, as errors in dataloading can point to bigger issues in your dataset. However, this can be useful when training on a large dataset which has a couple errors.",
     )
     parser.add_argument(
-        "--disable-meta-device",
+        "--experimental-meta-device",
         action="store_true",
         default=False,
-        help="If True, initialize the model on CPU instead of on meta device. This can be useful for debugging or for new models which do not support the meta device.",
+        help="If True, initialize the model on meta device. This can be useful for loading large models, but is not currently fully tested.",
     )
 
     add_model_args(parser)
