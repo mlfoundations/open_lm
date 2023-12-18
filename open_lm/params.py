@@ -56,6 +56,50 @@ def add_model_args(parser):
         default="rotary",
         help="Type of positional embedding to use. This might be overridden by the model config.",
     )
+    parser.add_argument(
+        "--moe-freq",
+        type=int,
+        default=0,
+        help="if set > 0, we will add MoE layer to every moe_freq layer.",
+    )
+    parser.add_argument(
+        "--moe-num-experts",
+        type=int,
+        default=None,
+        help="Number of experts for MoE",
+    )
+
+    parser.add_argument(
+        "--moe-weight-parallelism",
+        action="store_true",
+        help="Add weight parallelism to MoE",
+    )
+
+    parser.add_argument(
+        "--moe-expert-model-parallelism",
+        action="store_true",
+        help="Add expert model parallelism to MoE",
+    )
+
+    parser.add_argument(
+        "--moe-capacity-factor",
+        type=float,
+        default=1.25,
+        help="MoE capacity factor",
+    )
+
+    parser.add_argument(
+        "--moe-loss-weight",
+        type=float,
+        default=0.1,
+        help="MoE loss weight",
+    )
+    parser.add_argument(
+        "--moe-top-k",
+        type=int,
+        default=2,
+        help="MoE top k experts",
+    )
 
 
 def check_replacement_type(replacement, original):

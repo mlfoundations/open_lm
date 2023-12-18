@@ -28,6 +28,13 @@ def args():
             "qk_norm": False,
             "positional_embedding_type": "rotary",
             "ffn_type": "swiglu",
+            "moe_num_experts": None,
+            "moe_freq": 0,
+            "moe_weight_parallelism": False,
+            "moe_expert_model_parallelism": False,
+            "moe_capacity_factor": 1.25,
+            "moe_loss_weight": 0.1,
+            "moe_top_k": 2,
         }
     )
     return args

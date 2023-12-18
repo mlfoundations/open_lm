@@ -19,6 +19,16 @@ from open_lm.positional_embedding.head_rotary import HeadRotaryWithCast
 from open_lm.positional_embedding.rotary import RotaryWithCast
 from open_lm.positional_embedding.llama_rotary import LLaMARotaryWithCast
 
+
+# from open_lm.moe.mixture_of_experts import MoE
+try:
+    from megablocks.layers.moe import MoE
+    from megablocks.layers.arguments import Arguments as MoEArgs
+except ImportError:
+    import logging
+
+    logging.warning(f"Megablocks not installed. To train MoE, install with pip install megablocks.")
+
 try:  # optional import
     from mamba_ssm import MambaLMHeadModel
 except ImportError:
@@ -77,6 +87,13 @@ class Params:
     weight_tying: bool = False
     norm_type: nn.Module = nn.LayerNorm
     apply_qk_norm: bool = False
+    moe_loss_weight: float = 0.1
+    moe_capacity_factor: float = 1.25
+    moe_expert_model_parallelism: bool = False
+    moe_weight_parallelism: bool = False
+    moe_num_experts: int = 8
+    moe_top_k: int = 2
+    moe_freq: int = 0
     positional_embedding_type: str = "rotary"
     ffn_type: str = "swiglu"
 
@@ -237,10 +254,10 @@ class Block(nn.Module):
         super().__init__()
         self.n_heads = args.n_heads
         self.dim = args.dim
+
         self.head_dim = args.dim // args.n_heads
         self.attention = CustomAttn(layer_id, args)
         self._ffn_type = args.ffn_type
-
         if args.ffn_type == "swiglu":
             # this follows llama / lit llama -- go to multiple of 256
             self.hidden_dim = 256 * ((int(2 * 4 * args.dim / 3) + 256 - 1) // 256)
@@ -251,6 +268,21 @@ class Block(nn.Module):
             self._ff_w1 = nn.Linear(args.dim, self.hidden_dim, bias=False)
             self._ff_w2 = nn.Linear(self.hidden_dim, args.dim, bias=False)
             self.feed_forward = nn.Sequential(self._ff_w1, nn.GELU(approximate="none"), self._ff_w2)
+        elif args.ffn_type == "moe":
+            moe_args = MoEArgs(
+                hidden_size=args.dim,
+                ffn_hidden_size=args.dim * 4,
+                moe_num_experts=args.moe_num_experts,
+                moe_weight_parallelism=args.moe_weight_parallelism,
+                moe_expert_model_parallelism=args.moe_expert_model_parallelism,
+                moe_top_k=args.moe_top_k,
+                moe_capacity_factor=args.moe_capacity_factor,
+                moe_loss_weight=args.moe_loss_weight,
+                device=torch.cuda.current_device(),
+                bf16=False,
+                fp16=False,
+            )
+            self.feed_forward = MoE(moe_args)
 
         self.layer_id = layer_id
         self.attention_norm = args.norm_type(
@@ -289,7 +321,11 @@ class Block(nn.Module):
             use_cache=use_cache,
         )
         h = x + h
-        out = h + self.feed_forward(self.ffn_norm(h))
+        if self._ffn_type == "moe":
+            ffn_out, _ = self.feed_forward(self.ffn_norm(h))
+        else:
+            ffn_out = self.feed_forward(self.ffn_norm(h))
+        out = h + ffn_out
         return out, past_key_value
 
 
@@ -298,8 +334,10 @@ class Transformer(nn.Module, PyTorchModelHubMixin):
         super().__init__()
         # for convenience we often share param names with llama
         self.params = params
+        self.dim = params.dim
         self.vocab_size = params.vocab_size
         self.n_layers = params.n_layers
+        self.moe_num_experts = params.moe_num_experts
         self.seq_len = params.seq_len
         self.post_embed_norm = (
             params.norm_type(
@@ -314,7 +352,12 @@ class Transformer(nn.Module, PyTorchModelHubMixin):
         self.tok_embeddings = nn.Embedding(params.vocab_size, params.dim)
 
         self.layers = torch.nn.ModuleList()
+        ffn_type_ = params.ffn_type
         for layer_id in range(params.n_layers):
+            if params.moe_freq > 0 and layer_id % params.moe_freq == 0:
+                params.ffn_type = "moe"
+            else:
+                params.ffn_type = ffn_type_
             self.layers.append(Block(layer_id, params))
 
         # get class for normalization layers
@@ -405,6 +448,13 @@ def create_params(args):
             apply_qk_norm=cfg.get("qk_norm", args.qk_norm),
             positional_embedding_type=cfg.get("positional_embedding_type", args.positional_embedding_type),
             ffn_type=cfg.get("ffn_type", args.ffn_type),
+            moe_num_experts=cfg.get("moe_num_experts", args.moe_num_experts),
+            moe_loss_weight=cfg.get("moe_loss_weight", args.moe_loss_weight),
+            moe_expert_model_parallelism=cfg.get("moe_expert_model_parallelism", args.moe_expert_model_parallelism),
+            moe_weight_parallelism=cfg.get("moe_weight_parallelism", args.moe_weight_parallelism),
+            moe_capacity_factor=cfg.get("moe_capacity_factor", args.moe_capacity_factor),
+            moe_freq=cfg.get("moe_freq", args.moe_freq),
+            moe_top_k=cfg.get("moe_top_k", args.moe_top_k),
         )
 
 

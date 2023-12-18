@@ -43,6 +43,22 @@ class MockTrainArgs:
         self.vocab_size = 50432
         self.seq_len = 300
         self.wandb = False
+        self.fsdp = False
+        self.fsdp_amp = False
+        self.positional_embedding_type = "rotary"
+        self.dist_backend = "nccl"
+        self.dist_url = "env://"
+        self.dataset_manifest = None
+        self.target_mask_left = None
+        self.target_mask_individual = None
+        self.ignore_parse_errors = False
+        self.moe_num_experts = None
+        self.moe_freq = 0
+        self.moe_weight_parallelism = False
+        self.moe_expert_model_parallelism = False
+        self.moe_capacity_factor = 1.25
+        self.moe_loss_weight = 0.1
+        self.moe_top_k = 2
         self.per_gpu_batch_size = self.global_batch_size // self.world_size
         self.distributed = False
 
