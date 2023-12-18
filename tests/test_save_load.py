@@ -50,7 +50,7 @@ def test_tiny_save_load(tiny_args, fsdp=False):
         seq_len=tiny_args.sequence_length,
         vocab_size=tiny_args.vocab_size,
         train_num_samples=tiny_args.train_num_samples,
-        batch_size=tiny_args.batch_size,
+        global_batch_size=tiny_args.global_batch_size,
         checkpoint_path="./tests/assets/checkpoints/tiny_model/",
         device="cpu" if not torch.cuda.is_available() else "cuda",
         dataset_type="synthetic",
@@ -77,7 +77,7 @@ def test_tiny_save_load(tiny_args, fsdp=False):
         optimizer=optimizer,
         scaler=scaler,
         scheduler=scheduler,
-        total_steps=args.train_num_samples // args.batch_size,
+        total_steps=args.train_num_samples // args.global_batch_size,
         args=args,
     )
     epoch += 1

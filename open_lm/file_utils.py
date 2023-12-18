@@ -249,12 +249,11 @@ def log_num_checkpoints(total_steps, args):
             args.workers,
             args.world_size,
         )
-        global_batch_size = args.world_size * args.batch_size
-        steps_epoch = sum([(n // (args.workers * global_batch_size)) * args.workers for n in num_samples_per_source])
+        steps_epoch = sum([(n // (args.workers * args.global_batch_size)) * args.workers for n in num_samples_per_source])
         steps_done += steps_epoch
         if steps_done > total_steps:
             steps_done = total_steps
-        tokens_seen = steps_done * global_batch_size * args.seq_len
+        tokens_seen = steps_done * args.global_batch_size * args.seq_len
         checkpoints_made += 1
 
         if is_master(args):

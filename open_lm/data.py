@@ -515,20 +515,6 @@ def get_wds_dataset(args, is_train, epoch=0, floor=True, tokenizer=None, data_ke
         worker_init_fn=worker_init_fn,
     )
 
-    # FIXME not clear which approach is better, with_epoch before vs after dataloader?
-    # hoping to resolve via https://github.com/webdataset/webdataset/issues/169
-    # if is_train:
-    #     # roll over and repeat a few samples to get same number of full batches on each node
-    #     global_batch_size = args.batch_size * args.world_size
-    #     num_batches = math.ceil(num_samples / global_batch_size)
-    #     num_workers_per_gpu = max(1, args.workers)
-    #     num_batches = math.ceil(num_batches / num_workers_per_gpu) * num_workers_per_gpu
-    #     num_samples = num_batches * global_batch_size
-    #     dataloader = dataloader.with_epoch(num_batches)
-    # else:
-    #     # last batches are partial, eval is done on single (master) node
-    #     num_batches = math.ceil(num_samples / args.batch_size)
-
     # add meta-data to dataloader instance for convenience
     dataloader.num_batches = total_num_batches
     dataloader.num_samples = total_num_samples
