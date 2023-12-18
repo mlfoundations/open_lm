@@ -249,7 +249,9 @@ def log_num_checkpoints(total_steps, args):
             args.workers,
             args.world_size,
         )
-        steps_epoch = sum([(n // (args.workers * args.global_batch_size)) * args.workers for n in num_samples_per_source])
+        steps_epoch = sum(
+            [(n // (args.workers * args.global_batch_size)) * args.workers for n in num_samples_per_source]
+        )
         steps_done += steps_epoch
         if steps_done > total_steps:
             steps_done = total_steps
