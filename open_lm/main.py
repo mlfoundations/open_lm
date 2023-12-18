@@ -247,7 +247,7 @@ def main(args):
         args.global_batch_size % args.world_size == 0
     ), f"Global batch size ({args.global_batch_size}) is not divisible by number of GPUs ({args.world_size}), and thus cannot be respected."
 
-    args.per_gpu_batch_size = args.global_batch_size // args.world_size
+    args.per_gpu_batch_size = max(args.global_batch_size // args.world_size, 1)
     if args.val_data is not None:
         args.per_gpu_val_batch_size = max(args.global_val_batch_size // args.world_size, 1)
 
