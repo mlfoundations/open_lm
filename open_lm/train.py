@@ -172,6 +172,23 @@ def train_one_epoch(model, data, loss, epoch, step, optimizer, scaler, scheduler
     end = time.time()
 
     data_iterator = iter(dataloader)
+
+    if args.moe_freq > 0:
+        # these MoEArgs are necessary for logging load balancing.
+        moe_args = MoEArgs(
+            hidden_size=model.dim,
+            ffn_hidden_size=model.dim * 4,
+            moe_num_experts=args.moe_num_experts,
+            num_layers=model.n_layers // 2,
+            moe_expert_model_parallelism=True,
+            moe_top_k=args.moe_top_k,
+            device=torch.cuda.current_device(),
+            moe_capacity_factor=args.moe_capacity_factor,
+            moe_loss_weight=args.moe_loss_weight,
+            fp16=False,
+            bf16=False,
+        )
+
     for i in itertools.count():
         if not args.skip_scheduler:
             scheduler(step)
@@ -204,7 +221,12 @@ def train_one_epoch(model, data, loss, epoch, step, optimizer, scaler, scheduler
                 if args.log_logit_mean:
                     logit_m.update(torch.mean(out).item())
 
-                total_loss = loss(out.reshape(-1, args.vocab_size), targets.reshape(-1))
+                total_lm_loss = loss(out.reshape(-1, args.vocab_size), targets.reshape(-1))
+                total_loss = total_lm_loss
+                if args.moe_freq > 0:
+                    total_load_balancing_loss = batched_load_balancing_loss(moe_args)
+                    clear_load_balancing_loss()
+                    total_loss += total_load_balancing_loss
 
             backward(total_loss, scaler)
         else:
@@ -231,42 +253,30 @@ def train_one_epoch(model, data, loss, epoch, step, optimizer, scaler, scheduler
                         if args.log_logit_mean:
                             logit_m.update(torch.mean(out).item())
 
-                        local_loss = (
+                        local_lm_loss = (
                             loss(out.reshape(-1, args.vocab_size), targets_ii.reshape(-1))
                             * inputs_ii.shape[0]
                             / inputs.shape[0]
                         )
+                    local_loss = local_lm_loss
                     if args.moe_freq > 0:
-                        moe_args = MoEArgs(
-                            hidden_size=model.dim,
-                            ffn_hidden_size=model.dim * 4,
-                            moe_num_experts=args.moe_num_experts,
-                            num_layers=model.n_layers // 2,
-                            moe_expert_model_parallelism=True,
-                            moe_top_k=args.moe_top_k,
-                            device=torch.distributed.get_rank(),
-                            moe_capacity_factor=args.moe_capacity_factor,
-                            moe_loss_weight=args.moe_loss_weight,
-                            fp16=False,
-                        )
                         local_load_balancing_loss = batched_load_balancing_loss(moe_args)
                         clear_load_balancing_loss()
-
-                        local_loss = local_load_balancing_loss + local_loss
+                        local_loss += local_load_balancing_loss
 
                     backward(local_loss, scaler)
                 if ii == 0:
+                    total_lm_loss = local_lm_loss
                     if args.moe_freq > 0:
-                        total_loss = local_loss - local_load_balancing_loss
                         total_load_balancing_loss = local_load_balancing_loss
-                    else:
-                        total_loss = local_loss
                 else:
+                    total_lm_loss += local_lm_loss
                     if args.moe_freq > 0:
-                        total_loss += local_loss - local_load_balancing_loss
                         total_load_balancing_loss += local_load_balancing_loss
-                    else:
-                        total_loss += local_loss
+
+            total_loss = total_lm_loss
+            if args.moe_freq > 0:
+                total_loss += total_load_balancing_loss
 
         if scaler is not None:
             if args.grad_clip_norm is not None:
@@ -304,9 +314,11 @@ def train_one_epoch(model, data, loss, epoch, step, optimizer, scaler, scheduler
             # torch.distributed.all_gather(gathered_loss, total_loss)
 
             # losses_m.update(sum(gathered_loss).item() / args.world_size, batch_size * args.world_size)
-            losses_m.update(global_loss_tensor.item(), batch_size)
             if args.moe_freq > 0:
+                losses_m.update(global_loss_tensor.item() - total_load_balancing_loss.item(), batch_size)
                 load_balancing_losses_m.update(total_load_balancing_loss.item(), batch_size)
+            else:
+                losses_m.update(global_loss_tensor.item(), batch_size)
             samples_per_second = inputs.numel() * args.world_size / batch_time_m.val
             samples_per_second_per_gpu = inputs.numel() / batch_time_m.val
             loss_str = f"Loss: {losses_m.avg:.3f}"

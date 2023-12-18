@@ -1,6 +1,5 @@
 import math
 import json
-import logging
 import re
 from copy import deepcopy
 from pathlib import Path
@@ -26,8 +25,9 @@ try:
     from megablocks.layers.moe import MoE
     from megablocks.layers.arguments import Arguments as MoEArgs
 except ImportError:
-    logging.warning(f"Megablocks not installed. To train MoE, install with pip install megablocks.")
+    import logging
 
+    logging.warning(f"Megablocks not installed. To train MoE, install with pip install megablocks.")
 
 try:  # optional import
     from mamba_ssm import MambaLMHeadModel
