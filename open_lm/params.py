@@ -52,6 +52,7 @@ def add_model_args(parser):
     parser.add_argument(
         "--positional-embedding-type",
         type=str,
+        choices=["rotary", "head_rotary", "llama_rotary"],
         default="rotary",
         help="Type of positional embedding to use. This might be overridden by the model config.",
     )
@@ -559,6 +560,12 @@ def parse_args(args):
         action="store_true",
         default=False,
         help="If true, ignore parse errors in data loading. This should ideally be False, as errors in dataloading can point to bigger issues in your dataset. However, this can be useful when training on a large dataset which has a couple errors.",
+    )
+    parser.add_argument(
+        "--disable-meta-device",
+        action="store_true",
+        default=False,
+        help="If True, initialize the model on CPU instead of on meta device. This can be useful for debugging or for new models which do not support the meta device.",
     )
 
     add_model_args(parser)

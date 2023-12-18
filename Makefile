@@ -6,10 +6,10 @@ install-dev: ## [Local development] Install test requirements
 	python -m pip install -r requirements_test.txt
 
 lint: ## [Local development] Run mypy, pylint and black
-	python -m black --check -l 120 open_lm
+	python -m black --check -l 120 .
 
 black: ## [Local development] Auto-format python code using black
-	python3 -m black -l 120 open_lm
+	python3 -m black -l 120 .
 
 TEST_ARGS = tests ## set default to run all tests
 test: ## [Local development] Run unit tests

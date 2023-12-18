@@ -29,9 +29,9 @@ from torch.distributed.fsdp import (
 )
 from torch.distributed.fsdp.wrap import transformer_auto_wrap_policy
 
-from .data import proc_token
-from .model import Block
-from .losses import CrossEntropyLossWithZLoss
+from open_lm.data import proc_token
+from open_lm.model import Block
+from open_lm.losses import CrossEntropyLossWithZLoss
 
 try:
     import wandb
@@ -44,6 +44,7 @@ except ImportError:
     tensorboard = None
 
 from open_lm.model import create_model
+
 from open_lm.utils.transformers.hf_wrapper import create_wrapped_hf_model
 from open_lm.data import get_data, get_wds_dataset
 from open_lm.distributed import is_master, init_distributed_device, broadcast_object
@@ -51,6 +52,7 @@ from open_lm.logger import setup_logging
 from open_lm.params import parse_args
 from open_lm.scheduler import cosine_lr
 from open_lm.train import train_one_epoch, evaluate_loop
+
 from open_lm.file_utils import (
     pt_load,
     check_exists,
@@ -215,9 +217,11 @@ def save_checkpoint(
             or (args.save_frequency > 0 and (completed_epoch % args.save_frequency) == 0)
         ):
             for prefix in prefixes:
+                path = os.path.join(args.checkpoint_path, f"{prefix}{completed_epoch}.pt")
+                print(f"Saving {prefix}{completed_epoch} in {path}...")
                 torch.save(
                     prefixes[prefix],
-                    os.path.join(args.checkpoint_path, f"{prefix}{completed_epoch}.pt"),
+                    path,
                 )
 
         if args.delete_previous_checkpoint:
@@ -227,8 +231,39 @@ def save_checkpoint(
                     os.remove(prev)
 
 
+def check_args(args):
+    resume_latest = args.resume == "latest"
+
+    if args.hf_model is not None and args.hf_seq_len is None:
+        raise ValueError("If passing --hf-model, must also pass --hf-seq-len to be used for training/fine-tuning.")
+
+    if args.hf_model is not None and args.fsdp and args.hf_fsdp_block is None:
+        raise ValueError("If passing --hf-model and --fsdp, must also pass --hf-fsdp-block.")
+
+    if resume_latest:
+        # If using remote_sync, need to check the remote instead of the local checkpoints folder.
+        if args.remote_sync is not None:
+            if args.save_most_recent:
+                raise ValueError("Cannot use save-most-recent with remote_sync and resume latest.")
+            if args.remote_sync_protocol != "s3":
+                raise ValueError("Sync protocol not supported when using resume latest.")
+
+    if args.target_mask_left is not None and args.target_mask_individual == args.target_mask_left:
+        raise ValueError(
+            f"--target-mask-left and --target-mask-individual set to same value of {args.target_mask_left}."
+        )
+
+    if args.lr_scheduler != "cosine":
+        raise ValueError(
+            f"Unknown scheduler, {args.lr_scheduler}. Available options are: cosine, const, const-cooldown."
+        )
+
+
 def main(args):
     args = parse_args(args)
+
+    # Check the arg list for any incompatibilities.
+    check_args(args)
 
     requires_training = args.train_data or args.dataset_type == "synthetic" or args.dataset_manifest is not None
 
@@ -256,6 +291,10 @@ def main(args):
 
     if args.hf_model is not None and args.fsdp and args.hf_fsdp_block is None:
         raise ValueError("If passing --hf-model and --fsdp, must also pass --hf-fspd-block.")
+
+    if args.fsdp and not args.distributed:
+        raise ValueError(f"--fsdp can only be specified in distributed mode.")
+
 
     # get the name of the experiments
     if args.name is None:
@@ -311,13 +350,7 @@ def main(args):
     if resume_latest:
         resume_from = None
         checkpoint_path = args.checkpoint_path
-        # If using remote_sync, need to check the remote instead of the local checkpoints folder.
-        if args.remote_sync is not None:
-            checkpoint_path = os.path.join(args.remote_sync, args.name)
-            if args.save_most_recent:
-                raise ValueError("Cannot use save-most-recent with remote_sync and resume latest.")
-            if args.remote_sync_protocol != "s3":
-                raise ValueError("Sync protocol not supported when using resume latest.")
+
         if is_master(args):
             # Checking for existing checkpoint via master rank only. It is possible for
             # different rank processes to see different files if a shared file-system is under
@@ -388,10 +421,9 @@ def main(args):
     if args.hf_model is not None:
         model = create_wrapped_hf_model(args)
     else:
-        with torch.device("meta" if args.fsdp else args.device):
+        # Use meta device when FSDP is provided, unless user explicitly requests not to.
+        with torch.device("meta" if args.fsdp and not args.disable_meta_device else args.device):
             model = create_model(args)
-        if not args.fsdp:
-            model.reset_parameters()
 
     args.vocab_size = model.vocab_size
     args.seq_len = model.seq_len
@@ -575,10 +607,6 @@ def main(args):
         floor=args.dataset_manifest is not None,
     )
 
-    if args.target_mask_left is not None and args.target_mask_individual == args.target_mask_left:
-        logging.error(f"--target-mask-left and --target-mask-individual set to same value of {args.target_mask_left}.")
-        exit(1)
-
     if args.target_mask_left is not None:
         # tokens handled with same modulo in dataloading
         args.target_mask_left = proc_token(args.target_mask_left, args.vocab_size)
@@ -599,20 +627,14 @@ def main(args):
         else:
             total_steps = (data["train"].dataloader.num_batches) * args.epochs
 
-        if args.lr_scheduler == "cosine":
-            scheduler = cosine_lr(
-                optimizer,
-                args.lr,
-                args.warmup,
-                total_steps,
-                args.lr_cooldown_end,
-                args.force_min_lr,
-            )
-        else:
-            logging.error(
-                f"Unknown scheduler, {args.lr_scheduler}. Available options are: cosine, const, const-cooldown."
-            )
-            exit(1)
+        scheduler = cosine_lr(
+            optimizer,
+            args.lr,
+            args.warmup,
+            total_steps,
+            args.lr_cooldown_end,
+            args.force_min_lr,
+        )
 
     # determine if this worker should save logs and checkpoints. only do so if it is rank == 0
     args.save_logs = args.logs and args.logs.lower() != "none" and is_master(args)

@@ -29,7 +29,7 @@ INPUT_PATHS = [
 
 def retrieve_dataset(epoch, next_shard, weights, seed, disable_buffer, min_shards_needed=2):
     args = parse_args("")
-    
+
     train_data_string_per_source, num_samples_per_source, _ = get_string_for_epoch(
         NUM_SAMPLES, [next_shard, next_shard], INPUT_PATHS, weights, min_shards_needed, world_size=1
     )
@@ -47,7 +47,7 @@ def retrieve_dataset(epoch, next_shard, weights, seed, disable_buffer, min_shard
     args.per_gpu_batch_size = 2
     data = get_wds_dataset(args, is_train=True, epoch=epoch, force_num_samples=num_samples_per_source)
     dl = data.dataloader
-    
+
     return dl
 
 
@@ -69,7 +69,7 @@ def retrieve_dataset_resampled(epoch, next_shard, weights, seed, min_shards_need
     args.per_gpu_batch_size = 2
     data = get_wds_dataset(args, is_train=True, epoch=epoch)
     dl = data.dataloader
-    
+
     return dl
 
 
