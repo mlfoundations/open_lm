@@ -295,7 +295,6 @@ def main(args):
     if args.fsdp and not args.distributed:
         raise ValueError(f"--fsdp can only be specified in distributed mode.")
 
-
     # get the name of the experiments
     if args.name is None:
         # sanitize model name for filesystem / uri use, easier if we don't use / in name as a rule?
