@@ -59,11 +59,15 @@ class MockTrainArgs:
         self.moe_capacity_factor = 1.25
         self.moe_loss_weight = 0.1
         self.moe_top_k = 2
-        self.per_gpu_batch_size = self.global_batch_size // self.world_size
         self.distributed = False
+        self.per_gpu_batch_size = self.global_batch_size // self.world_size
 
         for k, v in kwargs.items():
             setattr(self, k, v)
+
+        # Recalculate batch size if overwritten.
+        if "global_batch_size" in kwargs:
+            self.per_gpu_batch_size = self.global_batch_size // self.world_size
 
 
 class MockDataArgs(object):
