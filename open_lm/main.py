@@ -249,7 +249,7 @@ def main(args):
 
     args.per_gpu_batch_size = args.global_batch_size // args.world_size
     if args.val_data is not None:
-        args.per_gpu_val_batch_size = args.global_val_batch_size // args.world_size
+        args.per_gpu_val_batch_size = max(args.global_val_batch_size // args.world_size, 1)
 
     if args.hf_model is not None and args.hf_seq_len is None:
         raise ValueError("If passing --hf-model, must also pass --hf-seq-len to be used for training/fine-tuning.")
