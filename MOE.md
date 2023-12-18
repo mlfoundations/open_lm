@@ -2,11 +2,11 @@
 
 ## Dependencies
 
-Our implementation of mixture of experts depends on [megablocks](https://github.com/stanford-futuredata/megablocks) and a newer version of xformers, which is compatible with torch 2.1:
+Our implementation of mixture of experts depends on [megablocks](https://github.com/stanford-futuredata/megablocks) and the version of xformers which is compatible with torch 2.1:
 
 ```
 pip install megablocks
-pip install xformers==0.0.22.post4
+pip3 install -U xformers --index-url https://download.pytorch.org/whl/cu121
 ```
 
 ## Train MoE
