@@ -13,15 +13,15 @@ from open_lm.main import save_checkpoint, load_model
 from open_lm.losses import CrossEntropyLossWithZLoss
 from open_lm.distributed import is_using_distributed
 
-from tests.shared import create_train_fixtures
+from tests.shared import MockTrainArgs, create_train_fixtures
 from tests.utils import download_dl_test_data
 
 
 @pytest.fixture(scope="module")
 def tiny_args():
-    args = argparse.Namespace(
+    args = MockTrainArgs(
+        model="open_lm_test_tiny",
         **{
-            "model": "open_lm_test_tiny",
             "vocab_size": 16,
             "sequence_length": 16,
             "train_num_samples": 64,
