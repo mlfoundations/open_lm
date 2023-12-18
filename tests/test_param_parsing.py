@@ -26,14 +26,14 @@ def get_cmdline_config1():
     # fmt: off
     cmdline = [
         "--train-num-samples", str(samples),
-        "--batch-size", str(batch_size),
+        "--global-batch-size", str(batch_size),
         "--dataset-type", "synthetic",
         "--model", "open_lm_test_tiny",
         "--epochs", "1",
     ]
     config_dict = {
         "train-num-samples": samples,
-        "batch-size": batch_size,
+        "global-batch-size": batch_size,
         "dataset-type": "synthetic",
         "model": "open_lm_test_tiny",
         "epochs": 1,

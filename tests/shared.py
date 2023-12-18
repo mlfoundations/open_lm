@@ -24,7 +24,7 @@ class MockTrainArgs:
             "--wd", "0.033",
             "--lr", "3e-3",
             "--warmup", "2",
-            "--batch-size", "8",
+            "--global-batch-size", "8",
             "--accum", "1",
             "--name", "test_model_name",
             "--logs", "./tests/assets/",
@@ -59,6 +59,7 @@ class MockTrainArgs:
         self.moe_capacity_factor = 1.25
         self.moe_loss_weight = 0.1
         self.moe_top_k = 2
+        self.per_gpu_batch_size = self.global_batch_size // self.world_size
         self.distributed = False
 
         for k, v in kwargs.items():
@@ -80,7 +81,7 @@ class MockDataArgs(object):
         self.disable_buffer = True
         self.seq_len = 300
         self.vocab_size = 50432
-        self.batch_size = 64
+        self.global_batch_size = 64
         self.world_size = 1
         self.rank = 0
         self.workers = 2
@@ -89,6 +90,7 @@ class MockDataArgs(object):
         self.target_mask_left = None
         self.target_mask_individual = None
         self.ignore_parse_errors = False
+        self.per_gpu_batch_size = self.global_batch_size // self.world_size
 
 
 def create_train_fixtures(model="open_lm_11m", fsdp=False, **kwargs):
@@ -96,7 +98,7 @@ def create_train_fixtures(model="open_lm_11m", fsdp=False, **kwargs):
     args = MockTrainArgs(model, **kwargs)
 
     # only want to look at one batch
-    args.train_num_samples = args.batch_size
+    args.train_num_samples = args.global_batch_size
 
     # increase learning rate and remove warmup for maximize change to model weights
     args.lr = 1e-3

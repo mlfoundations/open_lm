@@ -259,7 +259,7 @@ def parse_args(args):
         help="Optional identifier for the experiment when storing logs. Otherwise use current time.",
     )
     parser.add_argument("--workers", type=int, default=1, help="Number of dataloader workers per GPU.")
-    parser.add_argument("--batch-size", type=int, default=64, help="Batch size per GPU.")
+    parser.add_argument("--global-batch-size", type=int, default=64, help="Global batch size.")
     parser.add_argument("--epochs", type=int, default=32, help="Number of epochs to train for.")
     parser.add_argument(
         "--epochs-cooldown",
@@ -342,7 +342,7 @@ def parse_args(args):
         help="How often to run evaluation with val-data (in epochs). Last epoch validated if val-data provided.",
     )
     parser.add_argument(
-        "--val-batch-size",
+        "--global-val-batch-size",
         type=int,
         default=None,
         help="Batch size to be used with val-data.",
@@ -424,7 +424,7 @@ def parse_args(args):
         "--accum-freq",
         type=int,
         default=1,
-        help="Update the model every --acum-freq steps.",
+        help="Update the model every --accum-freq steps.",
     )
     # arguments for distributed training
     parser.add_argument(
@@ -625,9 +625,8 @@ def parse_args(args):
         assert args.train_data is None, "--train-data must not be specified if --dataset-type='synthetic'"
         assert args.dataset_manifest is None, "--dataset-manifest must not be specified if --dataset-type='synthetic'"
 
-    if args.val_data is not None and args.val_batch_size is None:
-        # if not set explicitly make sure that the val batch size is set to the micro batch size
-
-        args.val_batch_size = args.batch_size // args.accum_freq
+    if args.val_data is not None and args.global_val_batch_size is None:
+        # Make sure that val batch size is set to micro batch size
+        args.global_val_batch_size = args.global_batch_size // args.accum_freq
 
     return args

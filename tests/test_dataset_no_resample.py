@@ -84,7 +84,7 @@ def retrieve_dataset_once(
     args.train_num_samples = total_seqs
     args.train_data = train_data_string_per_source
     args.workers = num_workers
-    args.batch_size = batch_size
+    args.global_batch_size = args.per_gpu_batch_size = batch_size
     args.seed = seed
     args.dataset_resampled = False
     args.disable_buffer = disable_buffer
