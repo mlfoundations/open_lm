@@ -258,6 +258,9 @@ def check_args(args):
             f"Unknown scheduler, {args.lr_scheduler}. Available options are: cosine, const, const-cooldown."
         )
 
+    if args.experimental_meta_device:
+        print("WARNING: Meta device initialization requested, but this is not currently fully tested.")
+
 
 def main(args):
     args = parse_args(args)
@@ -420,8 +423,8 @@ def main(args):
     if args.hf_model is not None:
         model = create_wrapped_hf_model(args)
     else:
-        # Use meta device when FSDP is provided, unless user explicitly requests not to.
-        with torch.device("meta" if args.fsdp and not args.disable_meta_device else args.device):
+        # Optional: Use meta device
+        with torch.device("meta" if args.experimental_meta_device and args.fsdp else args.device):
             model = create_model(args)
 
     args.vocab_size = model.vocab_size
