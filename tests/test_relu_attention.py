@@ -18,7 +18,13 @@ def test_non_linear_attn_matches_torch_softmax_attn(threshold=1e-7):
             torch_out = torch_attn(queries, keys, values, is_causal=is_causal)
 
             my_out = non_linear_attn(
-                queries, keys, values, attn_non_linearity="softmax", attn_outter_scalar="none", is_causal=is_causal
+                queries,
+                keys,
+                values,
+                attn_non_linearity="softmax",
+                attn_seq_scalar="none",
+                alpha=1.0,
+                is_causal=is_causal,
             )
 
             assert torch.allclose(
@@ -40,7 +46,13 @@ def test_no_failure():
 
                 for is_causal in [True, False]:
                     non_linear_attn(
-                        queries, keys, values, attn_non_linearity=nl, attn_outter_scalar=os, is_causal=is_causal
+                        queries,
+                        keys,
+                        values,
+                        attn_non_linearity=nl,
+                        attn_seq_scalar=os,
+                        alpha=1.0,
+                        is_causal=is_causal,
                     )
 
     assert True
