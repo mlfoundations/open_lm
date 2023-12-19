@@ -109,7 +109,9 @@ def load_model(args, model):
         global_step = checkpoint.get("step", None)
         if next(iter(sd.items()))[0].startswith("module"):
             sd = {k[len("module.") :]: v for k, v in sd.items()}
-        if args.distributed:
+        if args.fsdp:
+            model.load_state_dict(sd)
+        elif args.distributed:
             model.module.load_state_dict(sd)
         else:
             model.load_state_dict(sd)
