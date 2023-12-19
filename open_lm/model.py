@@ -4,6 +4,7 @@ import re
 from copy import deepcopy
 from pathlib import Path
 from dataclasses import dataclass
+from typing import Callable
 
 import torch
 from torch import nn
@@ -86,7 +87,7 @@ class Params:
     post_embed_norm: bool = False
     weight_tying: bool = False
     norm_type: nn.Module = nn.LayerNorm
-    attn_func: function = xformers_attn if torch.cuda.is_available() else torch_attn
+    attn_func: Callable = xformers_attn if torch.cuda.is_available() else torch_attn
     apply_qk_norm: bool = False
     moe_loss_weight: float = 0.1
     moe_capacity_factor: float = 1.25
