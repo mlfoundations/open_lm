@@ -70,7 +70,7 @@ def torch_attn(queries, keys, values, is_causal):
         )
 
 
-ATTN_NON_LINEARITIES = {
+ATTN_ACTIVATIONS = {
     "relu": F.relu,
     "relu_squared": lambda x: torch.pow(F.relu(x), 2),
     # "gelu": F.gelu, # goes to NaN with bais so comment out for now
@@ -89,7 +89,7 @@ ATTN_SEQ_SCALARS = {
 }
 
 
-def non_linear_attn(
+def custom_attn(
     queries,
     keys,
     values,
@@ -108,13 +108,13 @@ def non_linear_attn(
     if is_causal and queries.shape[1] > 1:
         attn_bias = get_rectangular_mask((batch, heads), q_seq_len, k_seq_len, queries.device, queries.dtype)
 
-    inner_scale = 1 / embed_dim**0.5
-    attn_weight = inner_scale * torch.einsum("bqhd,bkhd->bhqk", queries, keys)
+    inner_scale = embed_dim**-0.5
+    attn_weight = torch.einsum("bqhd,bkhd->bhqk", inner_scale * queries, keys)
     attn_weight += attn_bias
 
     # scaling by: 1/L^{-\alpha}
     outter_scale = ATTN_SEQ_SCALARS[attn_seq_scalar](k_seq_len) ** -alpha
-    attn_weight = outter_scale * ATTN_NON_LINEARITIES[attn_non_linearity](attn_weight)
+    attn_weight = outter_scale * ATTN_ACTIVATIONS[attn_non_linearity](attn_weight)
 
     return torch.einsum("bhqk,bkhd->bqhd", attn_weight, values)
 
@@ -129,12 +129,12 @@ def get_attn_func(
         return xformers_attn
     elif attn_name == "torch_attn":
         return torch_attn
-    elif attn_name == "non_linear_attn":
+    elif attn_name == "custom_attn":
         assert (
             attn_non_linearity is not None and attn_seq_scalar is not None and alpha is not None
-        ), "must provide attn-non-linearity, attn-seq-scalar, attn-seq-scalar-alpha"
+        ), "must provide attn-activation, attn-seq-scalar, attn-seq-scalar-alpha"
         return partial(
-            non_linear_attn,
+            custom_attn,
             attn_non_linearity,
             attn_seq_scalar,
             alpha,

@@ -5,7 +5,7 @@ import json
 import logging
 import yaml
 
-from open_lm.attention import ATTN_NON_LINEARITIES, ATTN_SEQ_SCALARS
+from open_lm.attention import ATTN_ACTIVATIONS, ATTN_SEQ_SCALARS
 
 
 class ParseKwargs(argparse.Action):
@@ -106,28 +106,28 @@ def add_model_args(parser):
         "--attn-name",
         type=str,
         default="xformers_attn",
-        choices=["xformers_attn", "torch_attn", "non_linear_attn"],
+        choices=["xformers_attn", "torch_attn", "custom_attn"],
         help="type of attention to use",
     )
     parser.add_argument(
-        "--attn-non-linearity",
+        "--attn-activation",
         type=str,
         default=None,
-        choices=list(ATTN_NON_LINEARITIES.keys()),
-        help="non-linearity to use with non_linear_attn",
+        choices=list(ATTN_ACTIVATIONS.keys()),
+        help="activation to use with custom_attn",
     )
     parser.add_argument(
         "--attn-seq-scalar",
         type=str,
         default=None,
         choices=list(ATTN_SEQ_SCALARS.keys()),
-        help="different ways to set L, where L^alpha divides attention logits post non-linearlity",
+        help="different ways to set L, where L^alpha divides attention logits post activation",
     )
     parser.add_argument(
         "--attn-seq-scalar-alpha",
         type=float,
         default=None,
-        help="power alpha to raise L to, where L^alpha divides attention logits post non-linearlity",
+        help="power alpha to raise L to, where L^alpha divides attention logits post activation",
     )
 
 
@@ -660,15 +660,15 @@ def parse_args(args):
         # Make sure that val batch size is set to micro batch size
         args.global_val_batch_size = args.global_batch_size // args.accum_freq
 
-    if args.attn_name == "non_linear_attn":
+    if args.attn_name == "custom_attn":
         assert (
             args.attn_non_linearity is not None
             and args.attn_seq_scalar is not None
             and args.attn_seq_scalar_alpha is not None
-        ), "must provide attn-non-linearity, attn-seq-scalar, attn-seq-scalar-alpha to use non-linear-attn"
+        ), "must provide attn-activation, attn-seq-scalar, attn-seq-scalar-alpha to use non-linear-attn"
     else:
         assert (
             args.attn_non_linearity is None and args.attn_seq_scalar is None and args.attn_seq_scalar_alpha is None
-        ), "attn-non-linearity, attn-seq-scalar, attn-seq-scalar-alpha must be None unless using non-linear-attn"
+        ), "attn-activation, attn-seq-scalar, attn-seq-scalar-alpha must be None unless using non-linear-attn"
 
     return args
