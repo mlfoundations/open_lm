@@ -5,6 +5,8 @@ import json
 import logging
 import yaml
 
+from open_lm.attention import ATTN_NON_LINEARITIES, ATTN_SEQ_SCALARS
+
 
 class ParseKwargs(argparse.Action):
     def __call__(self, parser, namespace, values, option_string=None):
@@ -99,6 +101,33 @@ def add_model_args(parser):
         type=int,
         default=2,
         help="MoE top k experts",
+    )
+    parser.add_argument(
+        "--attn-name",
+        type=str,
+        default="xformers_attn",
+        choices=["xformers_attn", "torch_attn", "non_linear_attn"],
+        help="type of attention to use",
+    )
+    parser.add_argument(
+        "--attn-non-linearity",
+        type=str,
+        default=None,
+        choices=list(ATTN_NON_LINEARITIES.keys()),
+        help="non-linearity to use with non_linear_attn",
+    )
+    parser.add_argument(
+        "--attn-seq-scalar",
+        type=str,
+        default=None,
+        choices=list(ATTN_SEQ_SCALARS.keys()),
+        help="different ways to set L, where L^alpha divides attention logits post non-linearlity",
+    )
+    parser.add_argument(
+        "--attn-seq-scalar-alpha",
+        type=float,
+        default=None,
+        help="power alpha to raise L to, where L^alpha divides attention logits post non-linearlity",
     )
 
 
@@ -621,6 +650,8 @@ def parse_args(args):
     else:
         args = parser.parse_args(args)
 
+    # basic error checks
+    # TODO: move all error checking we can do after argparse to a seperate function
     if args.dataset_type == "synthetic":
         assert args.train_data is None, "--train-data must not be specified if --dataset-type='synthetic'"
         assert args.dataset_manifest is None, "--dataset-manifest must not be specified if --dataset-type='synthetic'"
@@ -628,5 +659,16 @@ def parse_args(args):
     if args.val_data is not None and args.global_val_batch_size is None:
         # Make sure that val batch size is set to micro batch size
         args.global_val_batch_size = args.global_batch_size // args.accum_freq
+
+    if args.attn_name == "non_linear_attn":
+        assert (
+            args.attn_non_linearity is not None
+            and args.attn_seq_scalar is not None
+            and args.attn_seq_scalar_alpha is not None
+        ), "must provide attn-non-linearity, attn-seq-scalar, attn-seq-scalar-alpha to use non-linear-attn"
+    else:
+        assert (
+            args.attn_non_linearity is None and args.attn_seq_scalar is None and args.attn_seq_scalar_alpha is None
+        ), "attn-non-linearity, attn-seq-scalar, attn-seq-scalar-alpha must be None unless using non-linear-attn"
 
     return args
