@@ -23,7 +23,7 @@ def run_command(command):
     subprocess.run(command, shell=True, check=True)
 
 
-def get_image(user, instance_type, build_type=None, profile="poweruser", region="us-east-1"):
+def get_image(user, instance_type, build_type=None, profile="default", region="us-east-1"):
     os.environ["AWS_PROFILE"] = f"{profile}"
     account = subprocess.getoutput(
         f"aws --region {region} --profile {profile} sts get-caller-identity --query Account --output text"
@@ -87,7 +87,7 @@ def main():
 
     # AWS profile args
     parser.add_argument("--region", default="us-east-1", help="AWS region")
-    parser.add_argument("--profile", default="poweruser", help="AWS profile to use")
+    parser.add_argument("--profile", default="default", help="AWS profile to use")
     parser.add_argument("--arn", default=None, help="If None, reads from SAGEMAKER_ARN env var")
     parser.add_argument(
         "--s3-remote-sync", default=None, help="S3 path to sync to. If none, reads from S3_REMOTE_SYNC env var"
@@ -125,6 +125,11 @@ def main_after_setup_move(args):
     # Create session and make sure of account and region
     ##########
     sagemaker_session = sagemaker.Session(boto_session=boto3.session.Session(region_name=args.region))
+
+    if args.local:
+        from sagemaker.local import LocalSession
+
+        sagemaker_session = LocalSession()
 
     role = args.arn
     # provide a pre-existing role ARN as an alternative to creating a new role
