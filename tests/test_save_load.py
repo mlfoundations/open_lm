@@ -126,6 +126,7 @@ def _save_load_helper_fsdp(rank, world_size, tiny_args):
     torch.distributed.destroy_process_group()
 
 
+@pytest.mark.gpu
 def test_tiny_save_load_fsdp(tiny_args):
     world_size = 1
     mp.spawn(_save_load_helper_fsdp, args=(world_size, tiny_args), nprocs=world_size, join=True)

@@ -55,6 +55,7 @@ def test_tiny_save_load_no_distributed():
     tiny_save_load(fsdp=False, distributed=False)
 
 
+@pytest.mark.gpu
 @pytest.mark.parametrize("fsdp", [False, True])
 def test_tiny_save_load_dist_fsdp(fsdp):
     mp.spawn(_save_load_helper_dist, args=(fsdp,), nprocs=1, join=True)
