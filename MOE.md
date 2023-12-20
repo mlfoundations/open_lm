@@ -20,7 +20,7 @@ torchrun --nproc-per-node 8 -m open_lm.main \
     --dataset-manifest "s3://laion-west/rpj_tokenized_upsampled_eleutherai/manifest.jsonl" "s3://laion-west/2T_no_rpj_tokenized_upsampled_25k_shards/manifest.jsonl" \
     --train-data-mix-weights 0.725 0.275 \
     --precision amp_bfloat16 \
-    --batch-size 8 \
+    --global-batch-size 64 \
     --accum-freq 4 \
     --log-every-n-steps 20 \
     --grad-clip-norm 1 \
@@ -34,8 +34,8 @@ torchrun --nproc-per-node 8 -m open_lm.main \
     --moe-freq 2 \
     --moe-num-experts 8 \
     --moe-top-k 2 \
-    --moe-capacity-factor 1.25 --moe-loss-weight 0.1 \
-    --disable-meta-device \
+    --moe-capacity-factor 1.25 \
+    --moe-loss-weight 0.1 \
     --wandb-project-name moe \
     --name test$RANDOM \
     --logs /fsx/home-$USER/experiments/moe \
@@ -60,7 +60,7 @@ torchrun --nproc-per-node 8 -m open_lm.main \
                 --val-data "pipe:aws s3 cp s3://laion-west/lmdata/validation_data_tokenized/open_lm//shard_00000000.tar -" \
                 --workers 6 \
                 --precision amp_bfloat16 \
-                --batch-size 8 \
+                --global-batch-size 64 \
                 --log-every-n-steps 1 \
                 --model open_lm_41m \
                 --fsdp --fsdp-amp \
