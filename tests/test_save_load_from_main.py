@@ -38,12 +38,8 @@ def tiny_save_load(fsdp=False, distributed=False):
 
     try:
         # Train for one epoch, load the model, then train for another epoch.
-        from torch.distributed.distributed_c10d import GroupMember, _world
         main(args + ["--epochs", "1"])
 
-        import subprocess
-        subprocess.run(["ls", "--recursive", logdir])
-        print(f"Abspath: {os.path.abspath(logdir)=}")
         # Loading saved tiny model
         resume_args = args + ["--resume", "latest", "--epochs", "2"]
         main(resume_args)
