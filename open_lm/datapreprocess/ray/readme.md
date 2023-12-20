@@ -44,6 +44,7 @@
    ```
    ray rsync_up ray_cluster_configs/cluster_west.yaml tokenize_shuffle.py /home/ubuntu
    ```
+   Copy the `default_dataset_yaml` as well if used.
 
 4. **SSH into the cluster**:  
    ```
