@@ -56,6 +56,50 @@ def add_model_args(parser):
         default="rotary",
         help="Type of positional embedding to use. This might be overridden by the model config.",
     )
+    parser.add_argument(
+        "--moe-freq",
+        type=int,
+        default=0,
+        help="if set > 0, we will add MoE layer to every moe_freq layer.",
+    )
+    parser.add_argument(
+        "--moe-num-experts",
+        type=int,
+        default=None,
+        help="Number of experts for MoE",
+    )
+
+    parser.add_argument(
+        "--moe-weight-parallelism",
+        action="store_true",
+        help="Add weight parallelism to MoE",
+    )
+
+    parser.add_argument(
+        "--moe-expert-model-parallelism",
+        action="store_true",
+        help="Add expert model parallelism to MoE",
+    )
+
+    parser.add_argument(
+        "--moe-capacity-factor",
+        type=float,
+        default=1.25,
+        help="MoE capacity factor",
+    )
+
+    parser.add_argument(
+        "--moe-loss-weight",
+        type=float,
+        default=0.1,
+        help="MoE loss weight",
+    )
+    parser.add_argument(
+        "--moe-top-k",
+        type=int,
+        default=2,
+        help="MoE top k experts",
+    )
 
 
 def check_replacement_type(replacement, original):
@@ -215,7 +259,7 @@ def parse_args(args):
         help="Optional identifier for the experiment when storing logs. Otherwise use current time.",
     )
     parser.add_argument("--workers", type=int, default=1, help="Number of dataloader workers per GPU.")
-    parser.add_argument("--batch-size", type=int, default=64, help="Batch size per GPU.")
+    parser.add_argument("--global-batch-size", type=int, default=64, help="Global batch size.")
     parser.add_argument("--epochs", type=int, default=32, help="Number of epochs to train for.")
     parser.add_argument(
         "--epochs-cooldown",
@@ -298,7 +342,7 @@ def parse_args(args):
         help="How often to run evaluation with val-data (in epochs). Last epoch validated if val-data provided.",
     )
     parser.add_argument(
-        "--val-batch-size",
+        "--global-val-batch-size",
         type=int,
         default=None,
         help="Batch size to be used with val-data.",
@@ -380,7 +424,7 @@ def parse_args(args):
         "--accum-freq",
         type=int,
         default=1,
-        help="Update the model every --acum-freq steps.",
+        help="Update the model every --accum-freq steps.",
     )
     # arguments for distributed training
     parser.add_argument(
@@ -561,6 +605,12 @@ def parse_args(args):
         default=False,
         help="If true, ignore parse errors in data loading. This should ideally be False, as errors in dataloading can point to bigger issues in your dataset. However, this can be useful when training on a large dataset which has a couple errors.",
     )
+    parser.add_argument(
+        "--experimental-meta-device",
+        action="store_true",
+        default=False,
+        help="If True, initialize the model on meta device. This can be useful for loading large models, but is not currently fully tested.",
+    )
 
     add_model_args(parser)
 
@@ -575,9 +625,8 @@ def parse_args(args):
         assert args.train_data is None, "--train-data must not be specified if --dataset-type='synthetic'"
         assert args.dataset_manifest is None, "--dataset-manifest must not be specified if --dataset-type='synthetic'"
 
-    if args.val_data is not None and args.val_batch_size is None:
-        # if not set explicitly make sure that the val batch size is set to the micro batch size
-
-        args.val_batch_size = args.batch_size // args.accum_freq
+    if args.val_data is not None and args.global_val_batch_size is None:
+        # Make sure that val batch size is set to micro batch size
+        args.global_val_batch_size = args.global_batch_size // args.accum_freq
 
     return args

@@ -1,9 +1,9 @@
 import pytest
-import argparse
 
 from open_lm.utils.transformers.hf_model import OpenLMforCausalLM
 from open_lm.utils.transformers.hf_config import OpenLMConfig
 from open_lm.model import create_params
+from tests.shared import MockTrainArgs
 from tests.utils import run_model, CharacterTokenizer
 
 
@@ -12,10 +12,10 @@ from tests.utils import run_model, CharacterTokenizer
 @pytest.mark.slow
 @pytest.fixture(scope="module")
 def args():
-    args = argparse.Namespace(
+    args = MockTrainArgs(
+        model="open_lm_test_tiny",
         **{
             # Generation params:
-            "model": "open_lm_test_tiny",
             "input_text": "random",
             "max_gen_len": None,
             "context_len": None,
@@ -28,6 +28,13 @@ def args():
             "qk_norm": False,
             "positional_embedding_type": "rotary",
             "ffn_type": "swiglu",
+            "moe_num_experts": None,
+            "moe_freq": 0,
+            "moe_weight_parallelism": False,
+            "moe_expert_model_parallelism": False,
+            "moe_capacity_factor": 1.25,
+            "moe_loss_weight": 0.1,
+            "moe_top_k": 2,
         }
     )
     return args

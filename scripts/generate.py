@@ -64,7 +64,6 @@ def main():
 
     add_model_args(parser)
     args = parser.parse_args()
-
     print("Loading model into the right classes...")
     open_lm = OpenLMforCausalLM(OpenLMConfig(create_params(args)))
 

@@ -141,3 +141,4 @@ tests/assets/*
 .vscode/
 secrets.env
 checkpoints/
+experiments/

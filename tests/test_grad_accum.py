@@ -72,7 +72,7 @@ def _grad_acc_helper_single(test_fsdp, accs=[2, 1], threshold=1e-7):
             epoch=0,
             step=0,
             optimizer=optimizer,
-            scaler=args.scaler,
+            scaler=None,
             scheduler=scheduler,
             total_steps=10,
             args=args,

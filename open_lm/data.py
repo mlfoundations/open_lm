@@ -419,16 +419,16 @@ def get_wds_dataset(args, is_train, epoch=0, floor=True, tokenizer=None, data_ke
                 ]
             )
 
-        map_dict_handler = {"handler": log_and_continue} if args.ignore_parse_errors else {}
-        batch_size = args.batch_size if is_train else args.val_batch_size
+        map_handler = {"handler": log_and_continue} if args.ignore_parse_errors else {}
+        batch_size = args.per_gpu_batch_size if is_train else args.per_gpu_val_batch_size
 
         if data_key == "json" or data_key == "json.gz":
             pipeline.extend(
                 [
                     wds.decode(),
                     wds.rename(json=data_key),
-                    wds.map_dict(json=partial(preprocess_json, vocab_size=args.vocab_size), **map_dict_handler),
-                    wds.to_tuple("json"),
+                    wds.map_dict(json=partial(preprocess_json, vocab_size=args.vocab_size), **map_handler),
+                    wds.to_tuple("json", **map_handler),
                     wds.select(partial(filter_lt_seqlen, args.seq_len)),
                     wds.batched(batch_size, partial=not is_train),
                 ]
@@ -436,8 +436,8 @@ def get_wds_dataset(args, is_train, epoch=0, floor=True, tokenizer=None, data_ke
         elif data_key == "txt":
             pipeline.extend(
                 [
-                    wds.map_dict(txt=partial(preprocess_txt, vocab_size=args.vocab_size), **map_dict_handler),
-                    wds.to_tuple("txt"),
+                    wds.map_dict(txt=partial(preprocess_txt, vocab_size=args.vocab_size), **map_handler),
+                    wds.to_tuple("txt", **map_handler),
                     wds.select(partial(filter_lt_seqlen, args.seq_len)),
                     wds.batched(batch_size, partial=not is_train),
                 ]
@@ -515,20 +515,6 @@ def get_wds_dataset(args, is_train, epoch=0, floor=True, tokenizer=None, data_ke
         worker_init_fn=worker_init_fn,
     )
 
-    # FIXME not clear which approach is better, with_epoch before vs after dataloader?
-    # hoping to resolve via https://github.com/webdataset/webdataset/issues/169
-    # if is_train:
-    #     # roll over and repeat a few samples to get same number of full batches on each node
-    #     global_batch_size = args.batch_size * args.world_size
-    #     num_batches = math.ceil(num_samples / global_batch_size)
-    #     num_workers_per_gpu = max(1, args.workers)
-    #     num_batches = math.ceil(num_batches / num_workers_per_gpu) * num_workers_per_gpu
-    #     num_samples = num_batches * global_batch_size
-    #     dataloader = dataloader.with_epoch(num_batches)
-    # else:
-    #     # last batches are partial, eval is done on single (master) node
-    #     num_batches = math.ceil(num_samples / args.batch_size)
-
     # add meta-data to dataloader instance for convenience
     dataloader.num_batches = total_num_batches
     dataloader.num_samples = total_num_samples
@@ -545,7 +531,7 @@ def get_synthetic_dataset(args, is_train, epoch, tokenizer, data_key, floor):
 
     dataloader = DataLoader(
         dataset,
-        batch_size=args.batch_size,
+        batch_size=args.per_gpu_batch_size,
         shuffle=shuffle,
         num_workers=args.workers,
         pin_memory=True,
