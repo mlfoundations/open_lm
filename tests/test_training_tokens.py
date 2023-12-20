@@ -5,6 +5,7 @@ from open_lm.file_utils import get_string_for_epoch
 from open_lm.train import train_one_epoch
 from tests.shared import create_train_fixtures
 from tests.utils import download_dl_test_data
+from torch.cuda.amp import GradScaler
 
 SOURCE_MANIFEST = ["tests/assets/source_3/manifest.jsonl"]
 
@@ -33,16 +34,17 @@ def test_token_count(test_case):
 
     download_dl_test_data()
     args, model, _, optimizer, scheduler, loss = create_train_fixtures("open_lm_11m")
-    args.batch_size = batch_size
+    args.global_batch_size = batch_size
+    args.per_gpu_batch_size = args.global_batch_size // args.world_size
     args.workers = workers
     args.train_data = None
     args.dataset_manifest = SOURCE_MANIFEST
     args.epochs = desired_epochs
     args.train_num_samples = desired_sequences_per_epoch
+    args.scaler = None if args.precision != "amp" else GradScaler()
 
     total_samples = desired_sequences_per_epoch * desired_epochs
-    global_batch_size = args.batch_size * args.world_size
-    total_steps = total_samples // (global_batch_size)
+    total_steps = total_samples // (args.global_batch_size)
     global_step = 0
     next_shard_per_source = [0]
     epoch = 0

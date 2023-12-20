@@ -16,7 +16,7 @@ import torch
 from typing import List, Optional
 from tqdm import tqdm
 
-from .distributed import is_master
+from open_lm.distributed import is_master
 
 
 def remote_sync_s3(local_dir, remote_dir):
@@ -234,7 +234,7 @@ def log_num_checkpoints(total_steps, args):
 
     steps_done = 0
     tokens_seen = 0
-    next_shard_per_source = [0]
+    next_shard_per_source = [0 for _ in range(len(args.dataset_manifest))] if args.dataset_manifest is not None else 0
     checkpoints_made = 0
 
     if is_master(args):
@@ -249,12 +249,13 @@ def log_num_checkpoints(total_steps, args):
             args.workers,
             args.world_size,
         )
-        global_batch_size = args.world_size * args.batch_size
-        steps_epoch = sum([(n // (args.workers * global_batch_size)) * args.workers for n in num_samples_per_source])
+        steps_epoch = sum(
+            [(n // (args.workers * args.global_batch_size)) * args.workers for n in num_samples_per_source]
+        )
         steps_done += steps_epoch
         if steps_done > total_steps:
             steps_done = total_steps
-        tokens_seen = steps_done * global_batch_size * args.seq_len
+        tokens_seen = steps_done * args.global_batch_size * args.seq_len
         checkpoints_made += 1
 
         if is_master(args):

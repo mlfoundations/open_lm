@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from multiprocessing import Value
 from functools import partial
 from itertools import islice
+import copy
 
 import numpy as np
 import pandas as pd
@@ -418,25 +419,27 @@ def get_wds_dataset(args, is_train, epoch=0, floor=True, tokenizer=None, data_ke
                 ]
             )
 
-        map_dict_handler = {"handler": log_and_continue} if args.ignore_parse_errors else {}
+        map_handler = {"handler": log_and_continue} if args.ignore_parse_errors else {}
+        batch_size = args.per_gpu_batch_size if is_train else args.per_gpu_val_batch_size
+
         if data_key == "json" or data_key == "json.gz":
             pipeline.extend(
                 [
                     wds.decode(),
                     wds.rename(json=data_key),
-                    wds.map_dict(json=partial(preprocess_json, vocab_size=args.vocab_size), **map_dict_handler),
-                    wds.to_tuple("json"),
+                    wds.map_dict(json=partial(preprocess_json, vocab_size=args.vocab_size), **map_handler),
+                    wds.to_tuple("json", **map_handler),
                     wds.select(partial(filter_lt_seqlen, args.seq_len)),
-                    wds.batched(args.batch_size, partial=not is_train),
+                    wds.batched(batch_size, partial=not is_train),
                 ]
             )
         elif data_key == "txt":
             pipeline.extend(
                 [
-                    wds.map_dict(txt=partial(preprocess_txt, vocab_size=args.vocab_size), **map_dict_handler),
-                    wds.to_tuple("txt"),
+                    wds.map_dict(txt=partial(preprocess_txt, vocab_size=args.vocab_size), **map_handler),
+                    wds.to_tuple("txt", **map_handler),
                     wds.select(partial(filter_lt_seqlen, args.seq_len)),
-                    wds.batched(args.batch_size, partial=not is_train),
+                    wds.batched(batch_size, partial=not is_train),
                 ]
             )
         else:
@@ -464,26 +467,32 @@ def get_wds_dataset(args, is_train, epoch=0, floor=True, tokenizer=None, data_ke
             assert num_shards >= args.workers * args.world_size, "number of shards must be >= total workers"
         # roll over and repeat a few samples to get same number of full batches on each node
         round_fn = math.floor if floor else math.ceil
-        global_batch_size = args.batch_size * args.world_size
+        global_batch_size = batch_size * args.world_size
         total_num_batches = 0
         total_num_samples = 0
         for ii in range(len(datasets)):
             # Calculate batches per worker, round as little as possible.
             num_workers_per_gpu = max(1, args.workers)
             num_worker_batches = round_fn(all_num_samples[ii] / (global_batch_size * num_workers_per_gpu))
+
+            if num_worker_batches == 0:
+                raise ValueError(
+                    f"The dataloader for source {ii} has received zero batches. This can happen due to rounding if "
+                    f"too many GPUs / workers are used for this source, or if the mixing coefficient is too low. "
+                    f"Consider addressing the above to fix this."
+                )
+
             num_batches = num_worker_batches * num_workers_per_gpu
             num_samples = num_batches * global_batch_size
 
             # This forces the dataloader to take num_worker_batches steps per worker, so num_batches total.
-            # Note that this internally sets num_repetitions = sys.maxsize, therefore allowing repeats. We are
-            # safeguarded by the fact that num_worker_batches is the number of minimum worker batches.
             datasets[ii] = datasets[ii].repeat(nepochs=1, nbatches=num_worker_batches)
 
             total_num_batches += num_batches
             total_num_samples += num_samples
     else:
         # last batches are partial, eval is done on single (master) node
-        num_batches = math.ceil(num_samples / args.batch_size)
+        num_batches = math.ceil(num_samples / batch_size)
         total_num_batches = num_batches
         total_num_samples = num_samples
 
@@ -506,20 +515,6 @@ def get_wds_dataset(args, is_train, epoch=0, floor=True, tokenizer=None, data_ke
         worker_init_fn=worker_init_fn,
     )
 
-    # FIXME not clear which approach is better, with_epoch before vs after dataloader?
-    # hoping to resolve via https://github.com/webdataset/webdataset/issues/169
-    # if is_train:
-    #     # roll over and repeat a few samples to get same number of full batches on each node
-    #     global_batch_size = args.batch_size * args.world_size
-    #     num_batches = math.ceil(num_samples / global_batch_size)
-    #     num_workers_per_gpu = max(1, args.workers)
-    #     num_batches = math.ceil(num_batches / num_workers_per_gpu) * num_workers_per_gpu
-    #     num_samples = num_batches * global_batch_size
-    #     dataloader = dataloader.with_epoch(num_batches)
-    # else:
-    #     # last batches are partial, eval is done on single (master) node
-    #     num_batches = math.ceil(num_samples / args.batch_size)
-
     # add meta-data to dataloader instance for convenience
     dataloader.num_batches = total_num_batches
     dataloader.num_samples = total_num_samples
@@ -527,7 +522,7 @@ def get_wds_dataset(args, is_train, epoch=0, floor=True, tokenizer=None, data_ke
     return DataInfo(dataloader=dataloader, shared_epoch=shared_epoch)
 
 
-def get_synthetic_dataset(args, is_train, epoch, tokenizer, data_key):
+def get_synthetic_dataset(args, is_train, epoch, tokenizer, data_key, floor):
     print(f"{args.train_num_samples=}")
     dataset = SyntheticDataset(seq_len=args.seq_len, vocab_size=args.vocab_size, dataset_size=args.train_num_samples)
     print(f"{len(dataset)=}")
@@ -536,7 +531,7 @@ def get_synthetic_dataset(args, is_train, epoch, tokenizer, data_key):
 
     dataloader = DataLoader(
         dataset,
-        batch_size=args.batch_size,
+        batch_size=args.per_gpu_batch_size,
         shuffle=shuffle,
         num_workers=args.workers,
         pin_memory=True,
@@ -549,31 +544,36 @@ def get_synthetic_dataset(args, is_train, epoch, tokenizer, data_key):
     return DataInfo(dataloader, sampler)
 
 
-def get_dataset_fn(data_path, dataset_type):
+def get_dataset_fn(dataset_type):
     if dataset_type == "synthetic":
         return get_synthetic_dataset
     else:
         return get_wds_dataset
 
 
-def get_data(args, epoch=0, tokenizer=None, skip_train=False):
+def get_data(args, epoch=0, tokenizer=None, skip_train=False, floor=True):
     data = {}
 
     if skip_train:
         data["train"] = None
     else:
         if args.train_data or args.dataset_type == "synthetic":
-            data["train"] = get_dataset_fn(args.train_data, args.dataset_type)(
-                args,
-                is_train=True,
-                epoch=epoch,
-                tokenizer=tokenizer,
-                data_key=args.data_key,
+            # train data is treated as a shard list where all data is combined and tained on
+            data["train"] = get_dataset_fn(args.dataset_type)(
+                args, is_train=True, epoch=epoch, tokenizer=tokenizer, data_key=args.data_key, floor=floor
             )
 
     if args.val_data:
-        data["val"] = get_dataset_fn(args.val_data, args.dataset_type)(
-            args, is_train=False, tokenizer=tokenizer, data_key=args.data_key
-        )
+        # val data is treated as independent val sets to be evaluated
+        data["val_list"] = []
+        for i, val_data in enumerate(args.val_data):
+            args_copy = copy.deepcopy(args)
+            args_copy.val_data = [val_data]
+            data_val = {
+                "val": get_dataset_fn(args.dataset_type)(
+                    args_copy, is_train=False, tokenizer=tokenizer, data_key=args.val_data_key[i]
+                )
+            }
+            data["val_list"].append(data_val)
 
     return data
