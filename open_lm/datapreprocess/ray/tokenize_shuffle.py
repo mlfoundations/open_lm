@@ -39,12 +39,13 @@ from ray.data.context import DataContext
 from ray.data.datasource import Datasource, ReadTask
 from ray.runtime_context import RuntimeContext
 from tqdm import tqdm
-from transformers import GPTNeoXTokenizerFast
+from transformers import GPTNeoXTokenizerFast, LlamaTokenizerFast, LlamaTokenizer
 
 
 import enum
 import yaml
 import pathlib
+import glob
 
 # Initialize an empty dictionary for sampling frequencies
 
@@ -167,7 +168,7 @@ def get_raw_filetype(key: str):
 
 def preprocess(
     key: str,
-    fh: BinaryIO,
+    fh: BinaryIO | BytesIO,
     seed: int,
     content_key: str,
     seqlen: int = 8192,
@@ -218,12 +219,15 @@ def preprocess(
         return []
 
 
-def process_keys(data, tokenizer, seqlen, seed, content_key, do_sample, sources=None):
+def process_keys(data, tokenizer, seqlen, seed, content_key, do_sample, sources=None, with_bytesio=False):
     s3_client = boto3.client("s3")
     path = data["path"]
     bucket, key = parse_s3_path(path)
     response = s3_client.get_object(Bucket=bucket, Key=key)
-    fh = response["Body"]
+    if with_bytesio:
+        fh = BytesIO(response["Body"]).read()
+    else:
+        fh = response["Body"]
     token_buffers = preprocess(
         key,
         fh,
@@ -329,6 +333,9 @@ def load_tokenizer(tokenizer):
     if tokenizer == "EleutherAI/gpt-neox-20b":
         enc = GPTNeoXTokenizerFast.from_pretrained("EleutherAI/gpt-neox-20b")
         return (lambda x: enc(x).input_ids, enc.vocab_size)
+    elif tokenizer.upper() == "LLAMA":
+        enc = LlamaTokenizer.from_pretrained("trishah/llama-2-7b-hf")
+        return (lambda x: enc(x).input_ids, enc.vocab_size)
     else:
         raise ValueError(f"Unknown Tokenizer: {tokenizer}")
 
@@ -412,6 +419,7 @@ def main(args):
     parser.add_argument("--do_sample", action="store_true")
     parser.add_argument("--ray_spill_location", type=str, default="/tmp/ray_spill")
     parser.add_argument("--default_dataset_yaml", type=str, default=(DIR.parent / "metadata" / "rpj_lm_data.yaml"))
+    parser.add_argument("--with_bytesio", type=bool, default=False)
 
     args = parser.parse_args(args)
     Sources, SAMPLING_FREQUENCIES = load_from_yaml(args.default_dataset_yaml)
@@ -465,6 +473,7 @@ def main(args):
             content_key=content_key,
             do_sample=args.do_sample,
             sources=Sources,
+            with_bytesio=False,
         )
     )
     ds = ds.map(add_hash)
