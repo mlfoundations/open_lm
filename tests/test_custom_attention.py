@@ -22,7 +22,7 @@ def test_custom_attn_matches_softmax_attn(threshold=1e-7):
                 queries.cpu(),
                 keys.cpu(),
                 values.cpu(),
-                attn_non_linearity="softmax",
+                attn_activation="softmax",
                 attn_seq_scalar="none",
                 alpha=1.0,
                 is_causal=is_causal,
@@ -35,12 +35,12 @@ def test_custom_attn_matches_softmax_attn(threshold=1e-7):
             if torch.cuda.is_available():
                 # also test xformers attention
                 torch_out = torch_attn(queries.cuda(), keys.cuda(), values.cuda(), is_causal=is_causal)
-                # xformers_out = xformers_attn(queries.cuda(), keys.cuda(), values.cuda(), is_causal=is_causal)
+                xformers_out = xformers_attn(queries.cuda(), keys.cuda(), values.cuda(), is_causal=is_causal)
                 my_out = custom_attn(
                     queries.cuda(),
                     keys.cuda(),
                     values.cuda(),
-                    attn_non_linearity="softmax",
+                    attn_activation="softmax",
                     attn_seq_scalar="none",
                     alpha=1.0,
                     is_causal=is_causal,
@@ -48,6 +48,10 @@ def test_custom_attn_matches_softmax_attn(threshold=1e-7):
 
                 assert torch.allclose(
                     torch_out, my_out, atol=threshold
+                ), "custom_attn incorrectly implements softmax attention"
+
+                assert torch.allclose(
+                    xformers_out, my_out, atol=threshold
                 ), "custom_attn incorrectly implements softmax attention"
 
 
@@ -68,24 +72,10 @@ def test_no_failure():
                         queries,
                         keys,
                         values,
-                        attn_non_linearity=nl,
+                        attn_activation=nl,
                         attn_seq_scalar=os,
                         alpha=1.0,
                         is_causal=is_causal,
                     )
 
     assert True
-
-
-# def test_custom_attn_matches_softmax_attn_amp(threshold=1e-7):
-#     for p in ["amp_bf16", "amp"]:
-#         autocast = get_autocast(p)
-#         with autocast():
-#             test_custom_attn_matches_softmax_attn(threshold=threshold)
-
-
-# def test_no_failure_amp():
-#     for p in ["amp", "amp_bf16"]:
-#         autocast = get_autocast(p)
-#         with autocast():
-#             test_no_failure()

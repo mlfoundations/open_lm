@@ -93,7 +93,7 @@ def custom_attn(
     queries,
     keys,
     values,
-    attn_non_linearity,
+    attn_activation,
     attn_seq_scalar,
     alpha,
     is_causal=False,
@@ -114,14 +114,14 @@ def custom_attn(
 
     # scaling by: 1/L^{-\alpha}
     outter_scale = ATTN_SEQ_SCALARS[attn_seq_scalar](k_seq_len) ** -alpha
-    attn_weight = outter_scale * ATTN_ACTIVATIONS[attn_non_linearity](attn_weight)
+    attn_weight = outter_scale * ATTN_ACTIVATIONS[attn_activation](attn_weight)
 
     return torch.einsum("bhqk,bkhd->bqhd", attn_weight, values)
 
 
 def get_attn_func(
     attn_name,
-    attn_non_linearity=None,
+    attn_activation=None,
     attn_seq_scalar=None,
     alpha=None,
 ):
@@ -131,11 +131,11 @@ def get_attn_func(
         return torch_attn
     elif attn_name == "custom_attn":
         assert (
-            attn_non_linearity is not None and attn_seq_scalar is not None and alpha is not None
+            attn_activation is not None and attn_seq_scalar is not None and alpha is not None
         ), "must provide attn-activation, attn-seq-scalar, attn-seq-scalar-alpha"
         return partial(
             custom_attn,
-            attn_non_linearity,
+            attn_activation,
             attn_seq_scalar,
             alpha,
         )

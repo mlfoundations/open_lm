@@ -662,13 +662,13 @@ def parse_args(args):
 
     if args.attn_name == "custom_attn":
         assert (
-            args.attn_non_linearity is not None
+            args.attn_activation is not None
             and args.attn_seq_scalar is not None
             and args.attn_seq_scalar_alpha is not None
         ), "must provide attn-activation, attn-seq-scalar, attn-seq-scalar-alpha to use non-linear-attn"
     else:
         assert (
-            args.attn_non_linearity is None and args.attn_seq_scalar is None and args.attn_seq_scalar_alpha is None
+            args.attn_activation is None and args.attn_seq_scalar is None and args.attn_seq_scalar_alpha is None
         ), "attn-activation, attn-seq-scalar, attn-seq-scalar-alpha must be None unless using non-linear-attn"
 
     return args
