@@ -100,6 +100,7 @@ class MockDataArgs(object):
 def create_train_fixtures(model="open_lm_11m", fsdp=False, **kwargs):
     # Setup data, optimizer, and other basic settings
     args = MockTrainArgs(model, **kwargs)
+    args.fsdp = fsdp
 
     # only want to look at one batch
     args.train_num_samples = args.global_batch_size
@@ -111,7 +112,6 @@ def create_train_fixtures(model="open_lm_11m", fsdp=False, **kwargs):
     # create base models
     random_seed()
     if fsdp:
-        init_distributed_device(args)
         model = create_model(args)
         model = FSDP(model)
     else:

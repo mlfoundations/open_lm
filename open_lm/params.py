@@ -611,6 +611,11 @@ def parse_args(args):
         default=False,
         help="If True, initialize the model on CPU instead of on meta device. This can be useful for debugging or for new models which do not support the meta device.",
     )
+    parser.add_argument(
+        "--force-distributed",
+        action="store_true",
+        help="Allow forcing distributed mode even when running on one gpu. Mostly useful for testing.",
+    )
 
     add_model_args(parser)
 
