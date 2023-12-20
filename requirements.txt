@@ -1,3 +1,4 @@
+megablocks @ git+https://github.com/stanford-futuredata/megablocks.git@main
 torch
 xformers>=0.0.22
 tiktoken
@@ -25,4 +26,3 @@ s3fs
 wikipedia
 ipython
 llm-foundry
-megablocks @ git+https://github.com/stanford-futuredata/megablocks.git@main
