@@ -54,10 +54,12 @@ class RotaryEmbedding(torch.nn.Module):
         self._cos_cached = None
         self._sin_cached = None
         self._seq_len_cached = 0
-        self._update_cos_sin_tables(seq_len)
+        self.seq_len = seq_len
+        self.reset_parameters()
 
     def reset_parameters(self):
         self.inv_freq = 1.0 / (10000 ** (torch.arange(0, self.dim_model, 2).float() / self.dim_model))
+        self._update_cos_sin_tables(self.seq_len)
 
     def _update_cos_sin_tables(self, seq_len: int = None, device: torch.device = None, dtype: torch.dtype = None):
         # If no seq_len is provided, use the cached one
