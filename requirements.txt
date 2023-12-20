@@ -25,4 +25,4 @@ s3fs
 wikipedia
 ipython
 llm-foundry
-git+https://github.com/stanford-futuredata/megablocks.git@main
+megablocks @ git+https://github.com/stanford-futuredata/megablocks.git@main
