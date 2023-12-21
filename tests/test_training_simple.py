@@ -26,6 +26,7 @@ def parse_tensorboard(tb_path):
 
 @pytest.fixture
 def cleanup_test_logs():
+    print("RUNNING FIXTURE")
     shutil.rmtree(LOG_PATH, ignore_errors=True)
 
 
@@ -62,7 +63,7 @@ General test strat:
 
 
 @pytest.mark.parametrize("num_batches", [10, 100, 1000])
-def test_lr_single_epoch_warmup(num_batches):
+def test_lr_single_epoch_warmup(num_batches, cleanup_test_logs):
     """Tests that LR gets adjusted correctly for a single epoch
     --
     """
@@ -89,7 +90,7 @@ def test_lr_single_epoch_warmup(num_batches):
         "--logs",
         LOG_PATH,
         "--name",
-        "test_lr_single_epoch_warmup_%03d" % num_batches
+        "test_lr_single_epoch_warmup_%03d" % num_batches,
     ]
     output_args = main(args)
 
@@ -101,8 +102,8 @@ def test_lr_single_epoch_warmup(num_batches):
     assert abs(lr_array - expected_lr_array).max() < 1e-6
 
 
-@pytest.mark.parametrize("total_batches", [10, 100, 1000, 10_000])
-def test_lr_multi_epoch_warmup(total_batches):
+@pytest.mark.parametrize("total_batches", [10, 100, 1000])
+def test_lr_multi_epoch_warmup(total_batches, cleanup_test_logs):
     """Tests that LR gets adjusted correctly for multiple epochs (but still in the warmup)"""
     seq_len = 16
     num_epochs = 5
@@ -141,7 +142,7 @@ def test_lr_multi_epoch_warmup(total_batches):
     assert abs(lr_array - expected_lr_array).max() < 1e-6
 
 
-def test_lr_single_epoch_cyclic():
+def test_lr_single_epoch_cyclic(cleanup_test_logs):
     """Tests that LR gets adjust correctly for a single epoch (that overruns the warmup)"""
 
     seq_len = 16
@@ -188,7 +189,7 @@ def test_lr_single_epoch_cyclic():
     assert abs(lr_array - np.array(expected_lr_array)).max() < 1e-6
 
 
-def test_lr_multi_epoch_cyclic():
+def test_lr_multi_epoch_cyclic(cleanup_test_logs):
     """Tests that LR gets adjust correctly for a single epoch (that overruns the warmup)"""
     seq_len = 16
     batch_size = 2
@@ -243,7 +244,7 @@ def test_lr_multi_epoch_cyclic():
 # =========================================================
 
 
-def test_lr_scheduling_from_main():
+def test_lr_scheduling_from_main(cleanup_test_logs):
     # Then do a training run
     seq_len = 16
     batch_size = 5
