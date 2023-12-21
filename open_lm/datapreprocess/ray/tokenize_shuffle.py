@@ -372,27 +372,6 @@ def glob_files(path, suffix=".jsonl"):
     return matching_files
 
 
-def get_filesystem(environment):
-    """
-    Create a pyarrow.fs.FileSystem based on provided AWS credentials.
-
-    :param environment: Dictionary containing AWS credentials.
-    :return: pyarrow.fs.S3FileSystem
-    """
-    # Extract the AWS credentials from the environment dictionary
-    access_key = environment.get("AWS_ACCESS_KEY_ID")
-    secret_key = environment.get("AWS_SECRET_ACCESS_KEY")
-    session_token = environment.get("AWS_SESSION_TOKEN", None)  # Session token might be optional
-
-    # Create and return the S3FileSystem
-    return fs.S3FileSystem(
-        access_key=access_key,
-        secret_key=secret_key,
-        session_token=session_token,
-        region="us-west-2",
-    )
-
-
 @ray.remote
 class GlobalCounter:
     def __init__(self):
@@ -412,6 +391,33 @@ class GlobalCounter:
 
     def get_token_counter(self):
         return self.token_count
+
+
+def write_manifest(jsonl_lines, args):
+    "Write manifest to provided output path."
+    
+    output_path = os.path.join(args.output.strip("/"), "manifest.jsonl")
+
+    if output_path.startswith("s3://"):
+        # Use boto3 for S3 paths
+        s3_client = boto3.client("s3")
+        jsonl_content = '\n'.join(json.dumps(record) for record in jsonl_lines)
+        bucket_name, s3_key = output_path[5:].split("/", 1)
+        response = s3_client.put_object(
+            Bucket=bucket_name,
+            Key=s3_key,
+            Body=jsonl_content
+        )
+        if response['ResponseMetadata']['HTTPStatusCode'] != 200:
+            logging.warning(
+                "Failed to write manifest. Please manually include manifest by running "
+                "open_lm.utils.make_manifest on the tokenized data."
+            )
+    else:
+        with open(output_path, "w") as f:
+            for item in jsonl_lines:
+                f.write(json.dumps(item))
+                f.write('\n')
 
 
 def main(args):
@@ -512,21 +518,11 @@ def main(args):
         batch_format="pandas",
     )
 
-    def path_creation(*a, **kw):
-        output_path = os.path.join(args.output.strip("/"), "manifest.jsonl")
-        if output_path.startswith("s3://"):
-            return output_path[5:]
-        else:
-            return output_path
-
     # Sort by shard name
     ds = ds.repartition(1)
     ds = ds.sort(key="shard")
-    ds.write_json(
-        args.output.strip("/"),
-        filesystem=get_filesystem(creds) if args.output.startswith("s3") else None,
-        block_path_provider=path_creation,
-    )
+    jsonl_lines = ds.take_all()
+    write_manifest(jsonl_lines, args)
 
     end_time = time.time()
     duration = end_time - start_time
