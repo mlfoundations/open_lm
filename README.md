@@ -136,6 +136,15 @@ This will create a file called ```manifest.jsonl``` under ```/preproc_data```. T
  --logs path/to/logging/dir/
 ```
 
+### Dataset manifest
+
+The manifest created with `open_lm/utils/make_wds_manifest.py` is a `jsonl` file describing the dataset. Each line in this file corresponds to a shard of the dataset and is a `json` object containing two fields:
+
+- `"shard"`: the name of a shard in the dataset.
+- `"num_sequences"`: the number of sequences contained in the shards. Each sequence contains a set length of tokens.
+
+This manifest file provides auxiliary information about the dataset, and is assumed to be found within the same directory as the shards.
+
 ## Evaluate Model
 Once trained, we can evaluate the model. This requires [LLM Foundry](https://github.com/mosaicml/llm-foundry), which can be installed via `pip install llm-foundry`. Next some configurations are required to pass to the evaluator: a skeleton of these parameters is located at [eval/in_memory_hf_eval.yaml](eval/in_memory_hf_eval.yaml). Then just run the following script, making sure to point it at the checkpoint of your trained model (and it's correspending config .json file):
 ```
