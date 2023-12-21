@@ -395,20 +395,16 @@ class GlobalCounter:
 
 def write_manifest(jsonl_lines, args):
     "Write manifest to provided output path."
-    
+
     output_path = os.path.join(args.output.strip("/"), "manifest.jsonl")
 
     if output_path.startswith("s3://"):
         # Use boto3 for S3 paths
         s3_client = boto3.client("s3")
-        jsonl_content = '\n'.join(json.dumps(record) for record in jsonl_lines) + '\n'  # Add a newline at the end
+        jsonl_content = "\n".join(json.dumps(record) for record in jsonl_lines) + "\n"  # Add a newline at the end
         bucket_name, s3_key = output_path[5:].split("/", 1)
-        response = s3_client.put_object(
-            Bucket=bucket_name,
-            Key=s3_key,
-            Body=jsonl_content
-        )
-        if response['ResponseMetadata']['HTTPStatusCode'] != 200:
+        response = s3_client.put_object(Bucket=bucket_name, Key=s3_key, Body=jsonl_content)
+        if response["ResponseMetadata"]["HTTPStatusCode"] != 200:
             logging.warning(
                 "Failed to write manifest. Please manually include manifest by running "
                 "open_lm.utils.make_manifest on the tokenized data."
@@ -417,7 +413,7 @@ def write_manifest(jsonl_lines, args):
         with open(output_path, "w") as f:
             for item in jsonl_lines:
                 json.dump(item, f)
-                f.write('\n')
+                f.write("\n")
 
 
 def main(args):
