@@ -11,13 +11,16 @@ import braceexpand
 from dataclasses import dataclass
 from multiprocessing import Value
 from functools import partial
-import json
+from itertools import islice
+import copy
 
 import numpy as np
 import pandas as pd
 import torch
 import webdataset as wds
 from PIL import Image
+
+
 from torch.utils.data import (
     Dataset,
     DataLoader,
@@ -34,6 +37,12 @@ from webdataset.tariterators import (
     valid_sample,
 )
 from webdataset.mix import RandomMix
+
+
+def seed_worker(worker_id):
+    worker_seed = torch.initial_seed() % 2**32
+    np.random.seed(worker_seed)
+    random.seed(worker_seed)
 
 
 def proc_token(x, vocab_size):
@@ -298,25 +307,45 @@ def filter_lt_seqlen(seq_len, x):
     return valid_sample
 
 
-def get_wds_dataset(
-    args,
-    is_train,
-    epoch=0,
-    floor=False,
-    tokenizer=None,
-    data_key="json",
-    force_num_samples=None,
-):
+class FiniteDataPipeline(wds.DataPipeline):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+    def __iter__(self):
+        """Iterate through up to self.nsamples steps.
+
+        Note: wds.DataPipeline.__iter__ inexplicably only limits the number of samples with self.nsamples if
+        self.repetitions != 1. Here, we always slice using self.nsamples, if self.nsamples > 0.
+        """
+
+        if self.nsamples > 0:
+            return islice(self.iterator(), self.nsamples)
+        else:
+            return self.iterator()
+
+
+def get_wds_dataset(args, is_train, epoch=0, floor=True, tokenizer=None, data_key="json", force_num_samples=None):
+    """Create a dataloader for a dataset in webdataset format.
+
+    Args:
+        args: Object created by the parser defined in open_lm/params.py.
+        is_train: Whether the dataset is for training or not.
+        epoch: Epoch for which the dataset is created.
+        floor: If True, round down samples for the dataloader based on batch size. If False, round up. Defaults to True.
+        tokenizer: The tokenizer used in preprocessing (currently unused due to the dataset being already tokenized.)
+        data_key: Extension for items in the webdataset tarfiles.
+        force_num_samples: If not None, this is a list with the desired number of samples per source.
+    """
     input_shards_ = args.train_data if is_train else args.val_data
 
     assert input_shards_ is not None
 
     datasets = []
     all_num_samples = []
+
     shared_epoch = SharedEpoch(epoch=epoch)  # create a shared epoch store to sync epoch to dataloader worker proc
     for ii, input_shards in enumerate(input_shards_):
         resampled = getattr(args, "dataset_resampled", False) and is_train
-
         num_shards = None
         if is_train:
             if args.train_num_samples is not None:
@@ -354,13 +383,15 @@ def get_wds_dataset(
             pipeline = [wds.SimpleShardList(input_shards)]
 
         # at this point we have an iterator over all the shards
+        # disable shuffling if sampling w/o replacement to ensure no repeat
+        do_shuffle = resampled and not args.disable_buffer
         if is_train:
             if not resampled:
                 pipeline.extend(
                     [
                         detshuffle2(
-                            bufsize=0 if args.disable_buffer else _SHARD_SHUFFLE_SIZE,
-                            initial=0 if args.disable_buffer else _SHARD_SHUFFLE_INITIAL,
+                            bufsize=_SHARD_SHUFFLE_SIZE if do_shuffle else 0,
+                            initial=_SHARD_SHUFFLE_INITIAL if do_shuffle else 0,
                             seed=args.seed,
                             epoch=shared_epoch,
                         ),
@@ -373,8 +404,8 @@ def get_wds_dataset(
                     # at this point, we have an iterator over the shards assigned to each worker at each node
                     tarfile_to_samples_nothrow,  # wds.tarfile_to_samples(handler=log_and_continue),
                     wds.shuffle(
-                        bufsize=0 if args.disable_buffer else _SAMPLE_SHUFFLE_SIZE,
-                        initial=0 if args.disable_buffer else _SHARD_SHUFFLE_INITIAL,
+                        bufsize=_SAMPLE_SHUFFLE_SIZE if do_shuffle else 0,
+                        initial=_SAMPLE_SHUFFLE_INITIAL if do_shuffle else 0,
                         rng=random.Random(args.seed + shared_epoch.get_value()) if args.seed is not None else None,
                     ),
                 ]
@@ -388,39 +419,44 @@ def get_wds_dataset(
                 ]
             )
 
-        map_dict_handler = {"handler": log_and_continue} if args.ignore_parse_errors else {}
+        map_handler = {"handler": log_and_continue} if args.ignore_parse_errors else {}
+        batch_size = args.per_gpu_batch_size if is_train else args.per_gpu_val_batch_size
+
         if data_key == "json" or data_key == "json.gz":
             pipeline.extend(
                 [
                     wds.decode(),
                     wds.rename(json=data_key),
-                    wds.map_dict(json=partial(preprocess_json, vocab_size=args.vocab_size), **map_dict_handler),
-                    wds.to_tuple("json"),
+                    wds.map_dict(json=partial(preprocess_json, vocab_size=args.vocab_size), **map_handler),
+                    wds.to_tuple("json", **map_handler),
                     wds.select(partial(filter_lt_seqlen, args.seq_len)),
-                    wds.batched(args.batch_size, partial=not is_train),
+                    wds.batched(batch_size, partial=not is_train),
                 ]
             )
         elif data_key == "txt":
             pipeline.extend(
                 [
-                    wds.map_dict(txt=partial(preprocess_txt, vocab_size=args.vocab_size), **map_dict_handler),
-                    wds.to_tuple("txt"),
+                    wds.map_dict(txt=partial(preprocess_txt, vocab_size=args.vocab_size), **map_handler),
+                    wds.to_tuple("txt", **map_handler),
                     wds.select(partial(filter_lt_seqlen, args.seq_len)),
-                    wds.batched(args.batch_size, partial=not is_train),
+                    wds.batched(batch_size, partial=not is_train),
                 ]
             )
         else:
             raise ValueError(f"Unrecognized data key: {data_key}")
 
-        dataset = wds.DataPipeline(*pipeline)
+        dataset = FiniteDataPipeline(*pipeline)
         datasets.append(dataset)
         all_num_samples.append(num_samples)
 
     if is_train:
         # TODO: why did we previoulsy wrap with RandomMix_
         dataset = RandomMix(datasets, probs=args.train_data_mix_weights, longest=True)
+        if len(datasets) > 1:
+            logging.warning("Source mixing is happening during training. It is preferred to mix during tokenization.")
     else:
         pass
+
         # dataset = datasets[0]
     if is_train:
         if not resampled:
@@ -431,48 +467,53 @@ def get_wds_dataset(
             assert num_shards >= args.workers * args.world_size, "number of shards must be >= total workers"
         # roll over and repeat a few samples to get same number of full batches on each node
         round_fn = math.floor if floor else math.ceil
-        global_batch_size = args.batch_size * args.world_size
+        global_batch_size = batch_size * args.world_size
         total_num_batches = 0
         total_num_samples = 0
         for ii in range(len(datasets)):
-            num_batches = round_fn(all_num_samples[ii] / global_batch_size)
-            num_workers = max(1, args.workers)
-            num_worker_batches = round_fn(num_batches / num_workers)  # per dataloader worker
-            num_batches = num_worker_batches * num_workers
+            # Calculate batches per worker, round as little as possible.
+            num_workers_per_gpu = max(1, args.workers)
+            num_worker_batches = round_fn(all_num_samples[ii] / (global_batch_size * num_workers_per_gpu))
+
+            if num_worker_batches == 0:
+                raise ValueError(
+                    f"The dataloader for source {ii} has received zero batches. This can happen due to rounding if "
+                    f"too many GPUs / workers are used for this source, or if the mixing coefficient is too low. "
+                    f"Consider addressing the above to fix this."
+                )
+
+            num_batches = num_worker_batches * num_workers_per_gpu
             num_samples = num_batches * global_batch_size
-            # TODO: what is the effect of setting this?
-            datasets[ii] = datasets[ii].with_epoch(num_worker_batches)  # each worker is iterating over this
+
+            # This forces the dataloader to take num_worker_batches steps per worker, so num_batches total.
+            datasets[ii] = datasets[ii].repeat(nepochs=1, nbatches=num_worker_batches)
 
             total_num_batches += num_batches
             total_num_samples += num_samples
     else:
         # last batches are partial, eval is done on single (master) node
-        num_batches = math.ceil(num_samples / args.batch_size)
+        num_batches = math.ceil(num_samples / batch_size)
         total_num_batches = num_batches
         total_num_samples = num_samples
 
-    print("persistent workers:", args.dataset_manifest is None)
+    # Start a generator to have control over reproducibility.
+    if args.seed is not None:
+        generator = torch.Generator()
+        generator.manual_seed(args.seed + shared_epoch.get_value() * args.world_size + args.rank)
+        worker_init_fn = seed_worker
+    else:
+        generator = None
+        worker_init_fn = None
+
     dataloader = wds.WebLoader(
         dataset,
         batch_size=None,
         shuffle=False,
         num_workers=args.workers,
-        persistent_workers=args.dataset_manifest is None,
+        persistent_workers=resampled,
+        generator=generator,
+        worker_init_fn=worker_init_fn,
     )
-
-    # FIXME not clear which approach is better, with_epoch before vs after dataloader?
-    # hoping to resolve via https://github.com/webdataset/webdataset/issues/169
-    # if is_train:
-    #     # roll over and repeat a few samples to get same number of full batches on each node
-    #     global_batch_size = args.batch_size * args.world_size
-    #     num_batches = math.ceil(num_samples / global_batch_size)
-    #     num_workers = max(1, args.workers)
-    #     num_batches = math.ceil(num_batches / num_workers) * num_workers
-    #     num_samples = num_batches * global_batch_size
-    #     dataloader = dataloader.with_epoch(num_batches)
-    # else:
-    #     # last batches are partial, eval is done on single (master) node
-    #     num_batches = math.ceil(num_samples / args.batch_size)
 
     # add meta-data to dataloader instance for convenience
     dataloader.num_batches = total_num_batches
@@ -481,7 +522,7 @@ def get_wds_dataset(
     return DataInfo(dataloader=dataloader, shared_epoch=shared_epoch)
 
 
-def get_synthetic_dataset(args, is_train, epoch, tokenizer, data_key):
+def get_synthetic_dataset(args, is_train, epoch, tokenizer, data_key, floor):
     print(f"{args.train_num_samples=}")
     dataset = SyntheticDataset(seq_len=args.seq_len, vocab_size=args.vocab_size, dataset_size=args.train_num_samples)
     print(f"{len(dataset)=}")
@@ -490,7 +531,7 @@ def get_synthetic_dataset(args, is_train, epoch, tokenizer, data_key):
 
     dataloader = DataLoader(
         dataset,
-        batch_size=args.batch_size,
+        batch_size=args.per_gpu_batch_size,
         shuffle=shuffle,
         num_workers=args.workers,
         pin_memory=True,
@@ -503,31 +544,36 @@ def get_synthetic_dataset(args, is_train, epoch, tokenizer, data_key):
     return DataInfo(dataloader, sampler)
 
 
-def get_dataset_fn(data_path, dataset_type):
+def get_dataset_fn(dataset_type):
     if dataset_type == "synthetic":
         return get_synthetic_dataset
     else:
         return get_wds_dataset
 
 
-def get_data(args, epoch=0, tokenizer=None, skip_train=False):
+def get_data(args, epoch=0, tokenizer=None, skip_train=False, floor=True):
     data = {}
 
     if skip_train:
         data["train"] = None
     else:
         if args.train_data or args.dataset_type == "synthetic":
-            data["train"] = get_dataset_fn(args.train_data, args.dataset_type)(
-                args,
-                is_train=True,
-                epoch=epoch,
-                tokenizer=tokenizer,
-                data_key=args.data_key,
+            # train data is treated as a shard list where all data is combined and tained on
+            data["train"] = get_dataset_fn(args.dataset_type)(
+                args, is_train=True, epoch=epoch, tokenizer=tokenizer, data_key=args.data_key, floor=floor
             )
 
     if args.val_data:
-        data["val"] = get_dataset_fn(args.val_data, args.dataset_type)(
-            args, is_train=False, tokenizer=tokenizer, data_key=args.data_key
-        )
+        # val data is treated as independent val sets to be evaluated
+        data["val_list"] = []
+        for i, val_data in enumerate(args.val_data):
+            args_copy = copy.deepcopy(args)
+            args_copy.val_data = [val_data]
+            data_val = {
+                "val": get_dataset_fn(args.dataset_type)(
+                    args_copy, is_train=False, tokenizer=tokenizer, data_key=args.val_data_key[i]
+                )
+            }
+            data["val_list"].append(data_val)
 
     return data

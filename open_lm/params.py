@@ -1,13 +1,11 @@
 import argparse
 import ast
+import copy
+import json
+import logging
+import yaml
 
-
-def get_default_params(model_name):
-    model_name = model_name.lower()
-    if "vit" in model_name:
-        return {"lr": 5.0e-4, "beta1": 0.9, "beta2": 0.98, "eps": 1.0e-6}
-    else:
-        return {"lr": 5.0e-4, "beta1": 0.9, "beta2": 0.999, "eps": 1.0e-8}
+from open_lm.attention import ATTN_ACTIVATIONS, ATTN_SEQ_SCALARS
 
 
 class ParseKwargs(argparse.Action):
@@ -54,11 +52,138 @@ def add_model_args(parser):
         help="apply --model-norm to qk as in: https://arxiv.org/abs/2302.05442. This might be overridden by the model config.",
     )
     parser.add_argument(
-        "--positional_embedding_type",
+        "--positional-embedding-type",
         type=str,
+        choices=["rotary", "head_rotary", "llama_rotary"],
         default="rotary",
         help="Type of positional embedding to use. This might be overridden by the model config.",
     )
+    parser.add_argument(
+        "--moe-freq",
+        type=int,
+        default=0,
+        help="if set > 0, we will add MoE layer to every moe_freq layer.",
+    )
+    parser.add_argument(
+        "--moe-num-experts",
+        type=int,
+        default=None,
+        help="Number of experts for MoE",
+    )
+
+    parser.add_argument(
+        "--moe-weight-parallelism",
+        action="store_true",
+        help="Add weight parallelism to MoE",
+    )
+
+    parser.add_argument(
+        "--moe-expert-model-parallelism",
+        action="store_true",
+        help="Add expert model parallelism to MoE",
+    )
+
+    parser.add_argument(
+        "--moe-capacity-factor",
+        type=float,
+        default=1.25,
+        help="MoE capacity factor",
+    )
+
+    parser.add_argument(
+        "--moe-loss-weight",
+        type=float,
+        default=0.1,
+        help="MoE loss weight",
+    )
+    parser.add_argument(
+        "--moe-top-k",
+        type=int,
+        default=2,
+        help="MoE top k experts",
+    )
+    parser.add_argument(
+        "--attn-name",
+        type=str,
+        default="xformers_attn",
+        choices=["xformers_attn", "torch_attn", "custom_attn"],
+        help="type of attention to use",
+    )
+    parser.add_argument(
+        "--attn-activation",
+        type=str,
+        default=None,
+        choices=list(ATTN_ACTIVATIONS.keys()),
+        help="activation to use with custom_attn",
+    )
+    parser.add_argument(
+        "--attn-seq-scalar",
+        type=str,
+        default=None,
+        choices=list(ATTN_SEQ_SCALARS.keys()),
+        help="different ways to set L, where L^alpha divides attention logits post activation",
+    )
+    parser.add_argument(
+        "--attn-seq-scalar-alpha",
+        type=float,
+        default=None,
+        help="power alpha to raise L to, where L^alpha divides attention logits post activation",
+    )
+
+
+def check_replacement_type(replacement, original):
+    """Checks that `replacement`, which is intended to replace `original` is of
+    the right type. The type is correct if it matches exactly or is one of a few
+    cases in which the type can be easily coerced.
+
+    Taken from YACS: https://github.com/rbgirshick/yacs/blob/32d5e4ac300eca6cd3b839097dde39c4017a1070/yacs/config.py#L494
+    """
+    # The types must match (with some exceptions)
+    if type(original) == type(replacement):
+        return True
+
+    # If either of them is None, accept the type.
+    if replacement is None or original is None:
+        return True
+
+    return False
+
+
+def maybe_load_config(parser, args):
+    config_parser = argparse.ArgumentParser()
+    config_parser.add_argument("--config", type=str)
+    args, unknown_args = config_parser.parse_known_args(args)
+    if not args.config:
+        return None
+
+    assert not unknown_args, "No arguments can be passed if --config is provided."
+    logging.info(f"Loading config from: {args.config}")
+    with open(args.config, "r") as f:
+        if args.config.endswith(".yaml") or args.config.endswith(".yml"):
+            config = yaml.safe_load(f)
+        elif args.config.endswith(".json"):
+            config = json.load(f)
+        else:
+            raise ValueError(f"Unknown config format: {args.config}")
+
+    default_args = vars(parser.parse_args([]))
+    default_arg_keys = default_args.keys()
+    updated_args = copy.deepcopy(default_args)
+
+    for config_key, config_value in config.items():
+        config_key = config_key.replace("-", "_")
+        if config_key not in default_arg_keys:
+            raise ValueError(f"Unknown config key: {config_key}")
+        default_value = default_args[config_key]
+        is_valid = check_replacement_type(replacement=config_value, original=default_value)
+        if not is_valid:
+            raise ValueError(
+                f"Type mismatch (config: {type(config_value)} vs. argparse: {type(default_value)}) with values "
+                f"(config: {config_value} vs. argparse: {default_value}) for config. key: {config_key}"
+            )
+        updated_args[config_key] = config_value
+
+    return updated_args
 
 
 def parse_args(args):
@@ -94,8 +219,12 @@ def parse_args(args):
     parser.add_argument(
         "--val-data",
         type=str,
+        nargs="+",
         default=None,
-        help="Path to file(s) with validation data",
+        help=(
+            "Path to file(s) with validation data. Note: each space seperated entry will be processed seperately and writen as seperate entries "
+            "in a results.jsonl file."
+        ),
     )
     parser.add_argument(
         "--data-key",
@@ -159,7 +288,7 @@ def parse_args(args):
         help="Optional identifier for the experiment when storing logs. Otherwise use current time.",
     )
     parser.add_argument("--workers", type=int, default=1, help="Number of dataloader workers per GPU.")
-    parser.add_argument("--batch-size", type=int, default=64, help="Batch size per GPU.")
+    parser.add_argument("--global-batch-size", type=int, default=64, help="Global batch size.")
     parser.add_argument("--epochs", type=int, default=32, help="Number of epochs to train for.")
     parser.add_argument(
         "--epochs-cooldown",
@@ -168,10 +297,10 @@ def parse_args(args):
         help="When scheduler w/ cooldown used, perform cooldown from total_epochs - cooldown_epochs onwards.",
     )
     parser.add_argument("--optimizer", default="adamw", help="Optimizer.")
-    parser.add_argument("--lr", type=float, default=None, help="Learning rate.")
-    parser.add_argument("--beta1", type=float, default=None, help="Adam beta 1.")
-    parser.add_argument("--beta2", type=float, default=None, help="Adam beta 2.")
-    parser.add_argument("--eps", type=float, default=None, help="Adam epsilon.")
+    parser.add_argument("--lr", type=float, default=5.0e-4, help="Learning rate.")
+    parser.add_argument("--beta1", type=float, default=0.9, help="Adam beta 1.")
+    parser.add_argument("--beta2", type=float, default=0.95, help="Adam beta 2.")
+    parser.add_argument("--eps", type=float, default=1.0e-8, help="Adam epsilon.")
     parser.add_argument("--wd", type=float, default=0.2, help="Weight decay.")
     parser.add_argument("--warmup", type=int, default=10000, help="Number of steps to warmup for.")
     parser.add_argument(
@@ -240,6 +369,19 @@ def parse_args(args):
         type=int,
         default=1,
         help="How often to run evaluation with val-data (in epochs). Last epoch validated if val-data provided.",
+    )
+    parser.add_argument(
+        "--global-val-batch-size",
+        type=int,
+        default=None,
+        help="Batch size to be used with val-data.",
+    )
+    parser.add_argument(
+        "--val-data-key",
+        type=str,
+        nargs="+",
+        default=None,
+        help="what is the extension fore each val-data source.",
     )
     parser.add_argument(
         "--resume",
@@ -311,7 +453,7 @@ def parse_args(args):
         "--accum-freq",
         type=int,
         default=1,
-        help="Update the model every --acum-freq steps.",
+        help="Update the model every --accum-freq steps.",
     )
     # arguments for distributed training
     parser.add_argument(
@@ -487,36 +629,46 @@ def parse_args(args):
         help="Mask the loss for a special pad token. Useful for sequences shorter than sequence lenght.",
     )
     parser.add_argument(
-        "--no-skip-tokens",
-        action="store_true",
-        default=False,
-        help="Use as many tokens from the data as possible. Requires --dataset-manifest and takes precedence over --train-num-samples. Using --accurate-total-tokens is recommended.",
-    )
-    parser.add_argument(
-        "--accurate-total-tokens",
-        action="store_true",
-        default=False,
-        help="If true, will end training early if the desired token count is reached. Requires --no-skip-tokens.",
-    )
-    parser.add_argument(
         "--ignore-parse-errors",
         action="store_true",
         default=False,
         help="If true, ignore parse errors in data loading. This should ideally be False, as errors in dataloading can point to bigger issues in your dataset. However, this can be useful when training on a large dataset which has a couple errors.",
     )
+    parser.add_argument(
+        "--experimental-meta-device",
+        action="store_true",
+        default=False,
+        help="If True, initialize the model on meta device. This can be useful for loading large models, but is not currently fully tested.",
+    )
 
     add_model_args(parser)
 
-    args = parser.parse_args(args)
+    config = maybe_load_config(parser, args)
+    if config is not None:
+        args = argparse.Namespace(**config)
+        logging.info(f"Loaded config from file: {args=}")
+    else:
+        args = parser.parse_args(args)
 
-    # If some params are not passed, we use the default values based on model name.
-    default_params = get_default_params(args.model)
-    for name, val in default_params.items():
-        if getattr(args, name) is None:
-            setattr(args, name, val)
-
+    # basic error checks
+    # TODO: move all error checking we can do after argparse to a seperate function
     if args.dataset_type == "synthetic":
         assert args.train_data is None, "--train-data must not be specified if --dataset-type='synthetic'"
         assert args.dataset_manifest is None, "--dataset-manifest must not be specified if --dataset-type='synthetic'"
+
+    if args.val_data is not None and args.global_val_batch_size is None:
+        # Make sure that val batch size is set to micro batch size
+        args.global_val_batch_size = args.global_batch_size // args.accum_freq
+
+    if args.attn_name == "custom_attn":
+        assert (
+            args.attn_activation is not None
+            and args.attn_seq_scalar is not None
+            and args.attn_seq_scalar_alpha is not None
+        ), "must provide attn-activation, attn-seq-scalar, attn-seq-scalar-alpha to use non-linear-attn"
+    else:
+        assert (
+            args.attn_activation is None and args.attn_seq_scalar is None and args.attn_seq_scalar_alpha is None
+        ), "attn-activation, attn-seq-scalar, attn-seq-scalar-alpha must be None unless using non-linear-attn"
 
     return args
