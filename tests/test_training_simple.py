@@ -7,6 +7,10 @@ import pandas as pd
 import glob
 import os
 
+
+
+LOG_PATH = './logs/test_logs/test_lr_scheduling_from_main/'
+
 # ==============================================================
 # =                 Testing utilities                          =
 # ==============================================================
@@ -19,6 +23,9 @@ def parse_tensorboard(tb_path):
     _absorb_print = ea.Reload()
     return {k: pd.DataFrame(ea.Scalars(k)) for k in ea.Tags()['scalars']}    
 
+@pytest.fixture
+def cleanup_test_logs():    
+    shutil.rmtree(LOG_PATH, ignore_errors=True)    
 
 
 # ==============================================================
@@ -69,41 +76,24 @@ def test_lr_single_epoch_warmup(num_batches):
             '--dataset-type', 'synthetic',
             '--model', 'open_lm_test_tiny',
             '--epochs', '1',
-            '--finegrain-debug']
+            '--lr', '1e0', # Artificially high LR
+            '--report-to', 'tensorboard',
+            '--log-every-n-steps', str(1),
+            '--logs', LOG_PATH
+            ]
+    output_args = main(args)
 
-    main_vars = main(args)
 
-    args = main_vars['args']
-    assert args.warmup == 10_000 # Default warmup steps
-    assert num_batches <= args.warmup
+    tb_data = parse_tensorboard(glob.glob(os.path.join(output_args.tensorboard_path, '*'))[0])
+    lr_array = np.array(tb_data['train/lr']['value'])
+    assert len(lr_array) == num_batches # Make sure we've flushed TB
+    expected_lr_array = np.array([(i+1)/10_000 for i in range(len(lr_array))])
 
-    # Now do training...
-    if args.distributed:
-        dist.barrier()
-
-    success, global_step = train_one_epoch(
-        main_vars['model'],
-        main_vars['data'],
-        main_vars['loss'],
-        epoch=main_vars['start_epoch'],
-        step=main_vars['global_step'],
-        optimizer=main_vars['optimizer'],
-        scaler=main_vars['scaler'],
-        scheduler=main_vars['scheduler'],
-        total_steps=main_vars['total_steps'],
-        args=main_vars['args'],
-        tb_writer=main_vars['writer'],
-    )
-    if args.distributed:
-        dist.barrier()
-
-    lrs = [_['lr'] for _ in main_vars['optimizer'].param_groups]
-    assert all(abs(lr - num_batches / args.warmup * args.lr) < 1e-9 for lr in lrs)
-
+    assert abs(lr_array - expected_lr_array).max() < 1e-6
 
 
 @pytest.mark.parametrize('total_batches',
-    [10, 100, 1000, 10000])
+    [10, 100, 1000, 10_000])
 def test_lr_multi_epoch_warmup(total_batches):
     """ Tests that LR gets adjusted correctly for multiple epochs (but still in the warmup)
     """
@@ -116,39 +106,21 @@ def test_lr_multi_epoch_warmup(total_batches):
             '--dataset-type', 'synthetic',
             '--model', 'open_lm_test_tiny',
             '--epochs', str(num_epochs),
-            '--finegrain-debug']
+            '--lr', '1e0',
+            '--report-to', 'tensorboard',
+            '--log-every-n-steps', str(1),
+            '--logs', LOG_PATH
+            ]
 
-    main_vars = main(args)
-
-    args = main_vars['args']
-    assert args.warmup == 10_000 # Default warmup steps
-    assert num_batches <= args.warmup
+    output_args = main(args)
 
 
-    global_step = main_vars['global_step']
+    tb_data = parse_tensorboard(glob.glob(os.path.join(output_args.tensorboard_path, '*'))[0])
+    lr_array = np.array(tb_data['train/lr']['value'])
 
-    for epoch in range(num_epochs):
-    # Now do training...
-        if args.distributed:
-            dist.barrier()
-        success, global_step = train_one_epoch(
-            main_vars['model'],
-            main_vars['data'],
-            main_vars['loss'],
-            epoch=main_vars['start_epoch'],
-            step=global_step,
-            optimizer=main_vars['optimizer'],
-            scaler=main_vars['scaler'],
-            scheduler=main_vars['scheduler'],
-            total_steps=main_vars['total_steps'],
-            args=main_vars['args'],
-            tb_writer=main_vars['writer'],
-        )
-        if args.distributed:
-            dist.barrier()
-
-        lrs = [_['lr'] for _ in main_vars['optimizer'].param_groups]
-        assert all(abs(lr - global_step / args.warmup * args.lr) < 1e-9 for lr in lrs)
+    assert len(lr_array) == total_batches
+    expected_lr_array = np.array([(i+1)/10_000 for i in range(len(lr_array))])
+    assert abs(lr_array - expected_lr_array).max() < 1e-6
 
 
 
@@ -159,44 +131,32 @@ def test_lr_single_epoch_cyclic():
     seq_len = 16
     batch_size = 2
     num_batches = 500
+    warmup = 100
+    lr = 1e0
     args = ['--train-num-samples', str(num_batches * seq_len * batch_size),
             '--batch-size', str(batch_size),
             '--dataset-type', 'synthetic',
             '--model', 'open_lm_test_tiny',
             '--epochs', '1',
-            '--finegrain-debug',
-            '--warmup', str(100)] # short warmup
-    main_vars = main(args)
+            '--warmup', str(warmup), # short warmup
+            '--lr', str(lr), #artificially high LR
+            '--report-to', 'tensorboard',
+            '--log-every-n-steps', str(1),
+            '--logs', LOG_PATH] 
+    output_args = main(args)
 
-    args = main_vars['args']
-    assert args.warmup == 100 # Default warmup steps
-    assert num_batches > args.warmup
 
+    tb_data = parse_tensorboard(glob.glob(os.path.join(output_args.tensorboard_path, '*'))[0])
+    lr_array = np.array(tb_data['train/lr']['value'])
 
-    # Now do training...
-    if args.distributed:
-        dist.barrier()
-
-    success, global_step = train_one_epoch(
-        main_vars['model'],
-        main_vars['data'],
-        main_vars['loss'],
-        epoch=main_vars['start_epoch'],
-        step=main_vars['global_step'],
-        optimizer=main_vars['optimizer'],
-        scaler=main_vars['scaler'],
-        scheduler=main_vars['scheduler'],
-        total_steps=main_vars['total_steps'],
-        args=main_vars['args'],
-        tb_writer=main_vars['writer'],
-    )
-    if args.distributed:
-        dist.barrier()
-
-    lrs = [_['lr'] for _ in main_vars['optimizer'].param_groups]
-
-    target = 0.5 * (1 + np.cos(np.pi * (num_batches-1 - args.warmup) / (num_batches - args.warmup))) * args.lr
-    assert all(abs(lr-target) < 1e-10 for lr in lrs)
+    assert len(lr_array) == num_batches
+    es = num_batches - warmup
+    lr_calc = lambda i: 0.5 * (1 + np.cos(np.pi * (i - warmup) / es)) * lr
+    expected_lr_array = [(1+i) /warmup for i in range(warmup)] 
+    expected_lr_array = expected_lr_array + [lr_calc(i) for i in range(warmup, num_batches)]
+    expected_lr_array = np.array(expected_lr_array)
+    assert len(expected_lr_array) == len(lr_array)
+    assert abs(lr_array -np.array(expected_lr_array)).max() < 1e-6
 
 
 
@@ -207,6 +167,8 @@ def test_lr_multi_epoch_cyclic():
     batch_size = 2
     num_epochs = 5
     total_batches = 1000
+    warmup = 100
+    lr = 1e0
     num_batches = total_batches // num_epochs
     print("NUM BATCHES", num_batches)
     args = ['--train-num-samples', str(num_batches * seq_len * batch_size),
@@ -214,46 +176,29 @@ def test_lr_multi_epoch_cyclic():
             '--dataset-type', 'synthetic',
             '--model', 'open_lm_test_tiny',
             '--epochs', str(num_epochs),
-            '--finegrain-debug',
-            '--lr', '1e0',
-            '--warmup', str(100)] # short warmup
-    main_vars = main(args)
+            '--lr', str(lr),
+            '--warmup', str(warmup),
+            '--report-to', 'tensorboard',
+            '--log-every-n-steps', str(1),
+            '--logs', LOG_PATH
+            ] 
 
-    args = main_vars['args']
-    assert args.warmup == 100 # Default warmup steps
-    assert num_batches > args.warmup
+    output_args = main(args)
 
 
-    compute_lr = lambda s: 0.5 * args.lr * (1 + np.cos(np.pi * (s - 100) / (total_batches - 100)))
-    # Now do training...
-    global_step = main_vars['global_step']
-    all_lrs = []
-    for epoch in range(num_epochs):
-        if args.distributed:
-            dist.barrier()
+    tb_data = parse_tensorboard(glob.glob(os.path.join(output_args.tensorboard_path, '*'))[0])
+    lr_array = np.array(tb_data['train/lr']['value'])
+    assert len(lr_array) == total_batches
 
-        success, global_step = train_one_epoch(
-            main_vars['model'],
-            main_vars['data'],
-            main_vars['loss'],
-            epoch=main_vars['start_epoch'],
-            step=global_step,
-            optimizer=main_vars['optimizer'],
-            scaler=main_vars['scaler'],
-            scheduler=main_vars['scheduler'],
-            total_steps=main_vars['total_steps'],
-            args=main_vars['args'],
-            tb_writer=main_vars['writer'],
-        )
-        if args.distributed:
-            dist.barrier()
+    es = total_batches - warmup
+    lr_calc = lambda i: 0.5 * (1 + np.cos(np.pi * (i - warmup) / es)) * lr
+    expected_lr_array = [(1+i) /warmup for i in range(warmup)] 
+    expected_lr_array = expected_lr_array + [lr_calc(i) for i in range(warmup, total_batches)]
+    expected_lr_array = np.array(expected_lr_array)
+    assert len(expected_lr_array) == len(lr_array)
+    assert abs(lr_array -np.array(expected_lr_array)).max() < 1e-6
 
-        lrs = [_['lr'] for _ in main_vars['optimizer'].param_groups]
 
-        all_lrs.append(lrs)
-        # return args, all_lrs
-        if global_step >= 100:
-            assert all(abs(lr - compute_lr(global_step - 1)) < 1e-8 for lr in lrs)
 
 
 
@@ -263,14 +208,6 @@ def test_lr_multi_epoch_cyclic():
 
 
 def test_lr_scheduling_from_main():
-    # First make sure we start from a clean slate
-    print("SETTING UP WITH PRINTS")
-    LOG_PATH = './logs/test_logs/test_lr_scheduling_from_main/'
-    def cleanup_test():
-        shutil.rmtree(LOG_PATH, ignore_errors=True)
-    cleanup_test()
-
-
     # Then do a training run
     seq_len = 16
     batch_size = 5
@@ -301,6 +238,4 @@ def test_lr_scheduling_from_main():
     max_diff = (abs(expected_lr - lr_array)).max()
     assert max_diff < 1e-7 
 
-    # and cleanup when done
-    cleanup_test()
 

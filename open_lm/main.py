@@ -644,10 +644,6 @@ def main(args):
             logging.info("Using CrossEntropyLossWithZLoss.")
         loss = CrossEntropyLossWithZLoss(args.z_loss_coefficient)
 
-
-    if args.finegrain_debug: # Break here if we want to debug in a fine-grained fashion
-        return vars() 
-
     for epoch in range(start_epoch, args.epochs):
         if is_master(args):
             logging.info(f"Start epoch {epoch}")
