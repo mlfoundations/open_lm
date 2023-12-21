@@ -71,7 +71,7 @@ def test_lr_single_epoch_warmup(num_batches):
     args = [
         "--train-num-samples",
         str(num_batches * seq_len * batch_size),
-        "--batch-size",
+        "--global-batch-size",
         str(batch_size),
         "--dataset-type",
         "synthetic",
@@ -108,7 +108,7 @@ def test_lr_multi_epoch_warmup(total_batches):
     args = [
         "--train-num-samples",
         str(num_batches * seq_len * batch_size),
-        "--batch-size",
+        "--global-batch-size",
         str(batch_size),
         "--dataset-type",
         "synthetic",
@@ -147,7 +147,7 @@ def test_lr_single_epoch_cyclic():
     args = [
         "--train-num-samples",
         str(num_batches * seq_len * batch_size),
-        "--batch-size",
+        "--global-batch-size",
         str(batch_size),
         "--dataset-type",
         "synthetic",
@@ -194,7 +194,7 @@ def test_lr_multi_epoch_cyclic():
     args = [
         "--train-num-samples",
         str(num_batches * seq_len * batch_size),
-        "--batch-size",
+        "--global-batch-size",
         str(batch_size),
         "--dataset-type",
         "synthetic",
@@ -244,7 +244,7 @@ def test_lr_scheduling_from_main():
     args = [
         "--train-num-samples",
         str(num_batches * seq_len * batch_size),
-        "--batch-size",
+        "--global-batch-size",
         str(batch_size),
         "--dataset-type",
         "synthetic",
