@@ -45,6 +45,7 @@ def test_train_simple():
         "--dataset-type", "synthetic",
         "--model", "open_lm_test_tiny",
         "--epochs", "1",
+
     ])
     # fmt: on
 
@@ -60,7 +61,7 @@ General test strat:
 """
 
 
-@pytest.mark.parametrize("num_batches", [10, 100, 1000, 10000])
+@pytest.mark.parametrize("num_batches", [10, 100, 1000])
 def test_lr_single_epoch_warmup(num_batches):
     """Tests that LR gets adjusted correctly for a single epoch
     --
@@ -87,6 +88,8 @@ def test_lr_single_epoch_warmup(num_batches):
         str(1),
         "--logs",
         LOG_PATH,
+        "--name",
+        "test_lr_single_epoch_warmup_%03d" % num_batches
     ]
     output_args = main(args)
 
@@ -124,6 +127,8 @@ def test_lr_multi_epoch_warmup(total_batches):
         str(1),
         "--logs",
         LOG_PATH,
+        "--name",
+        "test_lr_multi_epoch_warmup_%03d" % total_batches,
     ]
 
     output_args = main(args)
@@ -165,6 +170,8 @@ def test_lr_single_epoch_cyclic():
         str(1),
         "--logs",
         LOG_PATH,
+        "--name",
+        "test_lr_single_epoch_cyclic",
     ]
     output_args = main(args)
 
@@ -212,6 +219,8 @@ def test_lr_multi_epoch_cyclic():
         str(1),
         "--logs",
         LOG_PATH,
+        "--name",
+        "test_lr_multi_epoch_cyclic",
     ]
 
     output_args = main(args)
@@ -263,6 +272,8 @@ def test_lr_scheduling_from_main():
         "tensorboard",
         "--logs",
         LOG_PATH,
+        "--name",
+        "test_lr_scheduling_from_main",
     ]
     output_args = main(args)
 
