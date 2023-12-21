@@ -401,7 +401,7 @@ def write_manifest(jsonl_lines, args):
     if output_path.startswith("s3://"):
         # Use boto3 for S3 paths
         s3_client = boto3.client("s3")
-        jsonl_content = '\n'.join(json.dumps(record) for record in jsonl_lines)
+        jsonl_content = '\n'.join(json.dumps(record) for record in jsonl_lines) + '\n'  # Add a newline at the end
         bucket_name, s3_key = output_path[5:].split("/", 1)
         response = s3_client.put_object(
             Bucket=bucket_name,
@@ -416,7 +416,7 @@ def write_manifest(jsonl_lines, args):
     else:
         with open(output_path, "w") as f:
             for item in jsonl_lines:
-                f.write(json.dumps(item))
+                json.dump(item, f)
                 f.write('\n')
 
 
