@@ -366,6 +366,8 @@ def train_one_epoch(model, data, loss, epoch, step, optimizer, scaler, scheduler
                 return False, step
 
     # end for
+    if tb_writer is not None:
+        tb_writer.flush()
     return True, step
 
 

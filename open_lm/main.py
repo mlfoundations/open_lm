@@ -52,7 +52,6 @@ from open_lm.logger import setup_logging
 from open_lm.params import parse_args
 from open_lm.scheduler import cosine_lr
 from open_lm.train import train_one_epoch, evaluate_loop
-
 from open_lm.file_utils import (
     pt_load,
     check_exists,
@@ -173,7 +172,6 @@ def save_checkpoint(
         with FSDP.state_dict_type(model, StateDictType.FULL_STATE_DICT, save_policy):
             cpu_state = model.state_dict()
             optim_state = FSDP.optim_state_dict(model, optimizer)
-
     if args.save_logs:
         checkpoint_dict_model = {
             "epoch": completed_epoch,
@@ -798,6 +796,8 @@ def main(args):
             logging.info("Final remote sync successful.")
         else:
             logging.info("Final remote sync failed.")
+
+    return args
 
 
 def copy_codebase(args):
