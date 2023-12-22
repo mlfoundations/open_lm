@@ -5,17 +5,17 @@
 
 1. **Spin up the ray cluster**:  
    ```
-   ray up cluster_test.yaml
+   ray up ray_cluster_configs/cluster_west.yaml
    ```
 
 2. **Access the ray cluster**:  
    ```
-   ray attach cluster_test.yaml
+   ray attach ray_cluster_configs/cluster_west.yaml
    ```
 
 3. **Transfer the `tokenize_shuffle.py` script to the cluster**:  
    ```
-   ray rsync_up cluster_test.yaml tokenize_shuffle.py /home/ubuntu
+   ray rsync_up ray_cluster_configs/cluster_west.yaml tokenize_shuffle.py /home/ubuntu
    ```
 
 5. **Tokenize with shuffling**:  
@@ -42,8 +42,9 @@
 
 3. **Copy the script to the cluster**:  
    ```
-   ray rsync_up cluster_test.yaml tokenize_shuffle.py /home/ubuntu
+   ray rsync_up ray_cluster_configs/cluster_west.yaml tokenize_shuffle.py /home/ubuntu
    ```
+   Copy the `default_dataset_yaml` as well if used.
 
 4. **SSH into the cluster**:  
    ```
