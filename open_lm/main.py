@@ -80,7 +80,7 @@ def natural_key(string_):
 def get_latest_checkpoint(path: str):
     is_s3 = path.startswith("s3")
     fs, root_path = fsspec.core.url_to_fs(path)
-    checkpoints = fs.glob(os.path.join(root_path, "**/epoch_*.pt"))
+    checkpoints = fs.glob(os.path.join(root_path, "epoch_*.pt"))
     if checkpoints:
         checkpoints = sorted(checkpoints, key=natural_key)
         return f"s3://{checkpoints[-1]}" if is_s3 else checkpoints[-1]
@@ -262,6 +262,13 @@ def check_args(args):
         print("WARNING: Meta device initialization requested, but this is not currently fully tested.")
 
 
+def cleanup(sync_process, distributed=False):
+    if sync_process:
+        terminate_sync_process(sync_process)
+    if distributed and torch.distributed.is_initialized():
+        torch.distributed.destroy_process_group()
+
+
 def main(args):
     args = parse_args(args)
 
@@ -353,6 +360,10 @@ def main(args):
         resume_from = None
         checkpoint_path = args.checkpoint_path
 
+        # If using remote_sync, need to check the remote instead of the local checkpoints folder.
+        if args.remote_sync is not None:
+            checkpoint_path = os.path.join(args.remote_sync, args.name, "checkpoints")
+
         if is_master(args):
             # Checking for existing checkpoint via master rank only. It is possible for
             # different rank processes to see different files if a shared file-system is under
@@ -400,8 +411,11 @@ def main(args):
         )
         remote_sync_process.start()
 
-        # make sure that if open_lm throws the remote process is still killed to prevent hanging
-        atexit.register(terminate_sync_process, p=remote_sync_process)
+    # Handle cleanup even if open_lm crashes.
+    # TODO: For cases where main() is called as a functio, we need to call cleanup() manually.
+    # Right now, we do this manually in every case where main returns, but we should put main() in a wrapper and call
+    # cleanup() outside it, ideally.
+    atexit.register(cleanup, sync_process=remote_sync_process, distributed=args.distributed)
 
     if args.precision == "fp16":
         logging.warning(
@@ -662,6 +676,11 @@ def main(args):
         logging.debug("Finished loading wandb.")
 
     if not requires_training:
+        if not args.resume:
+            logging.info("No training required, exiting.")
+            cleanup(remote_sync_process, args.distributed)
+            return
+        logging.info("No training required, evaluating instead.")
         checkpoint_root = os.path.dirname(args.resume)
 
         metrics = evaluate_loop(model, data["val_list"], start_epoch, args, writer)
@@ -670,6 +689,7 @@ def main(args):
             with fsspec.open(os.path.join(checkpoint_root, "results.jsonl"), "a") as f:
                 f.write(f"{json.dumps(metrics)}\n")
 
+        cleanup(remote_sync_process, args.distributed)
         return
 
     loss = torch.nn.CrossEntropyLoss()
@@ -796,6 +816,7 @@ def main(args):
             logging.info("Final remote sync successful.")
         else:
             logging.info("Final remote sync failed.")
+    cleanup(remote_sync_process, args.distributed)
 
     return args
 
