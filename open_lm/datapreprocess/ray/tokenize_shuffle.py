@@ -12,6 +12,7 @@ import resource
 import tarfile
 import time
 import traceback
+import glob
 from enum import Enum
 from io import BytesIO
 from typing import BinaryIO, List
@@ -219,23 +220,35 @@ def preprocess(
 
 
 def process_keys(data, tokenizer, seqlen, seed, content_key, do_sample, sources=None):
-    s3_client = boto3.client("s3")
+    
     path = data["path"]
-    bucket, key = parse_s3_path(path)
-    response = s3_client.get_object(Bucket=bucket, Key=key)
-    fh = response["Body"]
-    token_buffers = preprocess(
-        key,
-        fh,
-        seqlen=seqlen,
-        seed=seed,
-        tokenizer=tokenizer,
-        content_key=content_key,
-        do_sample=do_sample,
-        sources=sources,
-    )
-    for token_buffer in token_buffers:
-        yield {"tokens": token_buffer}
+    
+    if path.startswith("s3"):
+        s3_client = boto3.client("s3")
+        bucket, key = parse_s3_path(path)
+        response = s3_client.get_object(Bucket=bucket, Key=key)
+        fh = response["Body"]
+    else:
+        key = path
+        with open(path, "rb") as f:
+            bytes = f.read()
+        fh = BytesIO(bytes)
+
+    try:
+        token_buffers = preprocess(
+            key,
+            fh,
+            seqlen=seqlen,
+            seed=seed,
+            tokenizer=tokenizer,
+            content_key=content_key,
+            do_sample=do_sample,
+            sources=sources,
+        )
+        for token_buffer in token_buffers:
+            yield {"tokens": token_buffer}
+    finally:
+        fh.close()
 
 
 class SpecialTokens(Enum):
@@ -361,8 +374,10 @@ def glob_files(path, suffix=".jsonl"):
 
     else:
         # Use glob for local paths
-        search_pattern = f"{path.rstrip('/')}/*{suffix}"
-        matching_files = glob.glob(search_pattern)
+        search_pattern = f"{path.rstrip('/')}/**/*{suffix}"
+        matching_files = glob.glob(search_pattern, recursive=True)
+        print("matching files with suffix: ", suffix)
+        print(matching_files)
 
     return matching_files
 
@@ -405,6 +420,7 @@ def main(args):
     parser.add_argument("--wds_chunk_size", type=int, default=8192)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--subset", type=int, default=None)
+    parser.add_argument("--subfraction", type=float,default=None)
     parser.add_argument("--ray_address", type=str, default=None)
     parser.add_argument("--block_size", type=str, default="10MB")
     parser.add_argument("--force_parallelism", type=int, default=None)
@@ -429,16 +445,22 @@ def main(args):
     input_folders = args.input.split(",")
     input_paths = []
     for inp_folder in input_folders:
+        input_paths += glob_files(inp_folder, suffix=".json")
         input_paths += glob_files(inp_folder, suffix=".jsonl")
         input_paths += glob_files(inp_folder, suffix=".zst")
         input_paths += glob_files(inp_folder, suffix=".tar")
+        input_paths += glob_files(inp_folder,suffix=".gz")
+    rng = random.Random(args.seed)
+    rng.shuffle(input_paths) # shuffle before selecting subsets
     if args.subset is not None:
         input_paths = input_paths[: args.subset]
-    rng = random.Random(args.seed)
-    rng.shuffle(input_paths)
+    if args.subfraction is not None:
+        input_paths = input_paths[: int(args.subfraction*len(input_paths))]
+    print("Files considered: \n", input_paths) 
     print(f"num files ={len(input_paths)}")
     num_files = len(input_paths)
     num_cores = os.cpu_count()
+    print(f"num cores = {num_cores}")
     output_path = args.output
     seqlen = args.seqlen + 1
     wds_chunk_size = args.wds_chunk_size
