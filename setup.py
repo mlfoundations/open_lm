@@ -19,7 +19,7 @@ REQUIREMENTS = _read_reqs("requirements.txt")
 
 setuptools.setup(
     name="open_lm",
-    version="0.0.25",
+    version="0.0.26",
     author=[
         "Suchin Gururangan*",
         "Mitchell Wortsman*",
