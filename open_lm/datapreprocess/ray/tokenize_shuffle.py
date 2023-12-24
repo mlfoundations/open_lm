@@ -218,11 +218,9 @@ def preprocess(
         logger.error(f"There was an incomplete read error: {e} for key {key}")
         return []
 
-
 def process_keys(data, tokenizer, seqlen, seed, content_key, do_sample, sources=None):
-    
     path = data["path"]
-    
+        
     if path.startswith("s3"):
         s3_client = boto3.client("s3")
         bucket, key = parse_s3_path(path)
@@ -230,11 +228,10 @@ def process_keys(data, tokenizer, seqlen, seed, content_key, do_sample, sources=
         fh = response["Body"]
     else:
         key = path
-        with open(path, "rb") as f:
-            bytes = f.read()
-        fh = BytesIO(bytes)
+        fh = open(path, "rb")
 
     try:
+        # Process the file stream (either S3 or local)
         token_buffers = preprocess(
             key,
             fh,
@@ -245,9 +242,12 @@ def process_keys(data, tokenizer, seqlen, seed, content_key, do_sample, sources=
             do_sample=do_sample,
             sources=sources,
         )
+
+        # Ensure that all operations on the file handle are done within this block
         for token_buffer in token_buffers:
             yield {"tokens": token_buffer}
     finally:
+        # Close the file handle/stream after all operations are done
         fh.close()
 
 
@@ -428,6 +428,7 @@ def main(args):
     parser.add_argument("--do_sample", action="store_true")
     parser.add_argument("--ray_spill_location", type=str, default="/tmp/ray_spill")
     parser.add_argument("--default_dataset_yaml", type=str, default=(DIR.parent / "metadata" / "rpj_lm_data.yaml"))
+    parser.add_argument("--ray_dashboard_host", type=str, default='127.0.0.1') # default is localhost; for slurm jobs do 0.0.0.0
 
     args = parser.parse_args(args)
     Sources, SAMPLING_FREQUENCIES = load_from_yaml(args.default_dataset_yaml)
@@ -438,9 +439,9 @@ def main(args):
     runtime_env = {"env_vars": creds}
 
     if args.ray_address is None:
-        ray.init(runtime_env=runtime_env, _temp_dir=args.ray_spill_location)
+        ray.init(runtime_env=runtime_env, _temp_dir=args.ray_spill_location, dashboard_host=args.ray_dashboard_host)
     else:
-        ray.init(args.ray_address, runtime_env=runtime_env, _temp_dir=args.ray_spill_location)
+        ray.init(args.ray_address, runtime_env=runtime_env, _temp_dir=args.ray_spill_location, dashboard_host=args.ray_dashboard_host)
     num_nodes = len(ray.nodes())
     input_folders = args.input.split(",")
     input_paths = []
