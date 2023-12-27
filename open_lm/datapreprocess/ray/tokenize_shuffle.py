@@ -43,7 +43,6 @@ from tqdm import tqdm
 from transformers import GPTNeoXTokenizerFast
 
 
-import enum
 import yaml
 import pathlib
 
@@ -165,6 +164,25 @@ def get_raw_filetype(key: str):
         logger.warning(f"Unknown filetype: {key}")
         return RawFileType.UNKNOWN
 
+@ray.remote
+class GlobalCounter:
+    def __init__(self):
+        self.value = 0
+        self.token_count = 0
+
+    def increment(self):
+        self.value += 1
+        return self.value
+
+    def increment_token_count(self, num_tokens):
+        self.token_count += num_tokens
+        return self.token_count
+
+    def get_counter(self):
+        return self.value
+
+    def get_token_counter(self):
+        return self.token_count
 
 def preprocess(
     key: str,
@@ -175,6 +193,7 @@ def preprocess(
     tokenizer=None,
     do_sample: bool = False,
     sources: enum.Enum = None,
+    source_counter: GlobalCounter = None,
 ):
     tokenizer_fn, vocab_size = tokenizer
     rng = random.Random(hash(key) + seed)
@@ -203,22 +222,30 @@ def preprocess(
                     # then yield 1 more sample with Pr[sample_freq - int(sample_freq)]
                     # in expectation we will yield sample_freq copies of buffer[:seqlen]
                     while local_sample_freq > 1:
+                        if source_counter is not None:
+                            ray.get(source_counter.increment_token_count.remote(seqlen))
                         yield buffer[:seqlen]
                         local_sample_freq -= 1
                     if rng.random() < local_sample_freq:
+                        if source_counter is not None:
+                            ray.get(source_counter.increment_token_count.remote(seqlen))
                         yield buffer[:seqlen]
                     buffer = buffer[seqlen:]
                 else:
+                    if source_counter is not None:
+                            ray.get(source_counter.increment_token_count.remote(seqlen))
                     yield buffer[:seqlen]
                     buffer = buffer[seqlen:]
         if len(buffer) > 0:
+            if source_counter is not None:
+                ray.get(source_counter.increment_token_count.remote(len(buffer)))
             yield buffer + [PAD] * (seqlen - len(buffer))
 
     except (IncompleteReadError, ReadTimeoutError, ResponseStreamingError) as e:
         logger.error(f"There was an incomplete read error: {e} for key {key}")
         return []
 
-def process_keys(data, tokenizer, seqlen, seed, content_key, do_sample, sources=None):
+def process_keys(data, tokenizer, seqlen, seed, content_key, do_sample, sources=None,source_counters=None):
     path = data["path"]
         
     if path.startswith("s3"):
@@ -231,6 +258,11 @@ def process_keys(data, tokenizer, seqlen, seed, content_key, do_sample, sources=
         fh = open(path, "rb")
 
     try:
+        # select a counter 
+        if sources is not None and source_counters is not None:
+            source_counter = source_counters[sources.get_source(key)]
+        else:
+            source_counter = None
         # Process the file stream (either S3 or local)
         token_buffers = preprocess(
             key,
@@ -241,6 +273,7 @@ def process_keys(data, tokenizer, seqlen, seed, content_key, do_sample, sources=
             content_key=content_key,
             do_sample=do_sample,
             sources=sources,
+            source_counter=source_counter,
         )
 
         # Ensure that all operations on the file handle are done within this block
@@ -382,25 +415,7 @@ def glob_files(path, suffix=".jsonl"):
     return matching_files
 
 
-@ray.remote
-class GlobalCounter:
-    def __init__(self):
-        self.value = 0
-        self.token_count = 0
 
-    def increment(self):
-        self.value += 1
-        return self.value
-
-    def increment_token_count(self, num_tokens):
-        self.token_count += num_tokens
-        return self.token_count
-
-    def get_counter(self):
-        return self.value
-
-    def get_token_counter(self):
-        return self.token_count
 
 
 def main(args):
@@ -424,6 +439,7 @@ def main(args):
     parser.add_argument("--ray_address", type=str, default=None)
     parser.add_argument("--block_size", type=str, default="10MB")
     parser.add_argument("--force_parallelism", type=int, default=None)
+    parser.add_argument("--force_num_cores", type=int, default=None)
     parser.add_argument("--no_shuffle", action="store_true")
     parser.add_argument("--do_sample", action="store_true")
     parser.add_argument("--ray_spill_location", type=str, default="/tmp/ray_spill")
@@ -457,10 +473,17 @@ def main(args):
         input_paths = input_paths[: args.subset]
     if args.subfraction is not None:
         input_paths = input_paths[: int(args.subfraction*len(input_paths))]
-    print("Files considered: \n", input_paths) 
+    print("Files considered: \n", input_paths)
+    # write files considered to a file
+    with open("/home1/09534/reinhardh/dcnlp/ray_processing/input_paths.txt", 'w') as file:
+        for path in input_paths:
+            file.write(path + '\n')
     print(f"num files ={len(input_paths)}")
     num_files = len(input_paths)
-    num_cores = os.cpu_count()
+    if args.force_num_cores is not None:
+        num_cores = args.force_num_cores
+    else:
+        num_cores = os.cpu_count()
     print(f"num cores = {num_cores}")
     output_path = args.output
     seqlen = args.seqlen + 1
@@ -479,6 +502,11 @@ def main(args):
     logger.info(f"Total number of keys = {len(input_paths)}")
     df = pd.DataFrame(input_paths, columns=["path"])
     ds = ray.data.from_pandas(pd.DataFrame(input_paths, columns=["path"])).repartition(parallelism)
+    
+    # dictionary with counters to keep track of the tokens for each source
+    if Sources is not None:
+        source_counters = {source: GlobalCounter.remote() for source in Sources} 
+
     ds = ds.flat_map(
         lambda x: process_keys(
             x,
@@ -488,6 +516,7 @@ def main(args):
             content_key=content_key,
             do_sample=args.do_sample,
             sources=Sources,
+            source_counters=source_counters,
         )
     )
     ds = ds.map(add_hash)
@@ -511,8 +540,14 @@ def main(args):
     end_time = time.time()
     duration = end_time - start_time
     final_token_count = ray.get(counter.increment_token_count.remote(0))
+    print("==== Token count summary ====")
     print(f"Tokenize + Shuffle script Finished in: {duration}")
     print(f"Final Token Count: {final_token_count}")
+    if Sources is not None:
+        for source, counter in source_counters.items():
+            token_count = ray.get(counter.increment_token_count.remote(0))
+            print(f"Source: {source}, Token count: {token_count}")
+
     print("==== Driver memory summary ====")
     maxrss = int(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss * 1e3)
     print(f"max: {maxrss / 1e9}/GB")
