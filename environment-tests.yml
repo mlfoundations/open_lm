@@ -2,7 +2,7 @@ name: open_lm_tests
 channels:
   - defaults
 dependencies:
-  - python=3.8
+  - python=3.10
   - pip
   - pip:
     - -r requirements.txt

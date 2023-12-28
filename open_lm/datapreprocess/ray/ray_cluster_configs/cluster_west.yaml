@@ -46,6 +46,8 @@ setup_commands:
     - pip install pyarrow
     - pip install webdataset
     - pip install transformers
+    - pip install jsonlines
+    - pip install loguru
     - sudo mkfs -t xfs /dev/nvme1n1
     - sudo mount /dev/nvme1n1 /tmp
     - sudo chown -R $USER /tmp
