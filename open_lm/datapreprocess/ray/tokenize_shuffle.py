@@ -443,9 +443,12 @@ def main(args):
     parser.add_argument("--default_dataset_yaml", type=str, default=(DIR.parent / "metadata" / "rpj_lm_data.yaml"))
 
     args = parser.parse_args(args)
-    Sources, SAMPLING_FREQUENCIES = load_from_yaml(args.default_dataset_yaml)
-    logger.info(f"SOURCES:\n {Sources}")
-    logger.info(f"SAMPLING_FREQUENCIES:\n{SAMPLING_FREQUENCIES}")
+    if args.do_sample: 
+        Sources, SAMPLING_FREQUENCIES = load_from_yaml(args.default_dataset_yaml)
+        logger.info(f"SOURCES:\n {Sources}")
+        logger.info(f"SAMPLING_FREQUENCIES:\n{SAMPLING_FREQUENCIES}")
+    else: 
+        Sources, SAMPLING_FREQUENCIES = None, None
     # configure remote spilling
     creds = {k: v for k, v in os.environ.items() if k.startswith("AWS")}
     runtime_env = {"env_vars": creds}
@@ -460,6 +463,7 @@ def main(args):
     for inp_folder in input_folders:
         input_paths += glob_files(inp_folder, suffix=".jsonl")
         input_paths += glob_files(inp_folder, suffix=".zst")
+        input_paths += glob_files(inp_folder, suffix=".jsonl.gz")
         input_paths += glob_files(inp_folder, suffix=".tar")
     if args.subset is not None:
         input_paths = input_paths[: args.subset]
