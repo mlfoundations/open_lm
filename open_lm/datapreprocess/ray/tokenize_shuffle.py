@@ -474,10 +474,6 @@ def main(args):
     if args.subfraction is not None:
         input_paths = input_paths[: int(args.subfraction*len(input_paths))]
     print("Files considered: \n", input_paths)
-    # write files considered to a file
-    with open("/home1/09534/reinhardh/dcnlp/ray_processing/input_paths.txt", 'w') as file:
-        for path in input_paths:
-            file.write(path + '\n')
     print(f"num files ={len(input_paths)}")
     num_files = len(input_paths)
     if args.force_num_cores is not None:
