@@ -19,7 +19,7 @@ QUEUE_MAX = 10000
 BUFFER_MIN = 1000
 BUFFER_MAX = 200000
 CHUNK_SIZE = 2048 + 1
-SHARD_SIZE = 267
+SHARD_SIZE = 8192
 SLEEP_TIME = 1
 S3_BUCKET = "s-laion"
 S3_SUFFIX = "validation_data_tokenized/"
@@ -147,7 +147,7 @@ def consumer(my_id, output_dir, threads, buffer, buffer_lock, num_consumers, upl
 
 
 def tokenize_eleutherai(tokenizer, string):
-    return tokenizer(string).input_ids
+    return tokenizer.encode(string, truncation=True, padding="max_length", max_length=CHUNK_SIZE)
 
 
 def main(
@@ -169,7 +169,7 @@ def main(
     print("Input files", input_files)
 
     enc = GPTNeoXTokenizerFast.from_pretrained("EleutherAI/gpt-neox-20b")
-
+    enc.add_special_tokens({"pad_token": "<|pad|>"})
     tokenize = lambda x: tokenize_eleutherai(enc, x)
     buffer = []  # Use list instead of queue.Queue
     buffer_lock = threading.Lock()

@@ -619,6 +619,7 @@ def parse_args(args):
     parser.add_argument(
         "--target-mask-left",
         type=int,
+        nargs="+",
         default=None,
         help="Mask the loss to the left of a specified token (including the specified token).",
     )

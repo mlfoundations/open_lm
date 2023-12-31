@@ -105,7 +105,7 @@ def load_model(args, model):
         # resuming a train checkpoint w/ epoch and optimizer state
         start_epoch = checkpoint["epoch"]
         sd = checkpoint["state_dict"]
-        global_step = checkpoint.get("step", None)
+        global_step = checkpoint.get("step", 0)
         if next(iter(sd.items()))[0].startswith("module"):
             sd = {k[len("module.") :]: v for k, v in sd.items()}
         if args.fsdp:
@@ -623,13 +623,13 @@ def main(args):
         floor=args.dataset_manifest is not None,
     )
 
-    if args.target_mask_left is not None:
-        # tokens handled with same modulo in dataloading
-        args.target_mask_left = proc_token(args.target_mask_left, args.vocab_size)
+    # if args.target_mask_left is not None:
+    #     # tokens handled with same modulo in dataloading
+    #     args.target_mask_left = proc_token(args.target_mask_left, args.vocab_size)
 
-    if args.target_mask_individual is not None:
-        # tokens handled with same modulo in dataloading
-        args.target_mask_individual = proc_token(args.target_mask_individual, args.vocab_size)
+    # if args.target_mask_individual is not None:
+    #     # tokens handled with same modulo in dataloading
+    #     args.target_mask_individual = proc_token(args.target_mask_individual, args.vocab_size)
 
     if args.torchcompile:
         logging.info("Compiling model...")
