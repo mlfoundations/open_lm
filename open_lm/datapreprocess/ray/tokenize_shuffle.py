@@ -453,11 +453,17 @@ def main(args):
     # configure remote spilling
     creds = {k: v for k, v in os.environ.items() if k.startswith("AWS")}
     runtime_env = {"env_vars": creds}
-
-    if args.ray_address is None:
-        ray.init(runtime_env=runtime_env, _temp_dir=args.ray_spill_location, dashboard_host=args.ray_dashboard_host)
+    
+    if args.force_num_cores is not None:
+        num_cores = args.force_num_cores
     else:
-        ray.init(args.ray_address, runtime_env=runtime_env, _temp_dir=args.ray_spill_location, dashboard_host=args.ray_dashboard_host)
+        num_cores = os.cpu_count()
+    
+    print(f"num cores = {num_cores}")
+    if args.ray_address is None:
+        ray.init(num_cpus=num_cores,runtime_env=runtime_env, _temp_dir=args.ray_spill_location, dashboard_host=args.ray_dashboard_host)
+    else:
+        ray.init(args.ray_address, num_cpus=num_cores, runtime_env=runtime_env, _temp_dir=args.ray_spill_location, dashboard_host=args.ray_dashboard_host)
     num_nodes = len(ray.nodes())
     input_folders = args.input.split(",")
     input_paths = []
@@ -476,11 +482,7 @@ def main(args):
     print("Files considered: \n", input_paths)
     print(f"num files ={len(input_paths)}")
     num_files = len(input_paths)
-    if args.force_num_cores is not None:
-        num_cores = args.force_num_cores
-    else:
-        num_cores = os.cpu_count()
-    print(f"num cores = {num_cores}")
+    
     output_path = args.output
     seqlen = args.seqlen + 1
     wds_chunk_size = args.wds_chunk_size
@@ -528,7 +530,7 @@ def main(args):
         batch_size=wds_chunk_size,
         fn_kwargs={
             "batch_size": wds_chunk_size,
-            "folder": args.output.strip("/"),
+            "folder": args.output.rstrip("/"),
             "counter": counter,
         },
         batch_format="pandas",
