@@ -443,11 +443,11 @@ def main(args):
     parser.add_argument("--default_dataset_yaml", type=str, default=(DIR.parent / "metadata" / "rpj_lm_data.yaml"))
 
     args = parser.parse_args(args)
-    if args.do_sample: 
+    if args.do_sample:
         Sources, SAMPLING_FREQUENCIES = load_from_yaml(args.default_dataset_yaml)
         logger.info(f"SOURCES:\n {Sources}")
         logger.info(f"SAMPLING_FREQUENCIES:\n{SAMPLING_FREQUENCIES}")
-    else: 
+    else:
         Sources, SAMPLING_FREQUENCIES = None, None
     # configure remote spilling
     creds = {k: v for k, v in os.environ.items() if k.startswith("AWS")}
