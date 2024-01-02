@@ -177,6 +177,7 @@ def preprocess(
     tokenizer=None,
     do_sample: bool = False,
     sources: enum.Enum = None,
+    max_buffer_seqs: int = 1000,
 ):
     tokenizer_fn, vocab_size = tokenizer
     rng = random.Random(hash(key) + seed)
@@ -196,23 +197,29 @@ def preprocess(
         for string in pbar:
             tokens = tokenizer_fn(string)
             tokens.append(EOT)
-            buffer += tokens
-            while len(buffer) >= seqlen:
-                if do_sample:
-                    local_sample_freq = sample_freq
-                    # This code does the following
-                    # yield a int(sample_freq) copies of buffer[:seqlen]
-                    # then yield 1 more sample with Pr[sample_freq - int(sample_freq)]
-                    # in expectation we will yield sample_freq copies of buffer[:seqlen]
-                    while local_sample_freq > 1:
+            while len(tokens) > 0:
+                # Add tokens to the buffer while controlling buffer, speeds up slicing for large documents
+                print(f"Tokens left: {len(tokens)}")
+                idx = min(seqlen * max_buffer_seqs - len(buffer), len(tokens))
+                buffer += tokens[:idx]
+                tokens = tokens[idx:]
+
+                while len(buffer) >= seqlen:
+                    if do_sample:
+                        local_sample_freq = sample_freq
+                        # This code does the following
+                        # yield a int(sample_freq) copies of buffer[:seqlen]
+                        # then yield 1 more sample with Pr[sample_freq - int(sample_freq)]
+                        # in expectation we will yield sample_freq copies of buffer[:seqlen]
+                        while local_sample_freq > 1:
+                            yield buffer[:seqlen]
+                            local_sample_freq -= 1
+                        if rng.random() < local_sample_freq:
+                            yield buffer[:seqlen]
+                        buffer = buffer[seqlen:]
+                    else:
                         yield buffer[:seqlen]
-                        local_sample_freq -= 1
-                    if rng.random() < local_sample_freq:
-                        yield buffer[:seqlen]
-                    buffer = buffer[seqlen:]
-                else:
-                    yield buffer[:seqlen]
-                    buffer = buffer[seqlen:]
+                        buffer = buffer[seqlen:]
         if len(buffer) > 0:
             yield buffer + [PAD] * (seqlen - len(buffer))
 
@@ -221,7 +228,7 @@ def preprocess(
         return []
 
 
-def process_keys(data, tokenizer, seqlen, seed, content_key, do_sample, sources=None):
+def process_keys(data, tokenizer, seqlen, seed, content_key, do_sample, sources=None, max_buffer_seqs=1000):
     s3_client = boto3.client("s3")
     path = data["path"]
     bucket, key = parse_s3_path(path)
@@ -236,6 +243,7 @@ def process_keys(data, tokenizer, seqlen, seed, content_key, do_sample, sources=
         content_key=content_key,
         do_sample=do_sample,
         sources=sources,
+        max_buffer_seqs=max_buffer_seqs,
     )
     for token_buffer in token_buffers:
         yield {"tokens": token_buffer}
@@ -441,6 +449,7 @@ def main(args):
     parser.add_argument("--do_sample", action="store_true")
     parser.add_argument("--ray_spill_location", type=str, default="/tmp/ray_spill")
     parser.add_argument("--default_dataset_yaml", type=str, default=(DIR.parent / "metadata" / "rpj_lm_data.yaml"))
+    parser.add_argument("--max_buffer_seqs", type=int, default=1000)
 
     args = parser.parse_args(args)
     if args.do_sample:
@@ -498,6 +507,7 @@ def main(args):
             content_key=content_key,
             do_sample=args.do_sample,
             sources=Sources,
+            max_buffer_seqs=args.max_buffer_seqs,
         )
     )
     ds = ds.map(add_hash)
