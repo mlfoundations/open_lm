@@ -38,3 +38,7 @@ class OpenLMConfig(PretrainedConfig):
 
         if params is not None:
             self.params = params
+
+    def set_params(self, params: Params):
+        for field in fields(Params):
+            setattr(self, field.name, getattr(params, field.name))

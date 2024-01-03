@@ -17,6 +17,7 @@ class OpenLMModel(PreTrainedModel):
             params = config.params
         else:
             params = create_params(Namespace(**config.params_args_dict))
+        config.set_params(params)
         self.model = Transformer(params)
 
     def forward(self, tokens):
