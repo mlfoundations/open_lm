@@ -12,12 +12,15 @@ class OpenLMModel(PreTrainedModel):
     config_class = OpenLMConfig
 
     def __init__(self, config):
-        super().__init__(config)
+        # This has to be done before init as it sets makes sure hf config is correct 
         if hasattr(config, "params"):
             params = config.params
         else:
             params = create_params(Namespace(**config.params_args_dict))
         config.set_params(params)
+
+        super().__init__(config)
+
         self.model = Transformer(params)
 
     def forward(self, tokens):
