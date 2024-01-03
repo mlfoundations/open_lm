@@ -1,7 +1,8 @@
+from argparse import Namespace
 from transformers import PreTrainedModel
 from transformers.modeling_outputs import CausalLMOutputWithPast
 from open_lm.utils.transformers.hf_config import OpenLMConfig
-from open_lm.model import Transformer
+from open_lm.model import Transformer, create_params
 import torch
 from typing import Union, Tuple, Optional, List
 import os
@@ -12,7 +13,11 @@ class OpenLMModel(PreTrainedModel):
 
     def __init__(self, config):
         super().__init__(config)
-        self.model = Transformer(config)
+        if hasattr(config, "params"):
+            params = config.params
+        else:
+            params = create_params(Namespace(**config.params_args_dict))
+        self.model = Transformer(params)
 
     def forward(self, tokens):
         return self.model(tokens)

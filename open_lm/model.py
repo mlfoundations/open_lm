@@ -4,7 +4,6 @@ import re
 from copy import deepcopy
 from pathlib import Path
 from dataclasses import dataclass
-from typing import Union
 from typing import Callable
 
 import torch
@@ -87,7 +86,7 @@ class Params:
     seq_len: int = 2048
     post_embed_norm: bool = False
     weight_tying: bool = False
-    norm_type: Union[str, nn.Module] = "default_layer_norm"
+    norm_type: nn.Module = nn.LayerNorm
     attn_func: Callable = xformers_attn if torch.cuda.is_available() else torch_attn
     apply_qk_norm: bool = False
     moe_loss_weight: float = 0.1
@@ -277,8 +276,6 @@ class Transformer(nn.Module, PyTorchModelHubMixin):
         self.n_layers = params.n_layers
         self.moe_num_experts = params.moe_num_experts
         self.seq_len = params.seq_len
-        if isinstance(params.norm_type, str):
-            params.norm_type = get_norm_class(params.norm_type)
         self.post_embed_norm = (
             params.norm_type(
                 params.dim,
@@ -362,9 +359,6 @@ def create_params(args):
     else:
         raise ValueError("Pass a pre-defined open_lm model name or a json config")
 
-    # Validate norm parameter
-    get_norm_class(cfg.get("model_norm", args.model_norm))
-
     # Note: here all the parameters should come from the config file
     # but for retro-compatibility, we add new model parameters to the args (with a default value that matches the old version)
     # These args are managed separately by the argparser
@@ -387,7 +381,7 @@ def create_params(args):
             vocab_size=cfg["vocab_size"],
             post_embed_norm=cfg["post_embed_norm"],
             weight_tying=cfg["weight_tying"],
-            norm_type=cfg.get("model_norm", args.model_norm),
+            norm_type=get_norm_class(cfg.get("model_norm", args.model_norm)),
             attn_func=get_attn_func(
                 args.attn_name, args.attn_activation, args.attn_seq_scalar, args.attn_seq_scalar_alpha
             ),
