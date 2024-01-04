@@ -12,7 +12,7 @@ class OpenLMModel(PreTrainedModel):
     config_class = OpenLMConfig
 
     def __init__(self, config):
-        # This has to be done before init as it sets makes sure hf config is correct 
+        # This has to be done before init as it sets makes sure hf config is correct
         if hasattr(config, "params"):
             params = config.params
         else:
