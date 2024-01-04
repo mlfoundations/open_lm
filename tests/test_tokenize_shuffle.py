@@ -84,7 +84,7 @@ def test_tokenize_shuffle_s3_write():
         total += len(x["json.gz"])
     assert total == NUM_TOKENS
     assert exit_value == 0
-    
+
     with open("test_output/manifest.jsonl", "rb") as f:
         out = f.read()
     out = [json.loads(o) for o in out.decode("utf-8").split("\n")[:-1]]
@@ -99,12 +99,14 @@ def test_tokenize_shuffle_local_read_local_write():
     # download a small test json file and store at ./test_input
     os.system("mkdir test_input")
     os.system("mkdir test_output")
-    os.system("wget -O ./test_input/wikipedia_sample.jsonl https://huggingface.co/datasets/togethercomputer/RedPajama-Data-1T-Sample/resolve/main/wikipedia_sample.jsonl")
+    os.system(
+        "wget -O ./test_input/wikipedia_sample.jsonl https://huggingface.co/datasets/togethercomputer/RedPajama-Data-1T-Sample/resolve/main/wikipedia_sample.jsonl"
+    )
     # run tokenize script
     exit_value = os.system(
         f"python open_lm/datapreprocess/ray/tokenize_shuffle.py --input ./test_input --content_key text --seqlen {content_len} --output ./test_output/"
     )
-    tars = ["test_output/00000001.tar","test_output/00000002.tar"]
+    tars = ["test_output/00000001.tar", "test_output/00000002.tar"]
     total = 0
     for tar in tars:
         ds = wds.WebDataset(tar).decode()
@@ -113,4 +115,3 @@ def test_tokenize_shuffle_local_read_local_write():
             total += len(x["json.gz"])
     assert total == NUM_TOKENS
     assert exit_value == 0
-

@@ -167,6 +167,7 @@ def get_raw_filetype(key: str):
         logger.warning(f"Unknown filetype: {key}")
         return RawFileType.UNKNOWN
 
+
 @ray.remote
 class GlobalCounter:
     def __init__(self):
@@ -186,6 +187,7 @@ class GlobalCounter:
 
     def get_token_counter(self):
         return self.token_count
+
 
 def preprocess(
     key: str,
@@ -236,7 +238,7 @@ def preprocess(
                     buffer = buffer[seqlen:]
                 else:
                     if source_counter is not None:
-                            ray.get(source_counter.increment_token_count.remote(seqlen))
+                        ray.get(source_counter.increment_token_count.remote(seqlen))
                     yield buffer[:seqlen]
                     buffer = buffer[seqlen:]
         if len(buffer) > 0:
@@ -248,9 +250,10 @@ def preprocess(
         logger.error(f"There was an incomplete read error: {e} for key {key}")
         return []
 
-def process_keys(data, tokenizer, seqlen, seed, content_key, do_sample, sources=None,source_counters=None):
+
+def process_keys(data, tokenizer, seqlen, seed, content_key, do_sample, sources=None, source_counters=None):
     path = data["path"]
-        
+
     if path.startswith("s3"):
         s3_client = boto3.client("s3")
         bucket, key = parse_s3_path(path)
@@ -261,7 +264,7 @@ def process_keys(data, tokenizer, seqlen, seed, content_key, do_sample, sources=
         fh = open(path, "rb")
 
     try:
-        # select a counter 
+        # select a counter
         if sources is not None and source_counters is not None:
             source_counter = source_counters[sources.get_source(key)]
         else:
@@ -421,9 +424,6 @@ def glob_files(path, suffix=".jsonl"):
     return matching_files
 
 
-
-
-
 def write_manifest(jsonl_lines, args):
     "Write manifest to provided output path."
 
@@ -464,7 +464,7 @@ def main(args):
     parser.add_argument("--wds_chunk_size", type=int, default=8192)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--subset", type=int, default=None)
-    parser.add_argument("--subfraction", type=float,default=None)
+    parser.add_argument("--subfraction", type=float, default=None)
     parser.add_argument("--ray_address", type=str, default=None)
     parser.add_argument("--block_size", type=str, default="10MB")
     parser.add_argument("--force_parallelism", type=int, default=None)
@@ -473,7 +473,9 @@ def main(args):
     parser.add_argument("--do_sample", action="store_true")
     parser.add_argument("--ray_spill_location", type=str, default="/tmp/ray_spill")
     parser.add_argument("--default_dataset_yaml", type=str, default=(DIR.parent / "metadata" / "rpj_lm_data.yaml"))
-    parser.add_argument("--ray_dashboard_host", type=str, default='127.0.0.1') # default is localhost; for slurm jobs do 0.0.0.0
+    parser.add_argument(
+        "--ray_dashboard_host", type=str, default="127.0.0.1"
+    )  # default is localhost; for slurm jobs do 0.0.0.0
 
     args = parser.parse_args(args)
     if args.do_sample:
@@ -485,17 +487,28 @@ def main(args):
     # configure remote spilling
     creds = {k: v for k, v in os.environ.items() if k.startswith("AWS")}
     runtime_env = {"env_vars": creds}
-    
+
     if args.force_num_cores is not None:
         num_cores = args.force_num_cores
     else:
         num_cores = os.cpu_count()
-    
+
     print(f"num cores = {num_cores}")
     if args.ray_address is None:
-        ray.init(num_cpus=num_cores,runtime_env=runtime_env, _temp_dir=args.ray_spill_location, dashboard_host=args.ray_dashboard_host)
+        ray.init(
+            num_cpus=num_cores,
+            runtime_env=runtime_env,
+            _temp_dir=args.ray_spill_location,
+            dashboard_host=args.ray_dashboard_host,
+        )
     else:
-        ray.init(args.ray_address, num_cpus=num_cores, runtime_env=runtime_env, _temp_dir=args.ray_spill_location, dashboard_host=args.ray_dashboard_host)
+        ray.init(
+            args.ray_address,
+            num_cpus=num_cores,
+            runtime_env=runtime_env,
+            _temp_dir=args.ray_spill_location,
+            dashboard_host=args.ray_dashboard_host,
+        )
     num_nodes = len(ray.nodes())
     input_folders = args.input.split(",")
     input_paths = []
@@ -505,17 +518,17 @@ def main(args):
         input_paths += glob_files(inp_folder, suffix=".zst")
         input_paths += glob_files(inp_folder, suffix=".jsonl.gz")
         input_paths += glob_files(inp_folder, suffix=".tar")
-        input_paths += glob_files(inp_folder,suffix=".gz")
+        input_paths += glob_files(inp_folder, suffix=".gz")
     rng = random.Random(args.seed)
-    rng.shuffle(input_paths) # shuffle before selecting subsets
+    rng.shuffle(input_paths)  # shuffle before selecting subsets
     if args.subset is not None:
         input_paths = input_paths[: args.subset]
     if args.subfraction is not None:
-        input_paths = input_paths[: int(args.subfraction*len(input_paths))]
+        input_paths = input_paths[: int(args.subfraction * len(input_paths))]
     print("Files considered: \n", input_paths)
     print(f"num files ={len(input_paths)}")
     num_files = len(input_paths)
-    
+
     output_path = args.output
     seqlen = args.seqlen + 1
     wds_chunk_size = args.wds_chunk_size
@@ -533,10 +546,12 @@ def main(args):
     logger.info(f"Total number of keys = {len(input_paths)}")
     df = pd.DataFrame(input_paths, columns=["path"])
     ds = ray.data.from_pandas(pd.DataFrame(input_paths, columns=["path"])).repartition(parallelism)
-    
+
     # dictionary with counters to keep track of the tokens for each source
     if Sources is not None:
-        source_counters = {source: GlobalCounter.remote() for source in Sources} 
+        source_counters = {source: GlobalCounter.remote() for source in Sources}
+    else:
+        source_counters = None
 
     ds = ds.flat_map(
         lambda x: process_keys(
