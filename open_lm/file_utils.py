@@ -133,7 +133,7 @@ def get_metadata_file(path):
     return out
 
 
-def get_shards_for_chunk(num_samples, chunk, path):
+def get_shards_for_chunk(num_samples, chunk, path, shard_shuffle_seed):
     """Function to get a chunk of shards to train on.
 
     Chunks are groups of shards with samples roughly equal to the number of samples
@@ -141,6 +141,9 @@ def get_shards_for_chunk(num_samples, chunk, path):
     to split the shards into chunks, and assign shards to each chunk.
     """
     metadata = get_metadata_file(path)
+    if shard_shuffle_seed is not None:
+        rng_gen = np.random.default_rng(shard_shuffle_seed)
+        metadata = rng_gen.shuffle(metadata)
     shard_list = []
     curr_shard_list = []
     chunk_count_list = []
@@ -225,7 +228,7 @@ def are_sources_imbalanced_with_each_other(paths, ratio=2):
     return max(median_shard_size_per_source) > ratio * min(median_shard_size_per_source)
 
 
-def log_num_checkpoints(total_steps, args):
+def log_num_checkpoints(total_steps, args, shard_shuffle_seed):
     """Log the number of checkpoints that will be made.
 
     This function counts the number of checkpoints to be made, and logs that number, printing out a warning if that
@@ -248,6 +251,7 @@ def log_num_checkpoints(total_steps, args):
             args.train_data_mix_weights,
             args.workers,
             args.world_size,
+            shard_shuffle_seed
         )
         steps_epoch = sum(
             [(n // (args.workers * args.global_batch_size)) * args.workers for n in num_samples_per_source]
@@ -285,12 +289,13 @@ def get_string_for_epoch(
     num_workers_per_gpu: int,
     world_size: int,
     multi_epoch=False,
+    shard_shuffle_seed=None,
 ):
     """See _single_epoch_string for full docstring."""
     if multi_epoch:
         raise NotImplementedError("Multiple passes over the dataset not fully supported yet.")
     else:
-        return _single_epoch_string(num_samples, starting_points, paths, weights, num_workers_per_gpu, world_size)
+        return _single_epoch_string(num_samples, starting_points, paths, weights, num_workers_per_gpu, world_size, shard_shuffle_seed)
 
 
 def _multi_epoch_string(num_samples, starting_chunk, paths, weights, min_shards_needed):
@@ -344,6 +349,7 @@ def _single_epoch_string(
     weights: Optional[List[float]],
     num_workers_per_gpu: int,
     world_size: int,
+    shard_shuffle_seed: Optional[int]
 ):
     """Retrieve shards to train on for a particular checkpoint.
 
@@ -356,6 +362,7 @@ def _single_epoch_string(
         weights: Weighting between sources. If None, it is assumed to be uniform.
         num_workers_per_gpu: Number of workers per gpu process.
         world_size: Total number of gpus used for training.
+        shard_shuffle_seed: Seed to shuffle shards before checkpoint assignment
     """
 
     num_sources = len(paths)
@@ -390,6 +397,9 @@ def _single_epoch_string(
     needed_samples_per_source = [int(np.ceil(weights[i] * num_samples / sum(weights))) for i in range(num_sources)]
 
     manifests = [get_metadata_file(path) for path in paths]
+    if shard_shuffle_seed is not None:
+        rng_gen = np.random.default_rng(shard_shuffle_seed)
+        manifests = [rng_gen.shuffle(m) for m in manifests]
     shard_strings_per_source = []
     next_shard_per_source = copy.deepcopy(starting_shard_per_source)
     shard_list_per_source = [[] for _ in range(num_sources)]
