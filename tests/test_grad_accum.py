@@ -50,6 +50,8 @@ def _grad_acc_helper_single(test_fsdp, accs=[2, 1], threshold=1e-7):
         if test_fsdp:
             args.fsdp = True
             args.fsdp_amp = True
+            # Required to force distributed mode on 1 gpu.
+            args.distributed = True
         fixtures.append((args, model, data, optimizer, scheduler, loss))
 
     model1 = fixtures[0][1]

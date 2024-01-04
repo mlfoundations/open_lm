@@ -57,7 +57,8 @@ def init_distributed_device(args):
     args.world_size = 1
     args.rank = 0  # global rank
     args.local_rank = 0
-    if is_using_distributed():
+    # For testing, allow forcing distributed mode to test distributed code path even on one gpu.
+    if is_using_distributed() or args.force_distributed:
         if "SLURM_PROCID" in os.environ:
             # DDP via SLURM
             args.local_rank, args.rank, args.world_size = world_info_from_env()

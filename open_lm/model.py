@@ -4,16 +4,17 @@ import re
 from copy import deepcopy
 from pathlib import Path
 from dataclasses import dataclass
+from typing import Callable
 
 import torch
 from torch import nn
 from torch.utils.checkpoint import checkpoint
-from torch.nn import functional as F
 
 import xformers.ops as xops
 
 from huggingface_hub import PyTorchModelHubMixin
 
+from open_lm.attention import get_attn_func, xformers_attn, torch_attn
 from open_lm.norms import get_norm_class
 from open_lm.positional_embedding.head_rotary import HeadRotaryWithCast
 from open_lm.positional_embedding.rotary import RotaryWithCast
@@ -86,6 +87,7 @@ class Params:
     post_embed_norm: bool = False
     weight_tying: bool = False
     norm_type: nn.Module = nn.LayerNorm
+    attn_func: Callable = xformers_attn if torch.cuda.is_available() else torch_attn
     apply_qk_norm: bool = False
     moe_loss_weight: float = 0.1
     moe_capacity_factor: float = 1.25
@@ -96,71 +98,6 @@ class Params:
     moe_freq: int = 0
     positional_embedding_type: str = "rotary"
     ffn_type: str = "swiglu"
-
-
-def get_rectangular_mask(shape, q_seq_len, k_seq_len, device, dtype):
-    # xformers requires the mask to be built with a shape that is a multiple of 8
-    # probably because of the way it is implemented in CUDA
-    next_multiple_8 = (k_seq_len + 7) // 8 * 8  #
-    mask = torch.ones((q_seq_len, next_multiple_8), device=device, dtype=bool)
-    mask[:, -q_seq_len:] = torch.tril(mask[:, -q_seq_len:], diagonal=0)
-    return torch.zeros((*shape, q_seq_len, next_multiple_8), device=device, dtype=dtype).masked_fill(
-        ~mask, float("-inf")
-    )[:, :, :, :k_seq_len]
-
-
-def xformers_attn(queries, keys, values, is_causal):
-    # xformers assumes q, k, v are [batch, seq_len, heads, embed_dim]
-    # We assume that queries match the last part of the key / value sequences
-    # see (https://facebookresearch.github.io/xformers/components/ops.html#xformers.ops.fmha.attn_bias.LowerTriangularFromBottomRightMask)
-    # we would like to replace the mask generation with: mask = xops.fmha.attn_bias.LowerTriangularFromBottomRightMask()
-    # sadly we cannot us this because it needs xformers>=0.0.23 and this is not compatible with torch<2.1.1 while llm-foundry requires torch<2.1.1
-
-    mask = None
-    # If queries have shape [batch, 1, heads, dim] it means there is only one query in the sequence.
-    # In this case, there is no notion of causal masking, so we can just set the mask to None.
-    # This is actually needed to get the desired behavior with seq_len=1.
-    if is_causal and queries.shape[1] == keys.shape[1]:
-        mask = xops.LowerTriangularMask()
-    elif is_causal and queries.shape[1] > 1:
-        # Build causal mask that assumes queries are in the end of the sequence.
-        batch, q_seq_len, heads, _ = queries.shape
-        k_seq_len = keys.shape[1]
-        mask = get_rectangular_mask((batch, heads), q_seq_len, k_seq_len, queries.device, queries.dtype)
-    return xops.memory_efficient_attention(queries, keys, values, attn_bias=mask)
-
-
-def torch_attn(queries, keys, values, is_causal):
-    # Need to call contiguous in torch >=2.1, otherwise later calls to .view() fail.
-    # Possibly related: https://github.com/pytorch/pytorch/issues/110213 - behavior of scaled_dot_product_attention
-    # changed between 2.0 and 2.1
-    if is_causal and keys.shape[1] > queries.shape[1] > 1:
-        q_seq_len = queries.shape[1]
-        k_seq_len = keys.shape[1]
-        # Same as above, we would like to use:
-        # mask = xops.fmha.attn_bias.LowerTriangularFromBottomRightMask().materialize((1, 1, q_seq_len, k_seq_len), queries.dtype, queries.device)
-        mask = get_rectangular_mask((1, 1), q_seq_len, k_seq_len, queries.device, queries.dtype)
-        return (
-            F.scaled_dot_product_attention(
-                queries.transpose(1, 2), keys.transpose(1, 2), values.transpose(1, 2), attn_mask=mask
-            )
-            .transpose(1, 2)
-            .contiguous()
-        )
-    elif queries.shape[1] == 1:
-        return (
-            F.scaled_dot_product_attention(queries.transpose(1, 2), keys.transpose(1, 2), values.transpose(1, 2))
-            .transpose(1, 2)
-            .contiguous()
-        )
-    else:
-        return (
-            F.scaled_dot_product_attention(
-                queries.transpose(1, 2), keys.transpose(1, 2), values.transpose(1, 2), is_causal=is_causal
-            )
-            .transpose(1, 2)
-            .contiguous()
-        )
 
 
 def get_pos_embed(args: Params):
@@ -445,6 +382,9 @@ def create_params(args):
             post_embed_norm=cfg["post_embed_norm"],
             weight_tying=cfg["weight_tying"],
             norm_type=get_norm_class(cfg.get("model_norm", args.model_norm)),
+            attn_func=get_attn_func(
+                args.attn_name, args.attn_activation, args.attn_seq_scalar, args.attn_seq_scalar_alpha
+            ),
             apply_qk_norm=cfg.get("qk_norm", args.qk_norm),
             positional_embedding_type=cfg.get("positional_embedding_type", args.positional_embedding_type),
             ffn_type=cfg.get("ffn_type", args.ffn_type),

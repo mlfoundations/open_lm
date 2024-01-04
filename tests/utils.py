@@ -222,6 +222,7 @@ def run_model(open_lm, tokenizer, args, wiki_page=None, start_index=None):
         **generate_args,
     )
     output = tokenizer.decode(output[0].cpu().numpy())
+    torch.distributed.destroy_process_group()
     return output
 
 

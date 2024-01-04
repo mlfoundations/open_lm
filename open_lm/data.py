@@ -419,16 +419,16 @@ def get_wds_dataset(args, is_train, epoch=0, floor=True, tokenizer=None, data_ke
                 ]
             )
 
-        map_dict_handler = {"handler": log_and_continue} if args.ignore_parse_errors else {}
+        map_handler = {"handler": log_and_continue} if args.ignore_parse_errors else {}
         batch_size = args.per_gpu_batch_size if is_train else args.per_gpu_val_batch_size
 
         if data_key == "json" or data_key == "json.gz":
             pipeline.extend(
                 [
-                    wds.decode(),
+                    wds.decode(**map_handler),
                     wds.rename(json=data_key),
-                    wds.map_dict(json=partial(preprocess_json, vocab_size=args.vocab_size), **map_dict_handler),
-                    wds.to_tuple("json"),
+                    wds.map_dict(json=partial(preprocess_json, vocab_size=args.vocab_size), **map_handler),
+                    wds.to_tuple("json", **map_handler),
                     wds.select(partial(filter_lt_seqlen, args.seq_len)),
                     wds.batched(batch_size, partial=not is_train),
                 ]
@@ -436,8 +436,8 @@ def get_wds_dataset(args, is_train, epoch=0, floor=True, tokenizer=None, data_ke
         elif data_key == "txt":
             pipeline.extend(
                 [
-                    wds.map_dict(txt=partial(preprocess_txt, vocab_size=args.vocab_size), **map_dict_handler),
-                    wds.to_tuple("txt"),
+                    wds.map_dict(txt=partial(preprocess_txt, vocab_size=args.vocab_size), **map_handler),
+                    wds.to_tuple("txt", **map_handler),
                     wds.select(partial(filter_lt_seqlen, args.seq_len)),
                     wds.batched(batch_size, partial=not is_train),
                 ]
