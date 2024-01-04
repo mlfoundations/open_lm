@@ -496,7 +496,6 @@ def main(args):
     print(f"num cores = {num_cores}")
     if args.ray_address is None:
         ray.init(
-            num_cpus=num_cores,
             runtime_env=runtime_env,
             _temp_dir=args.ray_spill_location,
             dashboard_host=args.ray_dashboard_host,
@@ -504,7 +503,6 @@ def main(args):
     else:
         ray.init(
             args.ray_address,
-            num_cpus=num_cores,
             runtime_env=runtime_env,
             _temp_dir=args.ray_spill_location,
             dashboard_host=args.ray_dashboard_host,
