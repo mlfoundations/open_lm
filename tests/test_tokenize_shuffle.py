@@ -8,6 +8,7 @@ import webdataset as wds
 def run_around_tests():
     yield
     os.system("rm -rf test_output/")
+    os.system("rm -rf test_input/")
     os.system("aws s3 rm --recursive s3://dcnlp-west-test/tokenize_shuffle_test_output/simple/")
 
 
@@ -90,3 +91,27 @@ def test_tokenize_shuffle_s3_write():
 
     assert out[0]["shard"] == "00000001"
     assert out[0]["num_sequences"] == NUM_TOKENS // (content_len + 1)
+
+
+def test_tokenize_shuffle_local_read_local_write():
+    content_len = 2048
+    NUM_TOKENS = 24508089
+    # download a small test json file and store at ./test_input
+    os.system("mkdir test_input")
+    os.system("mkdir test_output")
+    os.system(
+        "wget -O ./test_input/wikipedia_sample.jsonl https://huggingface.co/datasets/togethercomputer/RedPajama-Data-1T-Sample/resolve/main/wikipedia_sample.jsonl"
+    )
+    # run tokenize script
+    exit_value = os.system(
+        f"python open_lm/datapreprocess/ray/tokenize_shuffle.py --input ./test_input --content_key text --seqlen {content_len} --output ./test_output/"
+    )
+    tars = ["test_output/00000001.tar", "test_output/00000002.tar"]
+    total = 0
+    for tar in tars:
+        ds = wds.WebDataset(tar).decode()
+        for x in ds:
+            assert len(x["json.gz"]) == content_len + 1
+            total += len(x["json.gz"])
+    assert total == NUM_TOKENS
+    assert exit_value == 0
