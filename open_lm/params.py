@@ -640,6 +640,11 @@ def parse_args(args):
         default=False,
         help="If True, initialize the model on meta device. This can be useful for loading large models, but is not currently fully tested.",
     )
+    parser.add_argument(
+        "--force-distributed",
+        action="store_true",
+        help="Allow forcing distributed mode even when running on one gpu. Mostly useful for testing.",
+    )
 
     add_model_args(parser)
 

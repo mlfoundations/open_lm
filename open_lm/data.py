@@ -425,7 +425,7 @@ def get_wds_dataset(args, is_train, epoch=0, floor=True, tokenizer=None, data_ke
         if data_key == "json" or data_key == "json.gz":
             pipeline.extend(
                 [
-                    wds.decode(),
+                    wds.decode(**map_handler),
                     wds.rename(json=data_key),
                     wds.map_dict(json=partial(preprocess_json, vocab_size=args.vocab_size), **map_handler),
                     wds.to_tuple("json", **map_handler),

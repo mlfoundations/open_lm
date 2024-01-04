@@ -1,3 +1,4 @@
+import glob
 import argparse
 import collections
 import enum
@@ -40,6 +41,8 @@ from ray.data.datasource import Datasource, ReadTask
 from ray.runtime_context import RuntimeContext
 from tqdm import tqdm
 from transformers import GPTNeoXTokenizerFast
+
+import logging
 
 
 import enum
@@ -293,7 +296,10 @@ def map_write_wds(batch, batch_size, folder, counter):
     bio.seek(0)
     token_count = ray.get(counter.increment_token_count.remote(token_count))
     write_to_location(folder, tar_name, bio)
-    return batch
+
+    return_dict = {"shard": [tar_name.split(".")[0]], "num_sequences": [len(batch["tokens"])]}
+
+    return return_dict
 
 
 def write_to_location(folder, tar_name, bio):
@@ -388,6 +394,29 @@ class GlobalCounter:
         return self.token_count
 
 
+def write_manifest(jsonl_lines, args):
+    "Write manifest to provided output path."
+
+    output_path = os.path.join(args.output.strip("/"), "manifest.jsonl")
+
+    if output_path.startswith("s3://"):
+        # Use boto3 for S3 paths
+        s3_client = boto3.client("s3")
+        jsonl_content = "\n".join(json.dumps(record) for record in jsonl_lines) + "\n"  # Add a newline at the end
+        bucket_name, s3_key = output_path[5:].split("/", 1)
+        response = s3_client.put_object(Bucket=bucket_name, Key=s3_key, Body=jsonl_content)
+        if response["ResponseMetadata"]["HTTPStatusCode"] != 200:
+            logging.warning(
+                "Failed to write manifest. Please manually include manifest by running "
+                "open_lm.utils.make_manifest on the tokenized data."
+            )
+    else:
+        with open(output_path, "w") as f:
+            for item in jsonl_lines:
+                json.dump(item, f)
+                f.write("\n")
+
+
 def main(args):
     parser = argparse.ArgumentParser()
     parser.add_argument("--input", help="input path", type=str, required=True)
@@ -414,9 +443,12 @@ def main(args):
     parser.add_argument("--default_dataset_yaml", type=str, default=(DIR.parent / "metadata" / "rpj_lm_data.yaml"))
 
     args = parser.parse_args(args)
-    Sources, SAMPLING_FREQUENCIES = load_from_yaml(args.default_dataset_yaml)
-    logger.info(f"SOURCES:\n {Sources}")
-    logger.info(f"SAMPLING_FREQUENCIES:\n{SAMPLING_FREQUENCIES}")
+    if args.do_sample:
+        Sources, SAMPLING_FREQUENCIES = load_from_yaml(args.default_dataset_yaml)
+        logger.info(f"SOURCES:\n {Sources}")
+        logger.info(f"SAMPLING_FREQUENCIES:\n{SAMPLING_FREQUENCIES}")
+    else:
+        Sources, SAMPLING_FREQUENCIES = None, None
     # configure remote spilling
     creds = {k: v for k, v in os.environ.items() if k.startswith("AWS")}
     runtime_env = {"env_vars": creds}
@@ -431,6 +463,7 @@ def main(args):
     for inp_folder in input_folders:
         input_paths += glob_files(inp_folder, suffix=".jsonl")
         input_paths += glob_files(inp_folder, suffix=".zst")
+        input_paths += glob_files(inp_folder, suffix=".jsonl.gz")
         input_paths += glob_files(inp_folder, suffix=".tar")
     if args.subset is not None:
         input_paths = input_paths[: args.subset]
@@ -484,7 +517,14 @@ def main(args):
             "counter": counter,
         },
         batch_format="pandas",
-    ).count()
+    )
+
+    # Sort by shard name
+    ds = ds.repartition(1)
+    ds = ds.sort(key="shard")
+    jsonl_lines = ds.take_all()
+    write_manifest(jsonl_lines, args)
+
     end_time = time.time()
     duration = end_time - start_time
     final_token_count = ray.get(counter.increment_token_count.remote(0))
