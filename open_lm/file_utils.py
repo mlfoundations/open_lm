@@ -270,8 +270,13 @@ def log_num_checkpoints(total_steps, args):
             args.world_size,
         )
 
-        shard_ids_per_source = [[Path(url.split("/")[-1]).with_suffix("").name for url in braceexpand.braceexpand(shard_string)] for shard_string in shard_strings_per_source]
-        num_samples_per_shard_per_source = [[manifests[i][shard_id] for shard_id in shard_ids_per_source[i]] for i in range(len(manifests))]
+        shard_ids_per_source = [
+            [Path(url.split("/")[-1]).with_suffix("").name for url in braceexpand.braceexpand(shard_string)]
+            for shard_string in shard_strings_per_source
+        ]
+        num_samples_per_shard_per_source = [
+            [manifests[i][shard_id] for shard_id in shard_ids_per_source[i]] for i in range(len(manifests))
+        ]
 
         num_samples_per_global_worker_per_source = [[0 for _ in range(num_global_workers)] for _ in range(num_sources)]
 
@@ -281,9 +286,12 @@ def log_num_checkpoints(total_steps, args):
         for source_id in range(num_sources):
             for i, elem in enumerate(num_samples_per_shard_per_source[source_id]):
                 num_samples_per_global_worker_per_source[source_id][i % num_global_workers] += elem
-        
+
         # we then find the batches that each worker will produce
-        num_batches_per_global_worker_per_source = [np.array([n // args.global_batch_size for n in nsamples]) for nsamples in num_samples_per_global_worker_per_source]
+        num_batches_per_global_worker_per_source = [
+            np.array([n // args.global_batch_size for n in nsamples])
+            for nsamples in num_samples_per_global_worker_per_source
+        ]
         num_batches_per_global_worker = sum(num_batches_per_global_worker_per_source)
 
         # The way wds.split_by_node and wds.split_by_worker are set up, each global worker in the above sequence
@@ -291,7 +299,7 @@ def log_num_checkpoints(total_steps, args):
         # this means that global_worker_id mod world size is the correct assignment of the worker to a gpu
         num_batches_per_gpu = [0 for _ in range(args.world_size)]
         for worker_id in range(num_global_workers):
-            gpu_id = worker_id % args.world_size 
+            gpu_id = worker_id % args.world_size
             num_batches_per_gpu[gpu_id] += num_batches_per_global_worker[worker_id]
 
         # Each gpu will serve as many batches as it can, and the checkpoint will end when one proc runs out of data.
