@@ -4,7 +4,7 @@ import random
 import os
 import webdataset as wds
 import glob
-from open_lm.model import _MODEL_CONFIGS
+from open_lm.params import _MODEL_CONFIGS
 from open_lm.main import random_seed
 from open_lm.data import get_wds_dataset
 from open_lm.file_utils import (

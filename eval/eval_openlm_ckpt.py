@@ -11,8 +11,7 @@ from llmfoundry.utils.builders import build_icl_evaluators, build_logger
 from omegaconf import OmegaConf as om
 from transformers import GPTNeoXTokenizerFast, LlamaTokenizerFast
 
-from open_lm.model import create_params
-from open_lm.params import add_model_args
+from open_lm.params import add_model_args, create_params
 from open_lm.utils.llm_foundry_wrapper import SimpleComposerOpenLMCausalLM
 from open_lm.utils.transformers.hf_config import OpenLMConfig
 from open_lm.utils.transformers.hf_model import OpenLMforCausalLM

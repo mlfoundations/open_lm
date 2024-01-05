@@ -3,7 +3,7 @@ from typing import List
 
 from transformers import PretrainedConfig
 
-from open_lm.model import Params
+from open_lm.params import Params
 
 
 class OpenLMConfig(PretrainedConfig):

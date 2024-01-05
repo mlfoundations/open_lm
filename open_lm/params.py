@@ -4,6 +4,10 @@ import copy
 import json
 import logging
 import yaml
+import re
+from pathlib import Path
+from dataclasses import dataclass
+from copy import deepcopy
 
 from open_lm.attention import ATTN_ACTIVATIONS, ATTN_SEQ_SCALARS
 
@@ -139,7 +143,7 @@ def check_replacement_type(replacement, original):
     Taken from YACS: https://github.com/rbgirshick/yacs/blob/32d5e4ac300eca6cd3b839097dde39c4017a1070/yacs/config.py#L494
     """
     # The types must match (with some exceptions)
-    if type(original) == type(replacement):
+    if type(original) is type(replacement):
         return True
 
     # If either of them is None, accept the type.
@@ -677,3 +681,129 @@ def parse_args(args):
         ), "attn-activation, attn-seq-scalar, attn-seq-scalar-alpha must be None unless using non-linear-attn"
 
     return args
+
+
+# from openclip
+_MODEL_CONFIG_PATHS = [Path(__file__).parent / "model_configs/"]
+_MODEL_CONFIGS = {}  # directory (model_name: config) of model architecture configs
+
+
+def _natural_key(string_):
+    return [int(s) if s.isdigit() else s for s in re.split(r"(\d+)", string_.lower())]
+
+
+def _rescan_model_configs(model_config_paths=None):
+    global _MODEL_CONFIGS
+
+    config_iter = None
+    if model_config_paths is not None:
+        config_iter = [
+            Path(model_config_paths),
+        ]
+    else:
+        config_iter = _MODEL_CONFIG_PATHS
+
+    config_ext = (".json",)
+    config_files = []
+    for config_path in config_iter:
+        if config_path.is_file() and config_path.suffix in config_ext:
+            config_files.append(Path(config_path))
+        elif config_path.is_dir():
+            for ext in config_ext:
+                config_files.extend(config_path.glob(f"*{ext}"))
+
+    for cf in config_files:
+        with open(cf, "r") as f:
+            model_cfg = json.load(f)
+            _MODEL_CONFIGS[cf.stem] = model_cfg
+
+    _MODEL_CONFIGS = {k: v for k, v in sorted(_MODEL_CONFIGS.items(), key=lambda x: _natural_key(x[0]))}
+
+
+_rescan_model_configs()  # initial populate of model config registry
+
+
+@dataclass
+class AttnParams:
+    name: str = "xformers_attn"
+    activation: str = "softmax"
+    seq_scalar: str = "none"
+    seq_scalar_alpha: float = 1.0
+
+
+# args and default params follow llama (except with LayerNorm instead of RmsNorm)
+@dataclass
+class Params:
+    dim: int = 512
+    n_layers: int = 8
+    n_heads: int = 8
+    vocab_size: int = -1
+    norm_eps: float = 1e-5
+    seq_len: int = 2048
+    post_embed_norm: bool = False
+    weight_tying: bool = False
+    norm_name: str = "default_layer_norm"
+    attn_params: AttnParams = AttnParams()
+    apply_qk_norm: bool = False
+    moe_loss_weight: float = 0.1
+    moe_capacity_factor: float = 1.25
+    moe_expert_model_parallelism: bool = False
+    moe_weight_parallelism: bool = False
+    moe_num_experts: int = 8
+    moe_top_k: int = 2
+    moe_freq: int = 0
+    positional_embedding_type: str = "rotary"
+    ffn_type: str = "swiglu"
+
+
+def create_params(args):
+    cfg = None
+
+    if args.model.endswith(".json"):
+        _rescan_model_configs(model_config_paths=args.model)
+        args.model = Path(args.model).stem
+    if args.model in _MODEL_CONFIGS:
+        cfg = deepcopy(_MODEL_CONFIGS[args.model])
+    else:
+        raise ValueError("Pass a pre-defined open_lm model name or a json config")
+
+    # Note: here all the parameters should come from the config file
+    # but for retro-compatibility, we add new model parameters to the args (with a default value that matches the old version)
+    # These args are managed separately by the argparser
+    # If a parameter is in the model config, regardless of the args, we use the config parameters
+    # If a parameter is not in the model config, we use the args parameter
+
+    if "mamba" in args.model:
+        return {
+            "d_model": cfg["d_model"],
+            "n_layer": cfg["n_layer"],
+            "vocab_size": cfg["vocab_size"],
+            "seq_len": cfg["seq_len"],
+        }
+    else:
+        return Params(
+            dim=cfg["hidden_dim"],
+            n_layers=cfg["n_layers"],
+            n_heads=cfg["n_heads"],
+            seq_len=cfg["seq_len"],
+            vocab_size=cfg["vocab_size"],
+            post_embed_norm=cfg["post_embed_norm"],
+            weight_tying=cfg["weight_tying"],
+            norm_name=cfg.get("model_norm", args.model_norm),
+            attn_params=AttnParams(
+                cfg.get("attn_name", args.attn_name),
+                cfg.get("attn_activation", args.attn_activation),
+                cfg.get("attn_seq_scalar", args.attn_seq_scalar),
+                cfg.get("attn_seq_scalar_alpha", args.attn_seq_scalar_alpha),
+            ),
+            apply_qk_norm=cfg.get("qk_norm", args.qk_norm),
+            positional_embedding_type=cfg.get("positional_embedding_type", args.positional_embedding_type),
+            ffn_type=cfg.get("ffn_type", args.ffn_type),
+            moe_num_experts=cfg.get("moe_num_experts", args.moe_num_experts),
+            moe_loss_weight=cfg.get("moe_loss_weight", args.moe_loss_weight),
+            moe_expert_model_parallelism=cfg.get("moe_expert_model_parallelism", args.moe_expert_model_parallelism),
+            moe_weight_parallelism=cfg.get("moe_weight_parallelism", args.moe_weight_parallelism),
+            moe_capacity_factor=cfg.get("moe_capacity_factor", args.moe_capacity_factor),
+            moe_freq=cfg.get("moe_freq", args.moe_freq),
+            moe_top_k=cfg.get("moe_top_k", args.moe_top_k),
+        )

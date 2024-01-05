@@ -9,7 +9,7 @@ from transformers import GPTNeoXTokenizerFast
 
 from open_lm.utils.transformers.hf_model import OpenLMforCausalLM
 from open_lm.utils.transformers.hf_config import OpenLMConfig
-from open_lm.model import create_params
+from open_lm.params import create_params
 from tests.shared import MockTrainArgs
 from .utils import run_model
 

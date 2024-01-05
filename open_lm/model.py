@@ -1,10 +1,7 @@
 import math
-import json
-import re
+
 from copy import deepcopy
 from pathlib import Path
-from dataclasses import dataclass
-from typing import Callable
 
 import torch
 from torch import nn
@@ -19,6 +16,7 @@ from open_lm.norms import get_norm_class
 from open_lm.positional_embedding.head_rotary import HeadRotaryWithCast
 from open_lm.positional_embedding.rotary import RotaryWithCast
 from open_lm.positional_embedding.llama_rotary import LLaMARotaryWithCast
+from open_lm.params import Params, create_params
 
 
 # from open_lm.moe.mixture_of_experts import MoE
@@ -34,70 +32,6 @@ try:  # optional import
     from mamba_ssm import MambaLMHeadModel
 except ImportError:
     MambaLMHeadModel = None
-
-# from openclip
-_MODEL_CONFIG_PATHS = [Path(__file__).parent / f"model_configs/"]
-_MODEL_CONFIGS = {}  # directory (model_name: config) of model architecture configs
-
-
-def _natural_key(string_):
-    return [int(s) if s.isdigit() else s for s in re.split(r"(\d+)", string_.lower())]
-
-
-def _rescan_model_configs(model_config_paths=None):
-    global _MODEL_CONFIGS
-
-    config_iter = None
-    if model_config_paths is not None:
-        config_iter = [
-            Path(model_config_paths),
-        ]
-    else:
-        config_iter = _MODEL_CONFIG_PATHS
-
-    config_ext = (".json",)
-    config_files = []
-    for config_path in config_iter:
-        if config_path.is_file() and config_path.suffix in config_ext:
-            config_files.append(Path(config_path))
-        elif config_path.is_dir():
-            for ext in config_ext:
-                config_files.extend(config_path.glob(f"*{ext}"))
-
-    for cf in config_files:
-        with open(cf, "r") as f:
-            model_cfg = json.load(f)
-            _MODEL_CONFIGS[cf.stem] = model_cfg
-
-    _MODEL_CONFIGS = {k: v for k, v in sorted(_MODEL_CONFIGS.items(), key=lambda x: _natural_key(x[0]))}
-
-
-_rescan_model_configs()  # initial populate of model config registry
-
-
-# args and default params follow llama (except with LayerNorm instead of RmsNorm)
-@dataclass
-class Params:
-    dim: int = 512
-    n_layers: int = 8
-    n_heads: int = 8
-    vocab_size: int = -1
-    norm_eps: float = 1e-5
-    seq_len: int = 2048
-    post_embed_norm: bool = False
-    weight_tying: bool = False
-    norm_type: nn.Module = nn.LayerNorm
-    attn_func: Callable = xformers_attn if torch.cuda.is_available() else torch_attn
-    apply_qk_norm: bool = False
-    moe_loss_weight: float = 0.1
-    moe_capacity_factor: float = 1.25
-    moe_expert_model_parallelism: bool = False
-    moe_weight_parallelism: bool = False
-    moe_num_experts: int = 8
-    moe_top_k: int = 2
-    moe_freq: int = 0
-    positional_embedding_type: str = "rotary"
-    ffn_type: str = "swiglu"
 
 
 def get_pos_embed(args: Params):
@@ -120,12 +54,18 @@ class CustomAttn(nn.Module):
         self.in_proj = nn.Linear(args.dim, 3 * args.n_heads * self.head_dim, bias=False)
         self.out_proj = nn.Linear(args.n_heads * self.head_dim, args.dim, bias=False)
         self.pos_embed = get_pos_embed(args)
-        self.attn_fn = xformers_attn if torch.cuda.is_available() else torch_attn
+        self.attn_fn = get_attn_func(
+            args.attn_params.name,
+            args.attn_params.activation,
+            args.attn_params.seq_scalar,
+            args.attn_params.seq_scalar_alpha,
+        )
         self.apply_qk_norm = args.apply_qk_norm
 
         # initialize norm layers for queries and keys if needed
+        NormClass = get_norm_class(args.norm_name)
         self.q_norm = (
-            args.norm_type(
+            NormClass(
                 args.n_heads * self.head_dim,
                 eps=args.norm_eps,
             )
@@ -133,7 +73,7 @@ class CustomAttn(nn.Module):
             else nn.Identity()
         )
         self.k_norm = (
-            args.norm_type(
+            NormClass(
                 args.n_heads * self.head_dim,
                 eps=args.norm_eps,
             )
@@ -222,11 +162,12 @@ class Block(nn.Module):
             self.feed_forward = MoE(moe_args)
 
         self.layer_id = layer_id
-        self.attention_norm = args.norm_type(
+        NormClass = get_norm_class(args.norm_name)
+        self.attention_norm = NormClass(
             args.dim,
             eps=args.norm_eps,
         )
-        self.ffn_norm = args.norm_type(
+        self.ffn_norm = NormClass(
             args.dim,
             eps=args.norm_eps,
         )
@@ -276,8 +217,9 @@ class Transformer(nn.Module, PyTorchModelHubMixin):
         self.n_layers = params.n_layers
         self.moe_num_experts = params.moe_num_experts
         self.seq_len = params.seq_len
+        NormClass = get_norm_class(params.norm_name)
         self.post_embed_norm = (
-            params.norm_type(
+            NormClass(
                 params.dim,
                 eps=params.norm_eps,
             )
@@ -298,7 +240,7 @@ class Transformer(nn.Module, PyTorchModelHubMixin):
             self.layers.append(Block(layer_id, params))
 
         # get class for normalization layers
-        self.norm = params.norm_type(
+        self.norm = NormClass(
             params.dim,
             eps=params.norm_eps,
         )
@@ -345,57 +287,6 @@ class Transformer(nn.Module, PyTorchModelHubMixin):
 
     def get_output_embeddings(self):
         return self.output
-
-
-def create_params(args):
-    cfg = None
-
-    if args.model.endswith(".json"):
-        _rescan_model_configs(model_config_paths=args.model)
-        args.model = Path(args.model).stem
-
-    if args.model in _MODEL_CONFIGS:
-        cfg = deepcopy(_MODEL_CONFIGS[args.model])
-    else:
-        raise ValueError("Pass a pre-defined open_lm model name or a json config")
-
-    # Note: here all the parameters should come from the config file
-    # but for retro-compatibility, we add new model parameters to the args (with a default value that matches the old version)
-    # These args are managed separately by the argparser
-    # If a parameter is in the model config, regardless of the args, we use the config parameters
-    # If a parameter is not in the model config, we use the args parameter
-
-    if "mamba" in args.model:
-        return {
-            "d_model": cfg["d_model"],
-            "n_layer": cfg["n_layer"],
-            "vocab_size": cfg["vocab_size"],
-            "seq_len": cfg["seq_len"],
-        }
-    else:
-        return Params(
-            dim=cfg["hidden_dim"],
-            n_layers=cfg["n_layers"],
-            n_heads=cfg["n_heads"],
-            seq_len=cfg["seq_len"],
-            vocab_size=cfg["vocab_size"],
-            post_embed_norm=cfg["post_embed_norm"],
-            weight_tying=cfg["weight_tying"],
-            norm_type=get_norm_class(cfg.get("model_norm", args.model_norm)),
-            attn_func=get_attn_func(
-                args.attn_name, args.attn_activation, args.attn_seq_scalar, args.attn_seq_scalar_alpha
-            ),
-            apply_qk_norm=cfg.get("qk_norm", args.qk_norm),
-            positional_embedding_type=cfg.get("positional_embedding_type", args.positional_embedding_type),
-            ffn_type=cfg.get("ffn_type", args.ffn_type),
-            moe_num_experts=cfg.get("moe_num_experts", args.moe_num_experts),
-            moe_loss_weight=cfg.get("moe_loss_weight", args.moe_loss_weight),
-            moe_expert_model_parallelism=cfg.get("moe_expert_model_parallelism", args.moe_expert_model_parallelism),
-            moe_weight_parallelism=cfg.get("moe_weight_parallelism", args.moe_weight_parallelism),
-            moe_capacity_factor=cfg.get("moe_capacity_factor", args.moe_capacity_factor),
-            moe_freq=cfg.get("moe_freq", args.moe_freq),
-            moe_top_k=cfg.get("moe_top_k", args.moe_top_k),
-        )
 
 
 class Mamba(nn.Module):
