@@ -9,13 +9,17 @@ import sys
 import time
 from itertools import cycle, islice
 
+import braceexpand
 import fsspec
 import numpy as np
 import torch
+import webdataset as wds
 
+from pathlib import Path
 from typing import List, Optional
 from tqdm import tqdm
 
+from open_lm.data import detshuffle2
 from open_lm.distributed import is_master
 
 
@@ -133,6 +137,16 @@ def get_metadata_file(path):
     return out
 
 
+def convert_metadata_to_dict(manifest):
+    manifest_dict = {}
+    for m in manifest:
+        try:
+            manifest_dict[m["shard"]] = m["num_sequences"]
+        except:
+            manifest_dict[m["shard"]] = m["num_chunks"]
+    return manifest_dict
+
+
 def get_shards_for_chunk(num_samples, chunk, path):
     """Function to get a chunk of shards to train on.
 
@@ -232,16 +246,22 @@ def log_num_checkpoints(total_steps, args):
     number is different than expected.
     """
 
+    assert args.dataset_manifest is not None, "log_num_checkpoints is needed only in the sampling w/o replacement case."
+
     steps_done = 0
     tokens_seen = 0
-    next_shard_per_source = [0 for _ in range(len(args.dataset_manifest))] if args.dataset_manifest is not None else 0
+    next_shard_per_source = [0 for _ in range(len(args.dataset_manifest))]
+    manifests = [get_metadata_file(m) for m in args.dataset_manifest]
+    manifests = [convert_metadata_to_dict(m) for m in manifests]
+    num_sources = len(manifests)
+    num_global_workers = args.world_size * args.workers
     checkpoints_made = 0
 
     if is_master(args):
         logging.info("Precounting number of steps / tokens seen per checkpoint:")
 
     while steps_done < total_steps:
-        _, num_samples_per_source, next_shard_per_source = get_string_for_epoch(
+        shard_strings_per_source, _, next_shard_per_source = get_string_for_epoch(
             args.train_num_samples,
             next_shard_per_source,
             args.dataset_manifest,
@@ -249,9 +269,34 @@ def log_num_checkpoints(total_steps, args):
             args.workers,
             args.world_size,
         )
-        steps_epoch = sum(
-            [(n // (args.workers * args.global_batch_size)) * args.workers for n in num_samples_per_source]
-        )
+
+        shard_ids_per_source = [[Path(url.split("/")[-1]).with_suffix("").name for url in braceexpand.braceexpand(shard_string)] for shard_string in shard_strings_per_source]
+        num_samples_per_shard_per_source = [[manifests[i][shard_id] for shard_id in shard_ids_per_source[i]] for i in range(len(manifests))]
+
+        num_samples_per_global_worker_per_source = [[0 for _ in range(num_global_workers)] for _ in range(num_sources)]
+
+        # wds.split_by_node and wds.split_by_worker work in conjunction by assigning tars to global workers
+        # we can simulate this by first computing the samples that will be seen per source and per global worker
+
+        for source_id in range(num_sources):
+            for i, elem in enumerate(num_samples_per_shard_per_source[source_id]):
+                num_samples_per_global_worker_per_source[source_id][i % num_global_workers] += elem
+        
+        # we then find the batches that each worker will produce
+        num_batches_per_global_worker_per_source = [np.array([n // args.global_batch_size for n in nsamples]) for nsamples in num_samples_per_global_worker_per_source]
+        num_batches_per_global_worker = sum(num_batches_per_global_worker_per_source)
+
+        # The way wds.split_by_node and wds.split_by_worker are set up, each global worker in the above sequence
+        # is indexed by its local worker id and its gpu proc id, WITH THE SECOND CHANGING FASTER
+        # this means that global_worker_id mod world size is the correct assignment of the worker to a gpu
+        num_batches_per_gpu = [0 for _ in range(args.world_size)]
+        for worker_id in range(num_global_workers):
+            gpu_id = worker_id % args.world_size 
+            num_batches_per_gpu[gpu_id] += num_batches_per_global_worker[worker_id]
+
+        # Each gpu will serve as many batches as it can, and the checkpoint will end when one proc runs out of data.
+        steps_epoch = min(num_batches_per_gpu)
+
         steps_done += steps_epoch
         if steps_done > total_steps:
             steps_done = total_steps
