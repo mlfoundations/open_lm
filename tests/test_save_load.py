@@ -135,7 +135,7 @@ def tiny_save_load_different_seed(tiny_args, fsdp=False):
         save_logs=True,
         distributed=fsdp or is_using_distributed(),
         force_distributed=fsdp or is_using_distributed(),
-        seed=0
+        seed=0,
     )
 
     try:
@@ -189,8 +189,14 @@ def tiny_save_load_different_seed(tiny_args, fsdp=False):
         args.resume = f"{override_params['checkpoint_path']}/epoch_1.pt"
         args.seed = 42
         load_model(args, model2)
+        raise RuntimeError(
+            "This checkpoint resuming should have failed due to different seeds, but the model resumed normally."
+        )
     except AssertionError as e:
-        assert str(e) == "This checkpoint was trained with a random seed of 0. Since this seed affects shard shuffling, resuming training must use the same seed."
+        assert (
+            str(e)
+            == "This checkpoint was trained with a random seed of 0. Since this seed affects shard shuffling, resuming training must use the same seed."
+        )
     finally:
         shutil.rmtree(override_params["checkpoint_path"], ignore_errors=True)
 
@@ -215,6 +221,7 @@ def test_tiny_save_load_fsdp(tiny_args):
 
 def test_tiny_save_load(tiny_args):
     tiny_save_load(tiny_args, fsdp=False)
+
 
 def test_fail_if_different_seed(tiny_args):
     tiny_save_load_different_seed(tiny_args, fsdp=False)
