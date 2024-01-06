@@ -156,3 +156,21 @@ def test_gsfe_ss_6():
     assert shards_ps == expected_shards_ps
     assert expected_nums_ps == nums_ps
     assert expected_next_ps == next_ps
+
+
+@pytest.mark.parametrize("seed", [0, 17, 42])
+def test_shard_shuffling(seed):
+    """Test whether shard shuffling is deterministic, given a seed."""
+
+    download_dl_test_data()
+    make_fake_tarfiles()
+
+    shards_ps_1, _, _ = get_string_for_epoch(
+        150, [0], SINGLE_SOURCE, None, num_workers_per_gpu=1, world_size=1, multi_epoch=False, shard_shuffle_seed=seed
+    )
+
+    shards_ps_2, _, _ = get_string_for_epoch(
+        150, [0], SINGLE_SOURCE, None, num_workers_per_gpu=1, world_size=1, multi_epoch=False, shard_shuffle_seed=seed
+    )
+
+    assert shards_ps_1 == shards_ps_2
