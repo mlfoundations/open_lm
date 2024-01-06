@@ -183,6 +183,7 @@ def tiny_save_load_different_seed(tiny_args, fsdp=False):
             is_final_checkpoint=done_training,
             next_shard_per_source=None,
             samples_seen=None,
+            shard_shuffle_seed=args.seed,
         )
 
         # Loading saved tiny model - this should fail because the seed also changes
