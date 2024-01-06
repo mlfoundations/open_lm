@@ -289,7 +289,7 @@ def log_num_checkpoints(total_steps, args):
 
         # we then find the batches that each worker will produce
         num_batches_per_global_worker_per_source = [
-            np.array([n // args.global_batch_size for n in nsamples])
+            np.array([n // args.per_gpu_batch_size for n in nsamples])
             for nsamples in num_samples_per_global_worker_per_source
         ]
         num_batches_per_global_worker = sum(num_batches_per_global_worker_per_source)
