@@ -104,9 +104,13 @@ def load_model(args, model):
     if "epoch" in checkpoint:
         if "shard_shuffle_seed" in checkpoint:
             pretrained_seed = checkpoint["shard_shuffle_seed"]
-            assert pretrained_seed == args.seed, f"This checkpoint was trained with a random seed of {pretrained_seed}. Since this seed affects shard shuffling, resuming training must use the same seed."
+            assert (
+                pretrained_seed == args.seed
+            ), f"This checkpoint was trained with a random seed of {pretrained_seed}. Since this seed affects shard shuffling, resuming training must use the same seed."
         else:
-            logging.info("Resuming a checkpoint that does not have a seed saved. This means that the shards were not shuffled, so they will remain unshuffled.")
+            logging.info(
+                "Resuming a checkpoint that does not have a seed saved. This means that the shards were not shuffled, so they will remain unshuffled."
+            )
             pretrained_seed = None
 
         # resuming a train checkpoint w/ epoch and optimizer state
@@ -734,7 +738,7 @@ def main(args):
                 args.train_data_mix_weights,
                 args.workers,
                 args.world_size,
-                shard_shuffle_seed
+                shard_shuffle_seed,
             )
 
             if data["train"] is not None:
@@ -807,7 +811,7 @@ def main(args):
             is_final_checkpoint=done_training,
             next_shard_per_source=next_shard_per_source if args.dataset_manifest is not None else None,
             samples_seen=samples_seen if args.dataset_manifest is not None else None,
-            shard_shuffle_seed=shard_shuffle_seed
+            shard_shuffle_seed=shard_shuffle_seed,
         )
 
         if done_training:

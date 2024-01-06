@@ -251,7 +251,7 @@ def log_num_checkpoints(total_steps, args, shard_shuffle_seed):
             args.train_data_mix_weights,
             args.workers,
             args.world_size,
-            shard_shuffle_seed
+            shard_shuffle_seed,
         )
         steps_epoch = sum(
             [(n // (args.workers * args.global_batch_size)) * args.workers for n in num_samples_per_source]
@@ -295,7 +295,9 @@ def get_string_for_epoch(
     if multi_epoch:
         raise NotImplementedError("Multiple passes over the dataset not fully supported yet.")
     else:
-        return _single_epoch_string(num_samples, starting_points, paths, weights, num_workers_per_gpu, world_size, shard_shuffle_seed)
+        return _single_epoch_string(
+            num_samples, starting_points, paths, weights, num_workers_per_gpu, world_size, shard_shuffle_seed
+        )
 
 
 def _multi_epoch_string(num_samples, starting_chunk, paths, weights, min_shards_needed):
@@ -349,7 +351,7 @@ def _single_epoch_string(
     weights: Optional[List[float]],
     num_workers_per_gpu: int,
     world_size: int,
-    shard_shuffle_seed: Optional[int]
+    shard_shuffle_seed: Optional[int],
 ):
     """Retrieve shards to train on for a particular checkpoint.
 
