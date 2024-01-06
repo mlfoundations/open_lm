@@ -143,7 +143,7 @@ def get_shards_for_chunk(num_samples, chunk, path, shard_shuffle_seed):
     metadata = get_metadata_file(path)
     if shard_shuffle_seed is not None:
         rng_gen = np.random.default_rng(shard_shuffle_seed)
-        metadata = rng_gen.shuffle(metadata)
+        rng_gen.shuffle(metadata)
     shard_list = []
     curr_shard_list = []
     chunk_count_list = []
@@ -400,8 +400,14 @@ def _single_epoch_string(
 
     manifests = [get_metadata_file(path) for path in paths]
     if shard_shuffle_seed is not None:
+        # Not the most efficient but probably the safest since shuffling is done inplace
         rng_gen = np.random.default_rng(shard_shuffle_seed)
-        manifests = [rng_gen.shuffle(m) for m in manifests]
+        new_manifests = []
+        for m in manifests:
+            nm = copy.deepcopy(m)
+            rng_gen.shuffle(nm)
+            new_manifests.append(nm)
+        manifests = new_manifests
     shard_strings_per_source = []
     next_shard_per_source = copy.deepcopy(starting_shard_per_source)
     shard_list_per_source = [[] for _ in range(num_sources)]

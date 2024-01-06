@@ -738,7 +738,7 @@ def main(args):
                 args.train_data_mix_weights,
                 args.workers,
                 args.world_size,
-                shard_shuffle_seed,
+                shard_shuffle_seed=shard_shuffle_seed,
             )
 
             if data["train"] is not None:
