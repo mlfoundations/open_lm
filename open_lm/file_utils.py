@@ -125,11 +125,14 @@ def check_exists(file_path):
     return True
 
 
-def get_metadata_file(path):
+def get_metadata_file(path, shard_shuffle_seed=None):
     of = fsspec.open(path, "rb")
     with of as f:
         out = f.read()
     out = [json.loads(o) for o in out.decode("utf-8").split("\n")[:-1]]
+    if shard_shuffle_seed is not None:
+        rng_gen = np.random.default_rng(shard_shuffle_seed)
+        rng_gen.shuffle(out)
     return out
 
 
@@ -140,10 +143,7 @@ def get_shards_for_chunk(num_samples, chunk, path, shard_shuffle_seed):
     that will be seen during training. This function uses the dataset manifest
     to split the shards into chunks, and assign shards to each chunk.
     """
-    metadata = get_metadata_file(path)
-    if shard_shuffle_seed is not None:
-        rng_gen = np.random.default_rng(shard_shuffle_seed)
-        rng_gen.shuffle(metadata)
+    metadata = get_metadata_file(path, shard_shuffle_seed=shard_shuffle_seed)
     shard_list = []
     curr_shard_list = []
     chunk_count_list = []
@@ -398,16 +398,8 @@ def _single_epoch_string(
 
     needed_samples_per_source = [int(np.ceil(weights[i] * num_samples / sum(weights))) for i in range(num_sources)]
 
-    manifests = [get_metadata_file(path) for path in paths]
-    if shard_shuffle_seed is not None:
-        # Not the most efficient but probably the safest since shuffling is done inplace
-        rng_gen = np.random.default_rng(shard_shuffle_seed)
-        new_manifests = []
-        for m in manifests:
-            nm = copy.deepcopy(m)
-            rng_gen.shuffle(nm)
-            new_manifests.append(nm)
-        manifests = new_manifests
+    manifests = [get_metadata_file(path, shard_shuffle_seed=shard_shuffle_seed) for path in paths]
+    
     shard_strings_per_source = []
     next_shard_per_source = copy.deepcopy(starting_shard_per_source)
     shard_list_per_source = [[] for _ in range(num_sources)]
