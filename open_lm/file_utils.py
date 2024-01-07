@@ -251,7 +251,7 @@ def log_num_checkpoints(total_steps, args, shard_shuffle_seed):
             args.train_data_mix_weights,
             args.workers,
             args.world_size,
-            shard_shuffle_seed,
+            shard_shuffle_seed=shard_shuffle_seed,
         )
         steps_epoch = sum(
             [(n // (args.workers * args.global_batch_size)) * args.workers for n in num_samples_per_source]
