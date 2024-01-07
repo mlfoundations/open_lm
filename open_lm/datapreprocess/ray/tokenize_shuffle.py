@@ -514,7 +514,6 @@ def main(args):
         input_paths += glob_files(inp_folder, suffix=".json")
         input_paths += glob_files(inp_folder, suffix=".jsonl")
         input_paths += glob_files(inp_folder, suffix=".zst")
-        input_paths += glob_files(inp_folder, suffix=".jsonl.gz")
         input_paths += glob_files(inp_folder, suffix=".tar")
         input_paths += glob_files(inp_folder, suffix=".gz")
     rng = random.Random(args.seed)
