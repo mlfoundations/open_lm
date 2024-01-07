@@ -73,7 +73,7 @@ def test_training_deterministic():
         "--model",
         "open_lm_test_tiny",
         "--dataset-manifest",
-        "tests/assets/source_1/manifest.jsonl",
+        "tests/assets/source_seq_len_16/manifest.jsonl",
         "--logs",
         logdir,
         "--seed",
