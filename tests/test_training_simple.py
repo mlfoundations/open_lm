@@ -1,4 +1,4 @@
-from open_lm.main import main, train_one_epoch
+from open_lm.main import main, train_one_epoch, load_model
 import shutil
 import pytest
 import numpy as np
@@ -6,6 +6,9 @@ from tensorboard.backend.event_processing import event_accumulator
 import pandas as pd
 import glob
 import os
+import torch
+from tests.shared import create_train_fixtures
+from tests.utils import download_dl_test_data
 
 
 LOG_PATH = "./logs/test_logs/test_lr_scheduling_from_main/"
@@ -49,6 +52,49 @@ def test_train_simple():
 
     ])
     # fmt: on
+
+
+# ==============================================================
+# =             Resuming + Determinism Tests                    =
+# ==============================================================
+
+
+def test_training_deterministic():
+    download_dl_test_data()
+    name1 = "test_training_deterministic_test1"
+    name2 = "test_training_deterministic_test2"
+
+    logdir = "tests/assets/"
+    args = [
+        "--train-num-samples", 64 * 16,  # seq_len is 16 for open_lm_test_tiny
+        "--global-batch-size", 4,
+        "--model", "open_lm_test_tiny",
+        "--dataset-manifest", "tests/assets/source_1/manifest.jsonl",
+        "--logs", logdir,
+        "--seed", 42
+    ]
+    args = [str(x) for x in args]
+
+    try:
+        # Train for one epoch each model, with the same seed.
+        # Make sure that the models are the same.
+        main(args + ["--name", name1, "--epochs", "1"])
+        main(args + ["--name", name2, "--epochs", "1"])
+
+        args, model, _, _, _, _ = create_train_fixtures("open_lm_test_tiny")
+        model = model.to(args.device)
+        args2, model2, _, _, _, _ = create_train_fixtures("open_lm_test_tiny")
+        model2 = model2.to(args2.device)
+
+        load_model(args, model)
+        load_model(args2, model2)
+
+        for (n1, p1), (n2, p2) in zip(model.named_parameters(), model2.named_parameters()):
+            assert torch.allclose(p1, p2, atol=1e-6)
+
+    finally:
+        shutil.rmtree(f"{logdir}{name1}", ignore_errors=True)
+        shutil.rmtree(f"{logdir}{name2}", ignore_errors=True)
 
 
 # =============================================================
