@@ -103,7 +103,7 @@ def _pt_load_s3_cp(file_path, map_location=None):
     stdout, stderr = proc.communicate()
     if proc.returncode != 0:
         raise Exception(f"Failed to fetch model from s3. stderr: {stderr.decode()}")
-    return torch.load(io.BytesIO(stdout), map_location=map_location)
+    return torch.load(io.BytesIO(stdout), map_location=map_location, mmap=True)
 
 
 def pt_load(file_path, map_location=None):
@@ -112,7 +112,7 @@ def pt_load(file_path, map_location=None):
         return _pt_load_s3_cp(file_path, map_location)
     of = fsspec.open(file_path, "rb")
     with of as f:
-        out = torch.load(f, map_location=map_location)
+        out = torch.load(f, map_location=map_location, mmap=True)
     return out
 
 
