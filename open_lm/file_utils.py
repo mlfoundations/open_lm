@@ -98,12 +98,16 @@ def pt_save(pt_obj, file_path):
 
 
 def _pt_load_s3_cp(file_path, map_location=None):
-    cmd = f"aws s3 cp {file_path} -"
+    import uuid
+    tmp_file = uuid.uuid4().hex + ".pt"
+    # cmd = f"aws s3 cp {file_path} -"
+    cmd = f"aws s3 cp {file_path} {tmp_file}"
     proc = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     stdout, stderr = proc.communicate()
     if proc.returncode != 0:
         raise Exception(f"Failed to fetch model from s3. stderr: {stderr.decode()}")
-    return torch.load(io.BytesIO(stdout), map_location=map_location, mmap=True)
+    # return torch.load(io.BytesIO(stdout), map_location=map_location, mmap=True)
+    return torch.load(tmp_file, map_location=map_location, mmap=True)
 
 
 def pt_load(file_path, map_location=None):
