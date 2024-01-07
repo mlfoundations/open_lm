@@ -1,4 +1,5 @@
 from open_lm.main import main, train_one_epoch, load_model
+from open_lm.params import parse_args
 import shutil
 import pytest
 import numpy as np
@@ -7,6 +8,7 @@ import pandas as pd
 import glob
 import os
 import torch
+import copy
 from tests.shared import create_train_fixtures
 from tests.utils import download_dl_test_data
 
@@ -67,9 +69,11 @@ def test_training_deterministic():
     logdir = "tests/assets/"
     args = [
         "--train-num-samples",
-        64 * 16,  # seq_len is 16 for open_lm_test_tiny
+        150 * 16,  # seq_len is 16 for open_lm_test_tiny
         "--global-batch-size",
         4,
+        "--workers",
+        1,
         "--model",
         "open_lm_test_tiny",
         "--dataset-manifest",
@@ -80,6 +84,65 @@ def test_training_deterministic():
         42,
         "--data-key",
         "json",
+        "--model-norm",
+        "gain_only_layer_norm",
+    ]
+    args = [str(x) for x in args]
+    args2 = copy.deepcopy(args)
+
+    try:
+        # Train for one epoch each model, with the same seed.
+        # Make sure that the models are the same.
+        main(args + ["--name", name1, "--epochs", "2"])
+        main(args + ["--name", name2, "--epochs", "2"])
+
+        _, model, _, _, _, _ = create_train_fixtures("open_lm_test_tiny")
+        _, model2, _, _, _, _ = create_train_fixtures("open_lm_test_tiny")
+
+        args = parse_args(args)
+        args.resume = f"{logdir}{name1}/checkpoints/epoch_1.pt"
+        args.seed = 42
+        args.distributed = False
+        load_model(args, model)
+        args2 = parse_args(args2)
+        args2.resume = f"{logdir}{name2}/checkpoints/epoch_1.pt"
+        args2.seed = 42
+        args2.distributed = False
+        load_model(args2, model2)
+
+        for (n1, p1), (n2, p2) in zip(model.named_parameters(), model2.named_parameters()):
+            assert torch.allclose(p1, p2, atol=1e-6)
+
+    finally:
+        shutil.rmtree(f"{logdir}{name1}", ignore_errors=True)
+        shutil.rmtree(f"{logdir}{name2}", ignore_errors=True)
+
+
+def test_good_resume_shard_shuffle():
+    download_dl_test_data()
+    name1 = "test_good_resume_test1"
+    name2 = "test_good_resume_test2"
+
+    logdir = "tests/assets/"
+    args = [
+        "--train-num-samples",
+        150 * 16,  # seq_len is 16 for open_lm_test_tiny
+        "--global-batch-size",
+        4,
+        "--workers",
+        1,
+        "--model",
+        "open_lm_test_tiny",
+        "--dataset-manifest",
+        "tests/assets/source_seq_len_16/manifest.jsonl",
+        "--logs",
+        logdir,
+        "--seed",
+        42,
+        "--data-key",
+        "json",
+        "--model-norm",
+        "gain_only_layer_norm",
     ]
     args = [str(x) for x in args]
 
@@ -87,18 +150,25 @@ def test_training_deterministic():
         # Train for one epoch each model, with the same seed.
         # Make sure that the models are the same.
         main(args + ["--name", name1, "--epochs", "1"])
-        main(args + ["--name", name2, "--epochs", "1"])
+        main(args + ["--name", name1, "--epochs", "2", "--resume", "latest"])
+        main(args + ["--name", name2, "--epochs", "2"])
 
-        args, model, _, _, _, _ = create_train_fixtures("open_lm_test_tiny")
-        model = model.to(args.device)
-        args2, model2, _, _, _, _ = create_train_fixtures("open_lm_test_tiny")
-        model2 = model2.to(args2.device)
+        logfile1 = f"{logdir}{name1}/out.log"
+        with open(logfile1, "r") as f:
+            lines1 = f.read()
+        lines1 = lines1.splitlines()
 
-        load_model(args, model)
-        load_model(args2, model2)
+        logfile2 = f"{logdir}{name2}/out.log"
+        with open(logfile2, "r") as f:
+            lines2 = f.read()
+        lines2 = lines2.splitlines()
 
-        for (n1, p1), (n2, p2) in zip(model.named_parameters(), model2.named_parameters()):
-            assert torch.allclose(p1, p2, atol=1e-6)
+        # Make sure that the same set of shards was chosen in each setting, regardless of resuming
+        for t in range(2):
+            splitting_str = f"=> epoch {t}, training on"  # Shard ids are printed after this.
+            choice1 = [x.split(splitting_str)[1] for x in lines1 if splitting_str in x][0]
+            choice2 = [x.split(splitting_str)[1] for x in lines2 if splitting_str in x][0]
+            assert choice1 == choice2
 
     finally:
         shutil.rmtree(f"{logdir}{name1}", ignore_errors=True)
