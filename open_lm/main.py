@@ -741,6 +741,14 @@ def main(args):
                 shard_shuffle_seed=shard_shuffle_seed,
             )
 
+            # In the distributed case, make sure that all nodes receive the same string
+            if args.distributed:
+                all_source_strings = ["" for _ in range(args.world_size)]
+                dist.all_gather_object(all_source_strings, train_data_string_per_source)
+                assert all(
+                    [x == train_data_string_per_source for x in all_source_strings]
+                ), "Dataset to train on is not the same across all nodes. This should not happen normally, unless there is an issue with shard shuffling during the dataset generation."
+
             if data["train"] is not None:
                 del data["train"]
             args.train_data = train_data_string_per_source

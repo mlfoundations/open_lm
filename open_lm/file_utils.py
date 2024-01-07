@@ -399,7 +399,7 @@ def _single_epoch_string(
     needed_samples_per_source = [int(np.ceil(weights[i] * num_samples / sum(weights))) for i in range(num_sources)]
 
     manifests = [get_metadata_file(path, shard_shuffle_seed=shard_shuffle_seed) for path in paths]
-    
+
     shard_strings_per_source = []
     next_shard_per_source = copy.deepcopy(starting_shard_per_source)
     shard_list_per_source = [[] for _ in range(num_sources)]
