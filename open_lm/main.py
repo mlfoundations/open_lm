@@ -591,6 +591,9 @@ def main(args):
                 state_dict[k] = state_dict[k] + state_dict_i[k] * args.average_coefficients[i]
         model.load_state_dict(state_dict)
 
+    # Put the shard shuffle seed back into args (this is done for compatibility with older, non shuffling versions)
+    args.shard_shuffle_seed = shard_shuffle_seed
+
     if requires_training and global_step is None:
         raise ValueError("Key 'step' not found in checkpoint, but required for training.")
 
@@ -716,7 +719,7 @@ def main(args):
         loss = CrossEntropyLossWithZLoss(args.z_loss_coefficient)
 
     if args.dataset_manifest:
-        log_num_checkpoints(total_steps, args, shard_shuffle_seed)
+        log_num_checkpoints(total_steps, args)
 
     # Only enter training loop if there are steps to be done.
     done_training = global_step >= total_steps
@@ -738,7 +741,7 @@ def main(args):
                 args.train_data_mix_weights,
                 args.workers,
                 args.world_size,
-                shard_shuffle_seed=shard_shuffle_seed,
+                shard_shuffle_seed=args.shard_shuffle_seed,
             )
 
             # In the distributed case, make sure that all nodes receive the same string
@@ -819,7 +822,7 @@ def main(args):
             is_final_checkpoint=done_training,
             next_shard_per_source=next_shard_per_source if args.dataset_manifest is not None else None,
             samples_seen=samples_seen if args.dataset_manifest is not None else None,
-            shard_shuffle_seed=shard_shuffle_seed,
+            shard_shuffle_seed=args.shard_shuffle_seed,
         )
 
         if done_training:

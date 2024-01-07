@@ -228,7 +228,7 @@ def are_sources_imbalanced_with_each_other(paths, ratio=2):
     return max(median_shard_size_per_source) > ratio * min(median_shard_size_per_source)
 
 
-def log_num_checkpoints(total_steps, args, shard_shuffle_seed):
+def log_num_checkpoints(total_steps, args):
     """Log the number of checkpoints that will be made.
 
     This function counts the number of checkpoints to be made, and logs that number, printing out a warning if that
@@ -251,7 +251,7 @@ def log_num_checkpoints(total_steps, args, shard_shuffle_seed):
             args.train_data_mix_weights,
             args.workers,
             args.world_size,
-            shard_shuffle_seed=shard_shuffle_seed,
+            shard_shuffle_seed=args.shard_shuffle_seed,
         )
         steps_epoch = sum(
             [(n // (args.workers * args.global_batch_size)) * args.workers for n in num_samples_per_source]
