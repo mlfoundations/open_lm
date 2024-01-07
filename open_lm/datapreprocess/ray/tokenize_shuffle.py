@@ -516,6 +516,7 @@ def main(args):
         input_paths += glob_files(inp_folder, suffix=".zst")
         input_paths += glob_files(inp_folder, suffix=".tar")
         input_paths += glob_files(inp_folder, suffix=".gz")
+    input_paths = sorted(set(input_paths))
     rng = random.Random(args.seed)
     rng.shuffle(input_paths)  # shuffle before selecting subsets
     if args.subset is not None:
