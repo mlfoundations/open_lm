@@ -66,12 +66,18 @@ def test_training_deterministic():
 
     logdir = "tests/assets/"
     args = [
-        "--train-num-samples", 64 * 16,  # seq_len is 16 for open_lm_test_tiny
-        "--global-batch-size", 4,
-        "--model", "open_lm_test_tiny",
-        "--dataset-manifest", "tests/assets/source_1/manifest.jsonl",
-        "--logs", logdir,
-        "--seed", 42
+        "--train-num-samples",
+        64 * 16,  # seq_len is 16 for open_lm_test_tiny
+        "--global-batch-size",
+        4,
+        "--model",
+        "open_lm_test_tiny",
+        "--dataset-manifest",
+        "tests/assets/source_1/manifest.jsonl",
+        "--logs",
+        logdir,
+        "--seed",
+        42,
     ]
     args = [str(x) for x in args]
 
