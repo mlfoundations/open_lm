@@ -55,7 +55,7 @@ def test_train_simple():
 
 
 # ==============================================================
-# =             Resuming + Determinism Tests                    =
+# =             Resuming + Determinism Tests                   =
 # ==============================================================
 
 
@@ -78,6 +78,8 @@ def test_training_deterministic():
         logdir,
         "--seed",
         42,
+        "--data-key",
+        "json",
     ]
     args = [str(x) for x in args]
 
