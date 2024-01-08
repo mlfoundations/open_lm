@@ -24,4 +24,3 @@ transformers
 s3fs
 wikipedia
 ipython
-llm-foundry
