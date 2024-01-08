@@ -106,7 +106,7 @@ def test_tokenize_shuffle_local_read_local_write():
     exit_value = os.system(
         f"python open_lm/datapreprocess/ray/tokenize_shuffle.py --input ./test_input --content_key text --seqlen {content_len} --output ./test_output/"
     )
-    tars = ["test_output/00000001.tar", "test_output/00000002.tar"]
+    tars = [os.path.join("test_output", fname) for fname in os.listdir("test_output") if fname.endswith(".tar")]
     total = 0
     for tar in tars:
         ds = wds.WebDataset(tar).decode()
