@@ -35,6 +35,7 @@ from botocore.exceptions import (
 from braceexpand import braceexpand
 from loguru import logger
 from ray._private.internal_api import memory_summary
+from ray.util.state import list_actors
 from ray.data._internal.util import _check_pyarrow_version
 from ray.data.block import Block, BlockMetadata
 from ray.data.context import DataContext
@@ -173,6 +174,7 @@ class GlobalCounter:
     def __init__(self):
         self.value = 0
         self.token_count = 0
+        self.buffer_writers = {}
 
     def increment(self):
         self.value += 1
@@ -185,8 +187,60 @@ class GlobalCounter:
     def get_counter(self):
         return self.value
 
+    def add_buffer_writer(self, buffer_writer_name, buffer_writer):
+        self.buffer_writers[buffer_writer_name] = buffer_writer
+
     def get_token_counter(self):
-        return self.token_count
+        return self.token_countts
+
+
+@ray.remote
+class BufferedShardWriter:
+    """
+    Utility class for writing equal sized webdataset shards to disk
+    """
+
+    def __init__(self):
+        self.buffer = []
+        self.manifests = []
+
+    def write(self, row, folder, counter, buffer_size=1024):
+        self.buffer.append(row)
+        if len(self.buffer) == buffer_size:
+            num_sequences_written = self._flush_buffer(folder, counter)
+        else:
+            num_sequences_written = 0
+        buffer_size = len(self.buffer)
+        return {"num_sequences_written": num_sequences_written, "buffer_size": buffer_size}
+
+    def get_manifests(self):
+        return self.manifests
+
+    def _flush_buffer(self, folder, counter):
+        tar_index = ray.get(counter.increment.remote())
+        digits = 8  # default to 8
+        # Format tar index with the determined number of leading zeros
+        tar_index_str = f"{tar_index:0{digits}}"
+        # Create tar file name
+        tar_name = f"{tar_index_str}.tar"
+        token_count = 0
+        # Write the batch to a tarball using webdataset's TarWriter
+        bio = io.BytesIO()
+        with wds.TarWriter(bio) as sink:
+            for i in range(len(self.buffer)):
+                tokens = [int(x) for x in self.buffer[i]["tokens"]]
+                token_count += len(tokens)
+                json_string = json.dumps(tokens)
+                uid = hashlib.md5(json_string.encode()).hexdigest()
+                sample = {"__key__": uid, "json.gz": json_string}
+                sink.write(sample)
+        bio.seek(0)
+        token_count = ray.get(counter.increment_token_count.remote(token_count))
+        write_to_location(folder, tar_name, bio)
+        return_dict = {"shard": tar_name.split(".")[0], "num_sequences": len(self.buffer)}
+        self.buffer = []
+        self.manifests.append(return_dict)
+        return return_dict["num_sequences"]
 
 
 def preprocess(
@@ -447,6 +501,26 @@ def write_manifest(jsonl_lines, args):
                 f.write("\n")
 
 
+def buffer_write(row, folder, counter, buffer_size, num_writers_per_node):
+    """
+    Use ray's actor logic to write equal sized shards, BufferedShardWriter will
+    only flush a shard if it is exactly buffer_size, except for the last N % args.wds_chunk_size
+    elements which need to be flushed separately.
+    """
+    node_id = ray.get_runtime_context().get_node_id()
+    worker_id = ray.get_runtime_context().get_worker_id()
+    buffer_writers = []
+    for k in range(num_writers_per_node):
+        buffer_writer_name = f"{node_id}_buffer_writer_{k}"
+        buffer_writer = BufferedShardWriter.options(name=buffer_writer_name, get_if_exists=True).remote()
+        ray.get(counter.add_buffer_writer.remote(buffer_writer_name, buffer_writer))
+        buffer_writers.append(buffer_writer)
+    # This will run the job on an idle actor
+    buffer_writer_pool = ray.util.ActorPool(buffer_writers)
+    buffer_writer_pool.submit(lambda a, row: a.write.remote(row, folder, counter, buffer_size), row)
+    return buffer_writer_pool.get_next()
+
+
 def main(args):
     parser = argparse.ArgumentParser()
     parser.add_argument("--input", help="input path", type=str, required=True)
@@ -466,12 +540,12 @@ def main(args):
     parser.add_argument("--subset", type=int, default=None)
     parser.add_argument("--subfraction", type=float, default=None)
     parser.add_argument("--ray_address", type=str, default=None)
-    parser.add_argument("--block_size", type=str, default="10MB")
+    parser.add_argument("--num_writers_per_node", type=int, default=1)
     parser.add_argument("--force_parallelism", type=int, default=None)
     parser.add_argument("--force_num_cores", type=int, default=None)
     parser.add_argument("--no_shuffle", action="store_true")
     parser.add_argument("--do_sample", action="store_true")
-    parser.add_argument("--ray_spill_location", type=str, default="/tmp/ray_spill")
+    parser.add_argument("--ray_spill_location", type=str, default="/tmp/ray")
     parser.add_argument("--default_dataset_yaml", type=str, default=(DIR.parent / "metadata" / "rpj_lm_data.yaml"))
     parser.add_argument(
         "--ray_dashboard_host", type=str, default="127.0.0.1"
@@ -526,7 +600,7 @@ def main(args):
     print("Files considered: \n", input_paths)
     print(f"num files ={len(input_paths)}")
     num_files = len(input_paths)
-
+    num_writers_per_node = args.num_writers_per_node
     output_path = args.output
     seqlen = args.seqlen + 1
     wds_chunk_size = args.wds_chunk_size
@@ -534,7 +608,9 @@ def main(args):
     if args.force_parallelism is not None:
         parallelism = args.force_parallelism
     else:
-        parallelism = num_cores * num_nodes
+        parallelism = (num_cores * num_nodes) - (num_nodes * num_writers_per_node)
+        # make sure there is room for actors
+    assert parallelism > 0
     ctx = DataContext.get_current()
     ctx.use_push_based_shuffle = True
     ctx.execution_options.resource_limits.object_store_memory = float("inf")
@@ -571,23 +647,27 @@ def main(args):
     else:
         ds = ds.repartition(num_cores * num_nodes, shuffle=False)
     counter = GlobalCounter.remote()
-    ds = ds.map_batches(
-        map_write_wds,
-        batch_size=wds_chunk_size,
+    out_folder = args.output.rstrip("/")
+    # first map buffer_write over rows, it will create an actor (which hopefully will be scheduled locally)
+    write_status = ds.map(
+        buffer_write,
         fn_kwargs={
-            "batch_size": wds_chunk_size,
-            "folder": args.output.rstrip("/"),
+            "folder": out_folder,
             "counter": counter,
+            "buffer_size": args.wds_chunk_size,
+            "num_writers_per_node": num_writers_per_node,
         },
-        batch_format="pandas",
-    )
-
-    # Sort by shard name
-    ds = ds.repartition(1)
-    ds = ds.sort(key="shard")
-    jsonl_lines = ds.take_all()
-    write_manifest(jsonl_lines, args)
-
+    ).take_all()
+    # after the write is done, grab all actors of class BufferedShardWriter
+    buffer_writers = [ray.get_actor(x.name) for x in list_actors(filters=[("class_name", "=", "BufferedShardWriter")])]
+    # flush the remaining buffers, this should be the *only* shards that are less than wds_chunk_size
+    flushed_buffers = [bw._flush_buffer.remote(out_folder, counter) for bw in buffer_writers]
+    tail_write_status = [ray.get(buf) for buf in flushed_buffers]
+    # Grab manifests which are stored in the buffer writers
+    manifests = [manifest_row for bw in buffer_writers for manifest_row in ray.get(bw.get_manifests.remote())]
+    manifests_sorted = sorted(manifests, key=lambda x: x["shard"])
+    print(manifests_sorted)
+    write_manifest(manifests_sorted, args)
     end_time = time.time()
     duration = end_time - start_time
     final_token_count = ray.get(counter.increment_token_count.remote(0))
