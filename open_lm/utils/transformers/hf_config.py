@@ -18,7 +18,7 @@ class OpenLMConfig(PretrainedConfig):
         **kwargs
     ):
         """
-        Initialize the HFConfig class.
+        Initialize the HFConfig class. Any of the three arguments can be used to initialize the class.
         Note that the instance can get serialized when passing in either params_args or params_args_dict.
 
         Args:
@@ -30,6 +30,10 @@ class OpenLMConfig(PretrainedConfig):
 
         # Used by huggingface transformers
         super().__init__(**kwargs)
+
+        assert (
+            params is not None or params_args is not None or params_args_dict is not None
+        ), "must provide either params, params_args, or params_args_dict"
 
         if params_args is not None:
             params_args_dict = vars(params_args)
