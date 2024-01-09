@@ -157,7 +157,7 @@ python eval_openlm_ckpt.py \
 --positional_embedding_type head_rotary
 
 ```
-Note that `--positional_embedding_type head_rotary` is only necessary if using the pretrained `open_lm_1b` model hosted below. See discussion in the next section about this.
+Note that `--positional-embedding-type head_rotary` is only necessary if using the pretrained `open_lm_1b` model hosted below. See discussion in the next section about this.
 
 ## Generate Text
 One can also use a trained model to generate text. This is accessible via the script located at [scripts/generate.py](scripts/generate.py). The parameters are similar to those used in evaluation:
@@ -167,11 +167,11 @@ cd scripts
 python generate.py \
 --model open_lm_1b \
 --checkpoint /path/to/openlm_checkpoint.pt \
---positional_embedding_type head_rotary \
+--positional-embedding-type head_rotary \
 --input-text "Please give me a recipe for chocolate chip cookies"
 ```
 
-Again, note that `--positional_embedding_type head_rotary` is only necessary for the pretrained `open_lm_1b` model hosted below. 
+Again, note that `--positional-embedding-type head_rotary` is only necessary for the pretrained `open_lm_1b` model hosted below. 
 
 # Pretrained Models
 
@@ -179,7 +179,7 @@ Again, note that `--positional_embedding_type head_rotary` is only necessary for
 OpenLM 1B is a ~1Billion parameter model trained on a 1.6T token dataset which consists of a mix of RedPajama, Pile, S2ORC, The Pile of Law, Deepmind Math, and RealNews (the full mixture of training data is described in [more detail here](https://docs.google.com/spreadsheets/d/1YW-_1vGsSPmVtEt2oeeJOecH6dYX2SuEuhOwZyGwy4k/edit?usp=sharing)).
 The model checkpoint can be downloaded from [HuggingFace here](https://huggingface.co/mlfoundations/open_lm_1B/tree/main).
 The script used to train this model (for config-copying purposes) is [located here](https://github.com/mlfoundations/open_lm/blob/main/scripts/train_example.sh).
-Once this checkpoint has been downloaded, you can evaluate it by following the directions in the [Evaluate Model](#evaluate-model) section above and passing `--positional_embedding_type head_rotary` or setting `"positional_embedding_type": "head_rotary"` in the model config (see note below).
+Once this checkpoint has been downloaded, you can evaluate it by following the directions in the [Evaluate Model](#evaluate-model) section above and passing `--positional-embedding-type head_rotary` or setting `"positional_embedding_type": "head_rotary"` in the model config (see note below).
 
 Note: We trained this model with rotary embeddings applied to the _head_
 dimension, which is the default in xformers as of 09/01/2023. Since these models
