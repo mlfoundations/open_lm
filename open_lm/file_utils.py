@@ -293,55 +293,55 @@ def get_string_for_epoch(
 ):
     """See _single_epoch_string for full docstring."""
     if multi_epoch:
-        raise NotImplementedError("Multiple passes over the dataset not fully supported yet.")
+        return _multi_epoch_string(num_samples, starting_points, paths, weights, num_workers_per_gpu, world_size, shard_shuffle_seed)
     else:
         return _single_epoch_string(
             num_samples, starting_points, paths, weights, num_workers_per_gpu, world_size, shard_shuffle_seed
         )
 
 
-def _multi_epoch_string(num_samples, starting_chunk, paths, weights, min_shards_needed):
-    """Multi epoch string training."""
+def _multi_epoch_string(
+    num_samples: int,
+    starting_shard_per_source: List[int],
+    paths: List[str],
+    weights: Optional[List[float]],
+    num_workers_per_gpu: int,
+    world_size: int,
+    shard_shuffle_seed: Optional[int],
+):
+    """Return the string for training the shards, while allowing multiple passes over the dataset.
 
-    raise NotImplementedError("Function not fully supported yet.")
+    """
 
-    if weights is None:
-        weights = [1.0 / len(paths) for _ in range(len(paths))]
-    needed_samples_per_source = [int(np.ceil(weights[i] * num_samples / sum(weights))) for i in range(len(weights))]
-    shard_strings_per_source = []
-    next_chunk = starting_chunk
-    shard_list_per_source = [[] for _ in range(len(paths))]
-    num_samples_per_source = [0 for _ in range(len(paths))]
-    while not enough_shards(shard_list_per_source, min_shards_needed) or not enough_samples(
-        num_samples_per_source, needed_samples_per_source
-    ):
-        for i, source_path in enumerate(paths):
-            shard_list_source, num_samples_source = get_shards_for_chunk(
-                needed_samples_per_source[i], next_chunk, source_path
+    num_sources = len(paths)
+    total_shards_per_source = [len(get_metadata_file(p, shard_shuffle_seed=None)) for p in paths]
+    pass_idx = starting_shard_per_source[0] // total_shards_per_source[0]
+
+    assert all([starting_shard_per_source[i] // total_shards_per_source[i] == pass_idx for i in range(num_sources)]), "Passes across sources are not synced."
+
+    starting_shard_per_source_single = [starting_shard_per_source[i] % total_shards_per_source[i] for i in range(num_sources)]
+    retries = 3
+
+    while retries > 0:
+        try:
+            shard_strings_per_source, num_samples_per_source, next_shard_per_source = _single_epoch_string(
+                num_samples=num_samples,
+                starting_shard_per_source=starting_shard_per_source_single,
+                paths=paths,
+                weights=weights,
+                num_workers_per_gpu=num_workers_per_gpu,
+                world_size=world_size,
+                shard_shuffle_seed=shard_shuffle_seed + pass_idx
             )
-            shard_list_per_source[i].extend(shard_list_source)
-            num_samples_per_source[i] += num_samples_source
-        next_chunk += 1
-        if source_exhausted(paths, shard_list_per_source):
-            logging.warning(
-                "Number of shards requested for a single epoch is more than the number of shards available. "
-                "Consider lowering the number of workers and / or the number of GPUs, to avoid continuous "
-                "reuse of samples."
-            )
+            next_shard_per_source = [next_shard_per_source[i] + pass_idx * total_shards_per_source[i] for i in range(num_sources)]
+            return shard_strings_per_source, num_samples_per_source, next_shard_per_source
+        except IndexError as e:
+            # In this case, we have run out of shards for this pass, so we will start a new pass of our dataset.
+            pass_idx += 1
+            starting_shard_per_source_single = [pass_idx * total_shards_per_source[i] for i in range(num_sources)]
+            retries -= 1
 
-    for i, source_path in enumerate(paths):
-        shard_list_source = shard_list_per_source[i]
-        num_samples_source = num_samples_per_source[i]
-        shard_root_source = "/".join(source_path.split("/")[:-1]) + "/"
-        if len(shard_list_source) == 1:
-            shard_string_source = shard_root_source + shard_list_source[0] + ".tar"
-        else:
-            shard_string_source = shard_root_source + "{" + ",".join(shard_list_source) + "}.tar"
-        if source_path.startswith("s3"):
-            shard_string_source = f"pipe:aws s3 cp {shard_string_source} -"
-        shard_strings_per_source.append(shard_string_source)
-
-    return shard_strings_per_source, num_samples_per_source, next_chunk
+    raise ValueError("Multiple passes over the dataset did not allow for a valid shard string to be created. Try decreasing the number of tokens between checkpoints.")
 
 
 def _single_epoch_string(
