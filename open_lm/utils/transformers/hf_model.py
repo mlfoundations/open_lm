@@ -133,7 +133,11 @@ class OpenLMforCausalLM(OpenLMModel):
 
     @classmethod
     def from_pretrained(cls, pretrained_model_name_or_path: Optional[Union[str, os.PathLike]], **kwargs):
-        if os.path.isdir(pretrained_model_name_or_path):
+        if (
+            os.path.isdir(pretrained_model_name_or_path)
+            and kwargs.get("config", None) is not None
+            and getattr(kwargs["config"], "checkpoint_file", None) is not None
+        ):
             # Setting torch default dtype
             torch_dtype = getattr(kwargs["config"], "torch_dtype", None)
             if isinstance(torch_dtype, str):
