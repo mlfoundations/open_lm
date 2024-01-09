@@ -11,6 +11,8 @@ import pytest
 import os
 import math
 import json
+from pathlib import Path
+from braceexpand import braceexpand
 
 from tests.utils import download_dl_test_data, make_fake_tarfiles
 
@@ -174,3 +176,32 @@ def test_shard_shuffling(seed):
     )
 
     assert shards_ps_1 == shards_ps_2
+
+
+@pytest.mark.parametrize(
+    "test_case",
+    [
+        (2000, 0, 1, ["00000", "00001"]),  # Easy case.
+    ],
+)
+def test_multi_passes(test_case):
+    num_samples, starting_shard, num_workers_per_gpu, expected_ids = test_case
+
+    download_dl_test_data()
+
+    source_manifest = "tests/assets/source_3/manifest.jsonl"
+
+    shards_ps, _, _ = get_string_for_epoch(
+        num_samples=num_samples,
+        starting_points=[starting_shard],
+        paths=[source_manifest],
+        weights=None,
+        num_workers_per_gpu=num_workers_per_gpu,
+        world_size=1,
+        multi_epoch=True,
+        shard_shuffle_seed=None,
+    )
+
+    shard_ids = sorted([Path(s).with_suffix("").name for s in braceexpand(shards_ps[0])])
+
+    assert shard_ids == expected_ids

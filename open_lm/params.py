@@ -726,7 +726,7 @@ def parse_args(args):
     parser.add_argument(
         "--multiple-data-passes",
         action="store_true",
-        help="If set, allow model to do multiple data passes over our dataset, in order to reach the desired number of tokens."
+        help="If set, allow model to do multiple data passes over our dataset, in order to reach the desired number of tokens.",
     )
 
     add_model_args(parser)

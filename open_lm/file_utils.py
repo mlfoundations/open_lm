@@ -293,7 +293,9 @@ def get_string_for_epoch(
 ):
     """See _single_epoch_string for full docstring."""
     if multi_epoch:
-        return _multi_epoch_string(num_samples, starting_points, paths, weights, num_workers_per_gpu, world_size, shard_shuffle_seed)
+        return _multi_epoch_string(
+            num_samples, starting_points, paths, weights, num_workers_per_gpu, world_size, shard_shuffle_seed
+        )
     else:
         return _single_epoch_string(
             num_samples, starting_points, paths, weights, num_workers_per_gpu, world_size, shard_shuffle_seed
@@ -309,17 +311,19 @@ def _multi_epoch_string(
     world_size: int,
     shard_shuffle_seed: Optional[int],
 ):
-    """Return the string for training the shards, while allowing multiple passes over the dataset.
-
-    """
+    """Return the string for training the shards, while allowing multiple passes over the dataset."""
 
     num_sources = len(paths)
     total_shards_per_source = [len(get_metadata_file(p, shard_shuffle_seed=None)) for p in paths]
     pass_idx = starting_shard_per_source[0] // total_shards_per_source[0]
 
-    assert all([starting_shard_per_source[i] // total_shards_per_source[i] == pass_idx for i in range(num_sources)]), "Passes across sources are not synced."
+    assert all(
+        [starting_shard_per_source[i] // total_shards_per_source[i] == pass_idx for i in range(num_sources)]
+    ), "Passes across sources are not synced."
 
-    starting_shard_per_source_single = [starting_shard_per_source[i] % total_shards_per_source[i] for i in range(num_sources)]
+    starting_shard_per_source_single = [
+        starting_shard_per_source[i] % total_shards_per_source[i] for i in range(num_sources)
+    ]
     retries = 3
 
     while retries > 0:
@@ -331,9 +335,11 @@ def _multi_epoch_string(
                 weights=weights,
                 num_workers_per_gpu=num_workers_per_gpu,
                 world_size=world_size,
-                shard_shuffle_seed=shard_shuffle_seed + pass_idx
+                shard_shuffle_seed=shard_shuffle_seed + pass_idx if shard_shuffle_seed is not None else None,
             )
-            next_shard_per_source = [next_shard_per_source[i] + pass_idx * total_shards_per_source[i] for i in range(num_sources)]
+            next_shard_per_source = [
+                next_shard_per_source[i] + pass_idx * total_shards_per_source[i] for i in range(num_sources)
+            ]
             return shard_strings_per_source, num_samples_per_source, next_shard_per_source
         except IndexError as e:
             # In this case, we have run out of shards for this pass, so we will start a new pass of our dataset.
@@ -341,7 +347,9 @@ def _multi_epoch_string(
             starting_shard_per_source_single = [pass_idx * total_shards_per_source[i] for i in range(num_sources)]
             retries -= 1
 
-    raise ValueError("Multiple passes over the dataset did not allow for a valid shard string to be created. Try decreasing the number of tokens between checkpoints.")
+    raise ValueError(
+        "Multiple passes over the dataset did not allow for a valid shard string to be created. Try decreasing the number of tokens between checkpoints."
+    )
 
 
 def _single_epoch_string(
