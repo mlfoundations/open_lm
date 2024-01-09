@@ -31,10 +31,6 @@ class OpenLMConfig(PretrainedConfig):
         # Used by huggingface transformers
         super().__init__(**kwargs)
 
-        assert (
-            params is not None or params_args is not None or params_args_dict is not None
-        ), "must provide either params, params_args, or params_args_dict"
-
         if params_args is not None:
             params_args_dict = vars(params_args)
 
