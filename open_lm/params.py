@@ -723,6 +723,11 @@ def parse_args(args):
         action="store_true",
         help="Allow forcing distributed mode even when running on one gpu. Mostly useful for testing.",
     )
+    parser.add_argument(
+        "--multiple-data-passes",
+        action="store_true",
+        help="If set, allow model to do multiple data passes over our dataset, in order to reach the desired number of tokens."
+    )
 
     add_model_args(parser)
 
