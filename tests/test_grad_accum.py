@@ -1,10 +1,8 @@
-import copy
 import pytest
 
 import torch
 import torch.multiprocessing as mp
 from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
-from open_lm.model import create_model
 
 from open_lm.train import train_one_epoch
 from open_lm.main import random_seed

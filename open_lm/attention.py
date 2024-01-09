@@ -125,11 +125,12 @@ def get_attn_func(
     attn_seq_scalar=None,
     alpha=None,
 ):
-    if attn_name == "xformers_attn":
+    is_cuda = torch.cuda.is_available()
+    if attn_name == "xformers_attn" and is_cuda:
         return xformers_attn
-    elif attn_name == "torch_attn":
+    elif attn_name == "torch_attn" or not is_cuda:
         return torch_attn
-    elif attn_name == "custom_attn":
+    elif attn_name == "custom_attn" and is_cuda:
         assert (
             attn_activation is not None and attn_seq_scalar is not None and alpha is not None
         ), "must provide attn-activation, attn-seq-scalar, attn-seq-scalar-alpha"
@@ -140,4 +141,7 @@ def get_attn_func(
             alpha,
         )
     else:
-        raise ValueError(f"Unsupported attn-name: {attn_name}")
+        if not is_cuda:
+            raise ValueError(f"Unsupported attn-name: {attn_name}. CUDA is not available.")
+        else:
+            raise ValueError(f"Unsupported attn-name: {attn_name}")
