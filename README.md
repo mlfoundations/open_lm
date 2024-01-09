@@ -148,6 +148,8 @@ This manifest file provides auxiliary information about the dataset, and is assu
 ## Evaluate Model
 Once trained, we can evaluate the model. This requires [LLM Foundry](https://github.com/mosaicml/llm-foundry), which can be installed via `pip install llm-foundry`. Next some configurations are required to pass to the evaluator: a skeleton of these parameters is located at [eval/in_memory_hf_eval.yaml](eval/in_memory_hf_eval.yaml). Then just run the following script, making sure to point it at the checkpoint of your trained model (and it's correspending config .json file):
 ```
+pip install llm-foundry  # Required for evaluation
+
 cd eval
 
 python eval_openlm_ckpt.py \
