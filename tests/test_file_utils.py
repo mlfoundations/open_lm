@@ -182,26 +182,36 @@ def test_shard_shuffling(seed):
     "test_case",
     [
         (2000, 0, 1, ["00000", "00001"]),  # Easy case.
+        (2000, 3, 1, ["00003", "00004", "00005"]),  # Shard 00004 is smaller
+        (2000, 7, 1, ["00000", "00001"]),  # At the very end of training shards, this should loop over.
+        (
+            10000,
+            0,
+            1,
+            "Multiple passes over the dataset did not allow for a valid shard string to be created. Try decreasing the number of tokens between checkpoints.",
+        ),  # Not enough data in a single pass.
     ],
 )
 def test_multi_passes(test_case):
-    num_samples, starting_shard, num_workers_per_gpu, expected_ids = test_case
+    num_samples, starting_shard, num_workers_per_gpu, expected_outputs = test_case
 
     download_dl_test_data()
 
     source_manifest = "tests/assets/source_3/manifest.jsonl"
 
-    shards_ps, _, _ = get_string_for_epoch(
-        num_samples=num_samples,
-        starting_points=[starting_shard],
-        paths=[source_manifest],
-        weights=None,
-        num_workers_per_gpu=num_workers_per_gpu,
-        world_size=1,
-        multi_epoch=True,
-        shard_shuffle_seed=None,
-    )
+    try:
+        shards_ps, _, _ = get_string_for_epoch(
+            num_samples=num_samples,
+            starting_points=[starting_shard],
+            paths=[source_manifest],
+            weights=None,
+            num_workers_per_gpu=num_workers_per_gpu,
+            world_size=1,
+            multi_epoch=True,
+            shard_shuffle_seed=None,
+        )
 
-    shard_ids = sorted([Path(s).with_suffix("").name for s in braceexpand(shards_ps[0])])
-
-    assert shard_ids == expected_ids
+        shard_ids = sorted([Path(s).with_suffix("").name for s in braceexpand(shards_ps[0])])
+        assert shard_ids == expected_outputs
+    except ValueError as e:
+        assert str(e) == expected_outputs

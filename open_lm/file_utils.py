@@ -321,13 +321,13 @@ def _multi_epoch_string(
         [starting_shard_per_source[i] // total_shards_per_source[i] == pass_idx for i in range(num_sources)]
     ), "Passes across sources are not synced."
 
-    starting_shard_per_source_single = [
-        starting_shard_per_source[i] % total_shards_per_source[i] for i in range(num_sources)
-    ]
     retries = 3
 
     while retries > 0:
         try:
+            starting_shard_per_source_single = [
+                starting_shard_per_source[i] % total_shards_per_source[i] for i in range(num_sources)
+            ]
             shard_strings_per_source, num_samples_per_source, next_shard_per_source = _single_epoch_string(
                 num_samples=num_samples,
                 starting_shard_per_source=starting_shard_per_source_single,
@@ -344,7 +344,7 @@ def _multi_epoch_string(
         except IndexError as e:
             # In this case, we have run out of shards for this pass, so we will start a new pass of our dataset.
             pass_idx += 1
-            starting_shard_per_source_single = [pass_idx * total_shards_per_source[i] for i in range(num_sources)]
+            starting_shard_per_source = [pass_idx * total_shards_per_source[i] for i in range(num_sources)]
             retries -= 1
 
     raise ValueError(
