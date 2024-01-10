@@ -186,6 +186,35 @@ def maybe_load_config(parser, args):
     return updated_args
 
 
+def check_args(args):
+    # data checks
+    if args.dataset_type == "synthetic":
+        assert args.train_data is None, "--train-data must not be specified if --dataset-type='synthetic'"
+        assert args.dataset_manifest is None, "--dataset-manifest must not be specified if --dataset-type='synthetic'"
+
+    if args.val_data is not None and args.global_val_batch_size is None:
+        # Make sure that val batch size is set to micro batch size
+        args.global_val_batch_size = args.global_batch_size // args.accum_freq
+
+    # custom_attn checks
+    if args.attn_name == "custom_attn":
+        assert (
+            args.attn_activation is not None
+            and args.attn_seq_scalar is not None
+            and args.attn_seq_scalar_alpha is not None
+        ), "must provide attn-activation, attn-seq-scalar, attn-seq-scalar-alpha to use non-linear-attn"
+    else:
+        assert (
+            args.attn_activation is None and args.attn_seq_scalar is None and args.attn_seq_scalar_alpha is None
+        ), "attn-activation, attn-seq-scalar, attn-seq-scalar-alpha must be None unless using non-linear-attn"
+
+    # masking checks
+    if args.squash_mask_left:
+        assert (
+            args.target_mask_left is not None and args.target_mask_individual is not None
+        ), "must pass target-mask-left and target-mask-individual to use squash-mask-left"
+
+
 def parse_args(args):
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -623,6 +652,12 @@ def parse_args(args):
         help="Mask the loss to the left of a specified token (including the specified token).",
     )
     parser.add_argument(
+        "--squash-mask-left",
+        default=False,
+        action="store_true",
+        help="squash the target-mask-left tokens in the sequence and pad from right with target-mask-individual",
+    )
+    parser.add_argument(
         "--target-mask-individual",
         type=int,
         default=None,
@@ -655,25 +690,6 @@ def parse_args(args):
     else:
         args = parser.parse_args(args)
 
-    # basic error checks
-    # TODO: move all error checking we can do after argparse to a seperate function
-    if args.dataset_type == "synthetic":
-        assert args.train_data is None, "--train-data must not be specified if --dataset-type='synthetic'"
-        assert args.dataset_manifest is None, "--dataset-manifest must not be specified if --dataset-type='synthetic'"
-
-    if args.val_data is not None and args.global_val_batch_size is None:
-        # Make sure that val batch size is set to micro batch size
-        args.global_val_batch_size = args.global_batch_size // args.accum_freq
-
-    if args.attn_name == "custom_attn":
-        assert (
-            args.attn_activation is not None
-            and args.attn_seq_scalar is not None
-            and args.attn_seq_scalar_alpha is not None
-        ), "must provide attn-activation, attn-seq-scalar, attn-seq-scalar-alpha to use non-linear-attn"
-    else:
-        assert (
-            args.attn_activation is None and args.attn_seq_scalar is None and args.attn_seq_scalar_alpha is None
-        ), "attn-activation, attn-seq-scalar, attn-seq-scalar-alpha must be None unless using non-linear-attn"
+    check_args(args)
 
     return args
