@@ -102,6 +102,17 @@ def get_state_dict(name):
 def load_model(args, model):
     checkpoint = pt_load(args.resume, map_location="cpu")
     if "epoch" in checkpoint:
+        if "shard_shuffle_seed" in checkpoint:
+            pretrained_seed = checkpoint["shard_shuffle_seed"]
+            assert (
+                pretrained_seed == args.seed
+            ), f"This checkpoint was trained with a random seed of {pretrained_seed}. Since this seed affects shard shuffling, resuming training must use the same seed."
+        else:
+            logging.info(
+                "Resuming a checkpoint that does not have a seed saved. This means that the shards were not shuffled, so they will remain unshuffled."
+            )
+            pretrained_seed = None
+
         # resuming a train checkpoint w/ epoch and optimizer state
         start_epoch = checkpoint["epoch"]
         sd = checkpoint["state_dict"]
@@ -118,9 +129,10 @@ def load_model(args, model):
     else:
         # loading a bare (model only) checkpoint for fine-tune or evaluation
         start_epoch, global_step = 0, 0
+        pretrained_seed = None
         model.load_state_dict(checkpoint)
         logging.info(f"=> loaded checkpoint '{args.resume}' (epoch {start_epoch})")
-    return start_epoch, global_step
+    return start_epoch, global_step, pretrained_seed
 
 
 def load_optimizer(args, model, optimizer, scaler):
@@ -165,6 +177,7 @@ def save_checkpoint(
     is_final_checkpoint,
     next_shard_per_source=None,
     samples_seen=None,
+    shard_shuffle_seed=None,
 ):
     cpu_state, optim_state = None, None
     if args.logs and args.logs.lower() != "none" and args.fsdp:
@@ -187,6 +200,9 @@ def save_checkpoint(
 
         if step is not None:
             checkpoint_dict_model["step"] = step
+
+        if shard_shuffle_seed is not None:
+            checkpoint_dict_model["shard_shuffle_seed"] = shard_shuffle_seed
 
         checkpoint_dict_opt = {
             "epoch": completed_epoch,
@@ -543,15 +559,16 @@ def main(args):
 
     # optionally resume model from a checkpoint
     start_epoch, global_step = 0, 0
+    shard_shuffle_seed = args.seed
     if args.resume is not None:
-        start_epoch, global_step = load_model(args, model)
+        start_epoch, global_step, shard_shuffle_seed = load_model(args, model)
     elif args.pretrained is not None:
         print("=> loading from a pre-trained model.")
         args.resume = args.pretrained
-        _epoch, _step = load_model(args, model)
+        _epoch, _step, _shard_shuffle_seed = load_model(args, model)
         # this flag continues training from the pre-trained model.
         if args.load_pretrained_state:
-            start_epoch, global_step = _epoch, _step
+            start_epoch, global_step, shard_shuffle_seed = _epoch, _step, _shard_shuffle_seed
         else:
             args.resume = None
     elif args.average is not None:
@@ -573,6 +590,9 @@ def main(args):
             for k in state_dict:
                 state_dict[k] = state_dict[k] + state_dict_i[k] * args.average_coefficients[i]
         model.load_state_dict(state_dict)
+
+    # Put the shard shuffle seed back into args (this is done for compatibility with older, non shuffling versions)
+    args.shard_shuffle_seed = shard_shuffle_seed
 
     if requires_training and global_step is None:
         raise ValueError("Key 'step' not found in checkpoint, but required for training.")
@@ -721,7 +741,16 @@ def main(args):
                 args.train_data_mix_weights,
                 args.workers,
                 args.world_size,
+                shard_shuffle_seed=args.shard_shuffle_seed,
             )
+
+            # In the distributed case, make sure that all nodes receive the same string
+            if args.distributed:
+                all_source_strings = ["" for _ in range(args.world_size)]
+                dist.all_gather_object(all_source_strings, train_data_string_per_source)
+                assert all(
+                    [x == train_data_string_per_source for x in all_source_strings]
+                ), "Dataset to train on is not the same across all nodes. This should not happen normally, unless there is an issue with shard shuffling during the dataset generation."
 
             if data["train"] is not None:
                 del data["train"]
@@ -793,6 +822,7 @@ def main(args):
             is_final_checkpoint=done_training,
             next_shard_per_source=next_shard_per_source if args.dataset_manifest is not None else None,
             samples_seen=samples_seen if args.dataset_manifest is not None else None,
+            shard_shuffle_seed=args.shard_shuffle_seed,
         )
 
         if done_training:
