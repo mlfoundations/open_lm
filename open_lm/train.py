@@ -97,7 +97,7 @@ def squash_tok(seqs, mask, pad):
     count_non_squash = mask.sum(dim=1)
 
     # Create a tensor of pad tokens with the same shape as the input tensor
-    out_tensor = torch.full(seqs.shape, pad)  # , dtype=t.dtype, device=t.device)
+    out_tensor = torch.full(seqs.shape, pad, dtype=seqs.dtype, device=seqs.device)
 
     # Place all non-delimiter elements at the left of the output tensor, pad tokens to the right
     for i in range(seqs.shape[0]):
