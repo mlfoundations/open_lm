@@ -105,8 +105,8 @@ def add_model_args(parser):
     parser.add_argument(
         "--attn-name",
         type=str,
-        default="xformers_attn",
-        choices=["xformers_attn", "xformers_attn_with_variable_length_support", "torch_attn", "custom_attn"],
+        default="auto",
+        choices=["auto", "xformers_attn", "xformers_attn_with_variable_length_support", "torch_attn", "custom_attn"],
         help="type of attention to use",
     )
     parser.add_argument(
