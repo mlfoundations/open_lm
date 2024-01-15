@@ -93,8 +93,6 @@ Next we process our training data by running it through a BPE tokenizer and chun
    tmux new-session -d -s ray_tokenize_shuffle  'python tokenize_shuffle.py'
    ```
 
-> **Heads up**: This is version 0 of this script. The user interface will be improved in future versions. Currently, objects are being spilled to `dcnlp-hub`.
-
 ### Tokenize shuffle on a SLURM cluster
 
 To run the same process on top of a SLURM cluster, you can use the `open_lm/datapreprocess/ray/tokenize_shuffle_sbatch.sh` script, by:
