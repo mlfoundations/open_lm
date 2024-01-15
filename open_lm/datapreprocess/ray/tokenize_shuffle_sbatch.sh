@@ -7,8 +7,8 @@
 #SBATCH --cpus-per-task=128
 #SBATCH --output=%x_%j.out
 
-export PATH="/work/08002/gsmyrnis/frontera/conda/miniconda3/condabin:$PATH"
-source /work/08002/gsmyrnis/frontera/conda/miniconda3/etc/profile.d/conda.sh
+export PATH="~/miniconda3/condabin:$PATH"
+source ~/miniconda3/etc/profile.d/conda.sh
 conda activate open_lm  # install according to tng/tools/environment.yml
 cd $OPEN_LM_BASE
 

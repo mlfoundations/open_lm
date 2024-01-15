@@ -107,6 +107,8 @@ You can then run tokenization on however many nodes you want using the following
 sbatch open_lm/datapreprocess/ray/tokenize_shuffle_sbatch.sh path/to/raw_data path/to/output
 ```
 
+Note that the script assumes that a valid conda installation exists under `~/miniconda3`. If that is not the case, make sure to edit the script, so that it points to the correct installation directory for conda (if using conda), or source the correct virtual environment (if using venv).
+
 ## Run Training
 Tokenized data can now be passed to the main training script, `open_lm/main.py`. Distributed computatation is handled via `torchrun`, and hyperparameters are specified by a variety of keyword arguments. We highlight several of the most important ones here:
 - `train-data`: location of the sharded tokenized training data. If locally generated and stored, this will point to a directory containing files like `preproc_data/2048-v1/0/XXXXXXX.tar`. Data are processed using the [webdataset](https://github.com/webdataset/webdataset) package where wildcards are supported like `preproc_data/2048-v1/0/{0000000..0000099}.tar` to select the first 100 .tar files.
