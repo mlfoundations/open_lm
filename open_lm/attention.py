@@ -34,7 +34,7 @@ def xformers_attn(queries, keys, values, is_causal):
         batch, q_seq_len, heads, _ = queries.shape
         k_seq_len = keys.shape[1]
         mask = get_rectangular_mask((batch, heads), q_seq_len, k_seq_len, queries.device, queries.dtype)
-    return xops.memory_efficient_attention(queries, keys, values, attn_bias=mask).contiguous()
+    return xops.memory_efficient_attention(queries, keys, values, attn_bias=mask)
 
 
 def torch_attn(queries, keys, values, is_causal):
@@ -127,6 +127,8 @@ def get_attn_func(
 ):
     if attn_name == "xformers_attn":
         return xformers_attn
+    elif attn_name == "xformers_attn_with_variable_length_support":
+        return lambda *args, **kwargs: xformers_attn(*args, **kwargs).contiguous()
     elif attn_name == "torch_attn":
         return torch_attn
     elif attn_name == "custom_attn":
