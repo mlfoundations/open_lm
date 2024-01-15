@@ -36,18 +36,75 @@ Next you must specify a collection of tokenized data. For the purposes of this e
 python datapreprocess/wiki_download.py --output-dir path/to/raw_data
 ```
 
-Next we process our training data by running it through a BPE tokenizer and chunk it into chunks of appropriate length. By default we use the tokenizer attached with [GPT-NeoX-20B](https://github.com/EleutherAI/gpt-neox). To do this, use the script `datapreprocess/make_2048.py`:
+Next we process our training data by running it through a BPE tokenizer and chunk it into chunks of appropriate length. By default we use the tokenizer attached with [GPT-NeoX-20B](https://github.com/EleutherAI/gpt-neox). To do this, we will use the script `datapreprocess/ray/tokenize_shuffle.py`. There are two main ways to use this script - either via an AWS Ray cluster or via SLURM.
+
+### Tokenize shuffle on an AWS cluster - Quick Commands
+
+1. **Spin up the ray cluster**:  
+   ```
+   ray up ray_cluster_configs/cluster_west.yaml
+   ```
+
+2. **Access the ray cluster**:  
+   ```
+   ray attach ray_cluster_configs/cluster_west.yaml
+   ```
+
+3. **Transfer the `tokenize_shuffle.py` script to the cluster**:  
+   ```
+   ray rsync_up ray_cluster_configs/cluster_west.yaml tokenize_shuffle.py /home/ubuntu
+   ```
+
+5. **Tokenize with shuffling**:  
+   ```
+   python tokenize_shuffle.py --input “s3://dcnlp-data/redpajamas-raw/c4-train.{00000..00063}-of-01024.jsonl” --output s3://dcnlp-data/tokenize-shuffle-test/
+   ```
+
+> **Note**: Ensure that the paths specified above are in the same AWS region as the one mentioned in the ray yaml file (currently set to `us-west-2`).
+
+6. **Exit and re-enter the cluster as required**.
+
+### Tokenize shuffle on an AWS cluster - Detailed Workflow
+
+1. **Configure AWS**:  
+   Start by setting up your AWS credentials:
+   ```
+   aws configure
+   ```
+
+2. **Initialize the cluster**:  
+   ```
+   ray up ray_cluster_configs/cluster_west.yaml
+   ```
+
+3. **Copy the script to the cluster**:  
+   ```
+   ray rsync_up ray_cluster_configs/cluster_west.yaml tokenize_shuffle.py /home/ubuntu
+   ```
+   Copy the `default_dataset_yaml` as well if used.
+
+4. **SSH into the cluster**:  
+   ```
+   ray attach ray_cluster_configs/cluster_west.yaml
+   ```
+
+5. **Enter tmux and execute the job**:  
+   ```
+   tmux new-session -d -s ray_tokenize_shuffle  'python tokenize_shuffle.py'
+   ```
+
+> **Heads up**: This is version 0 of this script. The user interface will be improved in future versions. Currently, objects are being spilled to `dcnlp-hub`.
+
+### Tokenize shuffle on a SLURM cluster
+
+To run the same process on top of a SLURM cluster, you can use the `open_lm/datapreprocess/ray/tokenize_shuffle_sbatch.sh` script, by:
+
+1. Editing the specific SBATCH configuration for your particular cluster on top of the script.
+2. Exporting the environment variable `$OPEN_LM_BASE`, to point to the base directory of this repository.
+
+You can then run tokenization on however many nodes you want using the following command:
 ```
->>> python datapreprocess/make_2048.py \
-    --input-files path_to_raw_data/*.jsonl
-    --output-dir preproc_data
-    --num-workers 32
-    --num-consumers 1
-```
-Where `input-files` passes all of its (possibly many) arguments through the python `glob` module, allowing for wildcards. Optionally, data can be stored in S3 by setting the environment variables: `S3_BASE`,  and passing the flag `--upload-to-s3` to the script. This saves sharded data to the given bucket with prefix of `S3_BASE`. E.g.
-```
->>> export S3_BASE=preproc_data-v1/
->>> python datapreprocess/make2048.py --upload-to-s3 ... # same arguments as before
+sbatch open_lm/datapreprocess/ray/tokenize_shuffle_sbatch.sh path/to/raw_data path/to/output
 ```
 
 ## Run Training

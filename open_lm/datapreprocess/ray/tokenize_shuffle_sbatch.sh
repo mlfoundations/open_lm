@@ -1,13 +1,16 @@
 #!/bin/bash
-
-# Make sure to add SBATCH options for your particular cluster here!
+#SBATCH -p <partition>
+#SBATCH -t 48:00:00
+#SBATCH --job-name=ray_tokenize
+#SBATCH --nodes <N>
+#SBATCH --ntasks-per-node 1
+#SBATCH --cpus-per-task=128
+#SBATCH --output=%x_%j.out
 
 export PATH="/work/08002/gsmyrnis/frontera/conda/miniconda3/condabin:$PATH"
 source /work/08002/gsmyrnis/frontera/conda/miniconda3/etc/profile.d/conda.sh
 conda activate open_lm  # install according to tng/tools/environment.yml
-
-# Edit this path to point to the copy of the open_lm repo.
-cd ~/open_lm
+cd $OPEN_LM_BASE
 
 # The following is the recommended setup from the Ray documentation.
 
