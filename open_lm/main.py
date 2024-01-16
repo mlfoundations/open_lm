@@ -731,7 +731,9 @@ def main(args):
         if args.dataset_manifest is not None:
             assert not args.dataset_resampled, "dataset_manifest and dataset_resampled are mutually exclusive"
             steps_left = total_steps - global_step
-            samples_to_request = min(args.train_num_samples, steps_left * args.global_batch_size)  # Do not request too many samples if only a few are left.
+            samples_to_request = min(
+                args.train_num_samples, steps_left * args.global_batch_size
+            )  # Do not request too many samples if only a few are left.
             (
                 train_data_string_per_source,
                 num_samples_per_source,
