@@ -730,7 +730,7 @@ def main(args):
 
         if args.dataset_manifest is not None:
             assert not args.dataset_resampled, "dataset_manifest and dataset_resampled are mutually exclusive"
-            
+
             steps_left = total_steps - global_step
             assert steps_left > 0, "Training should have ended without reaching this point."
             samples_to_request = min(
