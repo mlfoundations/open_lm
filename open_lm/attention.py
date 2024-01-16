@@ -129,7 +129,10 @@ def get_attn_func(
         return xformers_attn if torch.cuda.is_available() else torch_attn
     elif attn_name == "xformers_attn":
         return xformers_attn
-    elif attn_name == "xformers_attn_with_variable_length_support":
+    elif attn_name == "xformers_attn_variable_length":
+        # Upon changing the input sequence length, xformers changes the stride
+        # dimension of the output tensor. This makes future calls to .view()
+        # fail. One thus needs to call .contiguous() on the output tensor.
         return lambda *args, **kwargs: xformers_attn(*args, **kwargs).contiguous()
     elif attn_name == "torch_attn":
         return torch_attn
