@@ -145,7 +145,7 @@ class OpenLMforCausalLM(OpenLMModel):
             if torch_dtype is not None:
                 torch.set_default_dtype(torch_dtype)
 
-            print("Loading model from directory")
+            print("Loading checkpoint from directory")
             checkpoint_path = kwargs["config"].checkpoint_file
             checkpoint = torch.load(checkpoint_path)
 
