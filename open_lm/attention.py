@@ -130,9 +130,10 @@ def get_attn_func(
     elif attn_name == "xformers_attn":
         return xformers_attn
     elif attn_name == "xformers_attn_variable_length":
-        # Upon changing the input sequence length, xformers changes the stride
-        # dimension of the output tensor. This makes future calls to .view()
-        # fail. One thus needs to call .contiguous() on the output tensor.
+        # Upon changing the input sequence length, xformers attention changes
+        # the stride dimension of the output tensor. This makes future calls to
+        # .view() that collapses last two dimensions fail. One thus needs to
+        # call .contiguous() on the output tensor. [#188]
         return lambda *args, **kwargs: xformers_attn(*args, **kwargs).contiguous()
     elif attn_name == "torch_attn":
         return torch_attn
