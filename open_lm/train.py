@@ -3,7 +3,6 @@ import logging
 import math
 import time
 from contextlib import nullcontext
-import copy
 
 import numpy as np
 import torch
@@ -23,59 +22,10 @@ try:
 except ImportError:
     wandb = None
 
+from open_lm.data import sample_chunk
 from open_lm.distributed import is_master
 from open_lm.precision import get_autocast
-
-
-class AverageMeter(object):
-    """Computes and stores the average and current value"""
-
-    def __init__(self):
-        self.reset()
-
-    def reset(self):
-        self.val = 0
-        self.avg = 0
-        self.sum = 0
-        self.count = 0
-
-    def update(self, val, n=1):
-        self.val = val
-        self.sum += val * n
-        self.count += n
-        self.avg = self.sum / self.count
-
-
-class ConfidenceIntervalMeter(object):
-    def __init__(self):
-        self.reset()
-
-    def reset(self):
-        self.points = []
-        self.points_tensor = None
-
-    def update(self, val):
-        self.points.append(val)
-
-    def compute_bootstrap_ci(self, num_samples=10_000, interval=95):
-        lower = None
-        upper = None
-
-        self.points_tensor = torch.cat(self.points)
-        num_points = self.points_tensor.shape[0]
-
-        estimates = []
-        for _ in range(num_samples):
-            i = np.random.choice(num_points, size=num_points)
-            estimate = torch.sum(self.points_tensor[i]) / num_points
-            estimates.append(estimate.item())
-
-        half = (100 - interval) / 2
-
-        lower = np.percentile(estimates, half).item()
-        upper = np.percentile(estimates, 100 - half).item()
-
-        return lower, upper
+from open_lm.meters import AverageMeter
 
 
 def unwrap_model(model):
@@ -90,87 +40,6 @@ def backward(total_loss, scaler):
         scaler.scale(total_loss).backward()
     else:
         total_loss.backward()
-
-
-def squash_tok(seqs, mask, pad):
-    # Get the count of non-delimiter elements in each batch
-    count_non_squash = mask.sum(dim=1)
-
-    # Create a tensor of pad tokens with the same shape as the input tensor
-    out_tensor = torch.full(seqs.shape, pad, dtype=seqs.dtype, device=seqs.device)
-
-    # Place all non-delimiter elements at the left of the output tensor, pad tokens to the right
-    for i in range(seqs.shape[0]):
-        if count_non_squash[i].item() != 0:
-            out_tensor[i, : count_non_squash[i]] = seqs[i, mask[i]]
-        else:
-            out_tensor[i] = seqs[i]
-
-    return out_tensor
-
-
-def mask_sequence(chunk, start_idx, args, ignore_tok=-100):
-    # NOTE: this implementation supports 0 or 1 instance of tok in a sequence.
-    #       if more than one instance appears, the last instace of tok is used.
-
-    tensor = torch.clone(chunk)
-
-    inputs = tensor[:, start_idx : start_idx + args.seq_len]
-    targets = tensor[:, start_idx + 1 : start_idx + args.seq_len + 1]
-
-    if args.target_mask_left is not None:
-        tok_positions_targets = targets == args.target_mask_left
-
-        # construct cumulative mask for positions before (last) tok (if it appears)
-        cumsum_mask = tok_positions_targets.flip(dims=[-1]).cumsum(dim=-1).flip(dims=[-1])
-
-        # create mask for positions before (last) tok in each row (batch)
-        tok_mask = cumsum_mask > 0
-
-        if args.squash_mask_left:
-            # retain tok in the output as makes squashing easier
-            tok_mask &= ~tok_positions_targets
-
-            # ensure we dont modify input
-            targets = torch.clone(targets)
-            targets[tok_mask] = ignore_tok
-
-            # code to squash the left mask and pad with args.target_mask_individual
-            selected_inputs = inputs != args.target_mask_left
-            selected_targets = targets != args.target_mask_left
-
-            inputs = squash_tok(inputs, selected_inputs, args.target_mask_individual)
-            targets = squash_tok(targets, selected_targets, args.target_mask_individual)
-
-        else:
-            # ensure we dont modify input
-            targets = torch.clone(targets)
-            targets[tok_mask] = ignore_tok
-
-    if args.target_mask_individual is not None:
-        # ensure we dont modify input
-        targets = torch.clone(targets)
-        targets[targets == args.target_mask_individual] = ignore_tok
-
-    return inputs, targets
-
-
-def sample_chunk(chunk, args):
-    if chunk.shape[1] == args.seq_len + 1:
-        start_idx = 0
-    elif chunk.shape[1] > args.seq_len + 1:
-        start_idx = torch.randint(0, chunk.shape[1] - args.seq_len, (1,)).item()
-    else:
-        raise Exception(f"Invalid sequence length: Sequence length {args.seq_len} > {chunk.shape[1]} Chunk size")
-
-    inputs = chunk[:, start_idx : start_idx + args.seq_len]
-    targets = chunk[:, start_idx + 1 : start_idx + args.seq_len + 1]
-
-    # replace elements to be masked with with -100 (pytorch default xent ignore value)
-    if args.target_mask_left is not None or args.target_mask_individual is not None:
-        inputs, targets = mask_sequence(chunk, start_idx, args)
-
-    return inputs, targets
 
 
 def train_one_epoch(model, data, loss, epoch, step, optimizer, scaler, scheduler, total_steps, args, tb_writer=None):
@@ -400,124 +269,3 @@ def train_one_epoch(model, data, loss, epoch, step, optimizer, scaler, scheduler
     if tb_writer is not None:
         tb_writer.flush()
     return True, step
-
-
-@torch.inference_mode()
-def evaluate(model, data, start_epoch, args, writer):
-    """
-    evaluates perplexity on validation data
-    """
-    if is_master(args):
-        print("=> begin evaluation")
-    device = torch.device(args.device)
-    autocast = get_autocast(args.precision)
-
-    model.eval()
-
-    data["val"].set_epoch(start_epoch)  # set epoch in process safe manner via sampler or shared_epoch
-    dataloader = data["val"].dataloader
-
-    # NOTE: max_num_batches = 0 corresponds to exhausting iterator
-    max_num_batches = dataloader.num_batches
-
-    losses_m = AverageMeter()
-    batch_time_m = AverageMeter()
-    data_time_m = AverageMeter()
-    sps_m = AverageMeter()
-    spspg_m = AverageMeter()
-    losses_seq_ci_m = ConfidenceIntervalMeter()
-    losses_tok_ci_m = ConfidenceIntervalMeter()
-
-    end = time.time()
-    loss = torch.nn.CrossEntropyLoss(reduction="none")
-    for i, batch in enumerate(dataloader):
-        if i == max_num_batches and max_num_batches != 0:
-            break
-
-        (texts,) = batch
-        texts = torch.LongTensor(texts).to(device)
-
-        data_time_m.update(time.time() - end)
-
-        with autocast():
-            inputs, targets = sample_chunk(texts, args)
-
-            out, _, _ = model(inputs)  # [bs, seq_len, vocab_size]
-
-            bs, seq_len = targets.shape
-
-            targets = targets.reshape(-1)
-            total_loss = loss(out.reshape(-1, args.vocab_size), targets)  # [bs * seq_len]
-
-            # cross entropy ignores -100 values in loss computation
-            mask = targets != -100
-
-            # reshape and average for sequence losses
-            sum_loss_per_seq = torch.sum(total_loss.reshape(bs, seq_len), -1)
-            num_toks_per_seq = torch.sum(mask.reshape(bs, seq_len), -1).float()
-            losses_seq_ci_m.update(sum_loss_per_seq / num_toks_per_seq)
-
-            # individual token losses
-            losses_tok_ci_m.update(total_loss[mask])
-
-            # compute average loss for the mini-batch
-            total_loss = total_loss[mask].mean()
-            losses_m.update(total_loss.item(), n=inputs.shape[0])
-
-        batch_time_m.update(time.time() - end)
-        sps_m.update(inputs.numel() * args.world_size / batch_time_m.val)
-        spspg_m.update(inputs.numel() / batch_time_m.val)
-
-    lower_seq, upper_seq = losses_seq_ci_m.compute_bootstrap_ci()
-    lower_tok, upper_tok = losses_tok_ci_m.compute_bootstrap_ci()
-    num_seqs = losses_seq_ci_m.points_tensor.shape[0]
-    num_toks = losses_tok_ci_m.points_tensor.shape[0]
-
-    # Save eval loss / etc.
-    log_data = {
-        "loss": losses_m.avg,
-        "data_time": data_time_m.avg,
-        "batch_time": batch_time_m.avg,
-        "samples_per_second": sps_m.avg,
-        "samples_per_second_per_gpu": spspg_m.avg,
-        "loss_sequences_lower_95": lower_seq,
-        "loss_sequences_upper_95": upper_seq,
-        "loss_tokens_lower_95": lower_tok,
-        "loss_tokens_upper_95": upper_tok,
-        "sequences": num_seqs,
-        "tokens": num_toks,
-    }
-    if args.train_num_samples is not None:
-        log_data["train_tokens"] = start_epoch * args.train_num_samples * args.seq_len
-
-    for name, val in log_data.items():
-        name = "valid/" + name
-        if writer is not None:
-            writer.add_scalar(name, val, start_epoch)
-        if args.wandb and is_master(args):
-            assert wandb is not None, "Please install wandb."
-            wandb.log({name: val, "epoch": start_epoch, "tokens": log_data["tokens"]})
-    if is_master(args):
-        print(f"evaluation on: {args.val_data}")
-        print(f"evaluation loss: {losses_m.avg}")
-        print(f"evaluation perplexity: {math.exp(losses_m.avg)}")
-        print(f"num seqs: {num_seqs}")
-        print(f"num tokens: {num_toks}")
-
-    log_data["checkpoint_path"] = args.resume
-    log_data["val_data"] = args.val_data
-    log_data["model"] = args.hf_model if args.hf_model else args.model
-
-    return log_data
-
-
-def evaluate_loop(model, data_list, start_epoch, args, writer):
-    log_data_list = []
-    for i, data in enumerate(data_list):
-        args_copy = copy.deepcopy(args)
-        args_copy.val_data = [args.val_data[i]]
-        args_copy.val_data_key = args.val_data_key[i]
-
-        log_data_list.append(evaluate(model, data, start_epoch, args_copy, writer))
-
-    return log_data_list

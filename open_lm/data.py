@@ -413,9 +413,10 @@ def get_wds_dataset(args, is_train, epoch=0, floor=True, tokenizer=None, data_ke
         else:
             pipeline.extend(
                 [
+                    wds.split_by_node,
                     wds.split_by_worker,
                     # at this point, we have an iterator over the shards assigned to each worker
-                    wds.tarfile_to_samples(handler=log_and_continue),
+                    wds.tarfile_to_samples(handler=None),
                 ]
             )
 
@@ -577,3 +578,87 @@ def get_data(args, epoch=0, tokenizer=None, skip_train=False, floor=True):
             data["val_list"].append(data_val)
 
     return data
+
+
+# preprocessing tokens and sampling chunks
+
+
+def squash_tok(seqs, mask, pad):
+    # Get the count of non-delimiter elements in each batch
+    count_non_squash = mask.sum(dim=1)
+
+    # Create a tensor of pad tokens with the same shape as the input tensor
+    out_tensor = torch.full(seqs.shape, pad, dtype=seqs.dtype, device=seqs.device)
+
+    # Place all non-delimiter elements at the left of the output tensor, pad tokens to the right
+    for i in range(seqs.shape[0]):
+        if count_non_squash[i].item() != 0:
+            out_tensor[i, : count_non_squash[i]] = seqs[i, mask[i]]
+        else:
+            out_tensor[i] = seqs[i]
+
+    return out_tensor
+
+
+def mask_sequence(chunk, start_idx, args, ignore_tok=-100):
+    # NOTE: this implementation supports 0 or 1 instance of tok in a sequence.
+    #       if more than one instance appears, the last instace of tok is used.
+
+    tensor = torch.clone(chunk)
+
+    inputs = tensor[:, start_idx : start_idx + args.seq_len]
+    targets = tensor[:, start_idx + 1 : start_idx + args.seq_len + 1]
+
+    if args.target_mask_left is not None:
+        tok_positions_targets = targets == args.target_mask_left
+
+        # construct cumulative mask for positions before (last) tok (if it appears)
+        cumsum_mask = tok_positions_targets.flip(dims=[-1]).cumsum(dim=-1).flip(dims=[-1])
+
+        # create mask for positions before (last) tok in each row (batch)
+        tok_mask = cumsum_mask > 0
+
+        if args.squash_mask_left:
+            # retain tok in the output as makes squashing easier
+            tok_mask &= ~tok_positions_targets
+
+            # ensure we dont modify input
+            targets = torch.clone(targets)
+            targets[tok_mask] = ignore_tok
+
+            # code to squash the left mask and pad with args.target_mask_individual
+            selected_inputs = inputs != args.target_mask_left
+            selected_targets = targets != args.target_mask_left
+
+            inputs = squash_tok(inputs, selected_inputs, args.target_mask_individual)
+            targets = squash_tok(targets, selected_targets, args.target_mask_individual)
+
+        else:
+            # ensure we dont modify input
+            targets = torch.clone(targets)
+            targets[tok_mask] = ignore_tok
+
+    if args.target_mask_individual is not None:
+        # ensure we dont modify input
+        targets = torch.clone(targets)
+        targets[targets == args.target_mask_individual] = ignore_tok
+
+    return inputs, targets
+
+
+def sample_chunk(chunk, args):
+    if chunk.shape[1] == args.seq_len + 1:
+        start_idx = 0
+    elif chunk.shape[1] > args.seq_len + 1:
+        start_idx = torch.randint(0, chunk.shape[1] - args.seq_len, (1,)).item()
+    else:
+        raise Exception(f"Invalid sequence length: Sequence length {args.seq_len} > {chunk.shape[1]} Chunk size")
+
+    inputs = chunk[:, start_idx : start_idx + args.seq_len]
+    targets = chunk[:, start_idx + 1 : start_idx + args.seq_len + 1]
+
+    # replace elements to be masked with with -100 (pytorch default xent ignore value)
+    if args.target_mask_left is not None or args.target_mask_individual is not None:
+        inputs, targets = mask_sequence(chunk, start_idx, args)
+
+    return inputs, targets

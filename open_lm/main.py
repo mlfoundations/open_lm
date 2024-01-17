@@ -51,7 +51,8 @@ from open_lm.distributed import is_master, init_distributed_device, broadcast_ob
 from open_lm.logger import setup_logging
 from open_lm.params import parse_args
 from open_lm.scheduler import cosine_lr
-from open_lm.train import train_one_epoch, evaluate_loop
+from open_lm.train import train_one_epoch
+from open_lm.evaluate import evaluate_loop
 from open_lm.file_utils import (
     pt_load,
     check_exists,
