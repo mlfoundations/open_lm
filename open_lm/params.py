@@ -413,6 +413,18 @@ def parse_args(args):
         help="what is the extension fore each val-data source.",
     )
     parser.add_argument(
+        "--val-seq-ci",
+        default=False,
+        action="store_true",
+        help="comput sequence loss 0.95 ci.",
+    )
+    parser.add_argument(
+        "--val-tok-ci",
+        default=False,
+        action="store_true",
+        help="compute token loss 0.95 ci.",
+    )
+    parser.add_argument(
         "--resume",
         default=None,
         type=str,

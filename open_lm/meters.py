@@ -31,7 +31,7 @@ class ConfidenceIntervalMeter(object):
 
     def reset(self):
         self.points = []
-        self.points_tensor = None
+        self.points_array = None
 
     def update(self, val):
         self.points.append(val)
@@ -40,16 +40,14 @@ class ConfidenceIntervalMeter(object):
         lower = None
         upper = None
 
-        logging.info("before torch cat")
-        self.points_tensor = np.concatenate(self.points)
-        logging.info(self.points_tensor.shape)
+        self.points_array = np.concatenate(self.points)
 
-        num_points = self.points_tensor.shape[0]
+        num_points = self.points_array.shape[0]
 
         estimates = []
         for _ in range(num_samples):
             i = np.random.choice(num_points, size=num_points)
-            estimate = np.sum(self.points_tensor[i]) / num_points
+            estimate = np.sum(self.points_array[i]) / num_points
             estimates.append(estimate.item())
 
         half = (100 - interval) / 2

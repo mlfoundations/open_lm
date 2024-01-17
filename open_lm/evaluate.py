@@ -18,8 +18,6 @@ from open_lm.meters import (
     AverageMeter,
     ConfidenceIntervalMeter,
     gather_meters,
-    combine_average_meters,
-    combine_ci_meters,
 )
 
 
@@ -124,11 +122,13 @@ def evaluate(model, data, start_epoch, args, writer):
     if args.distributed:
         dist.barrier()
 
-    if is_master(args):
-        logging.info("computing bootstrap ci")
+    lower_seq, upper_seq, lower_tok, upper_tok = -1.0, -1.0, -1.0, -1.0
+    if args.val_seq_ci:
+        lower_seq, upper_seq = losses_seq_ci_m.compute_bootstrap_ci()
 
-    lower_seq, upper_seq = losses_seq_ci_m.compute_bootstrap_ci()
-    lower_tok, upper_tok = losses_tok_ci_m.compute_bootstrap_ci()
+    if args.val_tok_ci:
+        lower_tok, upper_tok = losses_tok_ci_m.compute_bootstrap_ci()
+
     num_seqs = sum([len(p) for p in losses_seq_ci_m.points])
     num_toks = sum([len(p) for p in losses_tok_ci_m.points])
 

@@ -10,7 +10,6 @@ import torch.distributed as dist
 from torch.distributed.distributed_c10d import ReduceOp
 from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
 
-
 try:
     from megablocks.layers.moe import batched_load_balancing_loss, clear_load_balancing_loss
     from megablocks.layers.arguments import Arguments as MoEArgs
