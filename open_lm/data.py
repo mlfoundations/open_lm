@@ -413,10 +413,10 @@ def get_wds_dataset(args, is_train, epoch=0, floor=True, tokenizer=None, data_ke
         else:
             pipeline.extend(
                 [
+                    wds.tarfile_to_samples(handler=wds.reraise_exception),
+                    # splitting within a tar is fine for evaluation as no checkpointing
                     wds.split_by_node,
                     wds.split_by_worker,
-                    # at this point, we have an iterator over the shards assigned to each worker
-                    wds.tarfile_to_samples(handler=None),
                 ]
             )
 
