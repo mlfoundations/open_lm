@@ -2,7 +2,7 @@ import json
 
 from torch import Tensor, equal
 
-from open_lm.train import sample_chunk
+from open_lm.data import sample_chunk
 from tests.shared import create_train_fixtures
 
 
