@@ -120,7 +120,7 @@ class CustomAttn(nn.Module):
         self.in_proj = nn.Linear(args.dim, 3 * args.n_heads * self.head_dim, bias=False)
         self.out_proj = nn.Linear(args.n_heads * self.head_dim, args.dim, bias=False)
         self.pos_embed = get_pos_embed(args)
-        self.attn_fn = xformers_attn if torch.cuda.is_available() else torch_attn
+        self.attn_fn = args.attn_func
         self.apply_qk_norm = args.apply_qk_norm
 
         # initialize norm layers for queries and keys if needed
