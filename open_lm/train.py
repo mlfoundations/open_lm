@@ -92,6 +92,35 @@ def backward(total_loss, scaler):
         total_loss.backward()
 
 
+def sliding_window(tensor, subsequence):
+    # Create a sliding window view of the tensor
+    window_size = len(subsequence)
+    windows = tensor.unfold(dimension=-1, size=window_size, step=1)
+    # Compare each window to the subsequence
+    matches = torch.all(windows == torch.tensor(subsequence).to(tensor.device), dim=-1)
+    # Find the last match
+    if matches.any():  # Check if there are any matches
+        last_match_idx = torch.where(matches)[0].max().item()
+    else:
+        last_match_idx = -1  # Return -1 or any other value that indicates no match
+    return last_match_idx
+
+
+def replace_before_subsequence(tensor, subsequence, replaced, exclusive=False):
+    # Create a mask with the same shape as the tensor, initially filled with False
+    mask = torch.zeros_like(tensor, dtype=torch.bool)
+    # Apply sliding_window to each row of the tensor
+    for i, row in enumerate(tensor):
+        start_idx = sliding_window(row, subsequence)
+        if start_idx > 0:
+            mask[i, :start_idx] = True
+    if exclusive:
+        mask |= torch.arange(tensor.shape[-1], device=tensor.device) < start_idx + len(subsequence)
+    out = torch.clone(tensor)
+    out[mask] = replaced
+    return out
+
+
 def replace_before_tok(tensor, tok, replaced, excusive=False):
     # NOTE: this implementation supports 0 or 1 instance of tok in a sequence.
     #       if more than one instance appears, the last instace of tok is used.
@@ -135,10 +164,9 @@ def sample_chunk(chunk, args):
 
     # replace elements to be masked with with -100 (pytorch default xent ignore value)
     if args.target_mask_left is not None:
-        targets = replace_before_tok(targets, args.target_mask_left, -100)
+        targets = replace_before_subsequence(targets, args.target_mask_left, -100)
     if args.target_mask_individual is not None:
         targets = replace_tok(targets, args.target_mask_individual, -100)
-
     return inputs, targets
 
 
