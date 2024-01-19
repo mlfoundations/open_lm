@@ -6,10 +6,10 @@ from open_lm.data import sample_chunk
 from tests.shared import create_train_fixtures
 
 
-def create_tok_fixtures():
-    special_token_left = 42
-    special_token_individual = 2
+def test_target_mask_left():
+    args, _, _, _, _, _ = create_train_fixtures()
 
+    special_token_left = 42
     batched_tokens = Tensor(
         [
             [0, 1, 2, 42],
@@ -21,14 +21,7 @@ def create_tok_fixtures():
         ]
     )
 
-    return special_token_left, special_token_individual, batched_tokens
-
-
-def test_target_mask_left():
-    args, _, _, _, _, _ = create_train_fixtures()
-    special_token, _, batched_tokens = create_tok_fixtures()
-
-    args.target_mask_left = special_token
+    args.target_mask_left = special_token_left
     args.seq_len = 3
 
     input, target = sample_chunk(batched_tokens, args)
@@ -61,9 +54,20 @@ def test_target_mask_left():
 
 def test_target_mask_individual():
     args, _, _, _, _, _ = create_train_fixtures()
-    _, special_token, batched_tokens = create_tok_fixtures()
+    special_token_individual = 2
 
-    args.target_mask_individual = special_token
+    batched_tokens = Tensor(
+        [
+            [0, 1, 2, 42],
+            [0, 1, 42, 2],
+            [0, 42, 1, 2],
+            [42, 0, 1, 2],
+            [0, 1, 2, 3],
+            [42, 0, 42, 1],
+        ]
+    )
+
+    args.target_mask_individual = special_token_individual
     args.seq_len = 3
 
     input, target = sample_chunk(batched_tokens, args)
@@ -96,7 +100,20 @@ def test_target_mask_individual():
 
 def test_target_mask_left_individual():
     args, _, _, _, _, _ = create_train_fixtures()
-    special_token_left, special_token_individual, batched_tokens = create_tok_fixtures()
+    special_token_left = 42
+    special_token_individual = 2
+
+    batched_tokens = Tensor(
+        [
+            [0, 1, 2, 42],
+            [0, 1, 42, 2],
+            [0, 42, 1, 2],
+            [42, 0, 1, 2],
+            [0, 1, 2, 3],
+            [42, 0, 42, 1],
+            [42, 42, 42, 1],
+        ]
+    )
 
     args.target_mask_left = special_token_left
     args.target_mask_individual = special_token_individual
@@ -112,6 +129,7 @@ def test_target_mask_left_individual():
             [42, 0, 1],
             [0, 1, 2],
             [42, 0, 42],
+            [42, 42, 42],
         ]
     )
 
@@ -123,6 +141,7 @@ def test_target_mask_left_individual():
             [0, 1, -100],
             [1, -100, 3],
             [-100, -100, 1],
+            [-100, -100, 1],
         ]
     )
 
@@ -132,7 +151,19 @@ def test_target_mask_left_individual():
 
 def test_target_mask_left_individual_squash():
     args, _, _, _, _, _ = create_train_fixtures()
-    special_token_left, special_token_individual, batched_tokens = create_tok_fixtures()
+    special_token_left = 42
+    special_token_individual = 2
+
+    batched_tokens = Tensor(
+        [
+            [0, 1, 2, 42],
+            [0, 1, 42, 2],
+            [0, 42, 1, 2],
+            [42, 0, 1, 2],
+            [0, 1, 2, 3],
+            [42, 0, 42, 1],
+        ]
+    )
 
     args.target_mask_left = special_token_left
     args.target_mask_individual = special_token_individual

@@ -214,6 +214,37 @@ def check_args(args):
             args.target_mask_left is not None and args.target_mask_individual is not None
         ), "must pass target-mask-left and target-mask-individual to use squash-mask-left"
 
+    if args.target_mask_left is not None and args.target_mask_individual == args.target_mask_left:
+        raise ValueError(
+            f"--target-mask-left and --target-mask-individual set to same value of {args.target_mask_left}."
+        )
+
+    # hf checks
+    if args.hf_model is not None and args.hf_seq_len is None:
+        raise ValueError("If passing --hf-model, must also pass --hf-seq-len to be used for training/fine-tuning.")
+
+    if args.hf_model is not None and args.fsdp and args.hf_fsdp_block is None:
+        raise ValueError("If passing --hf-model and --fsdp, must also pass --hf-fsdp-block.")
+
+    resume_latest = args.resume == "latest"
+
+    # resuming checkpoing checks
+    if resume_latest:
+        # If using remote_sync, need to check the remote instead of the local checkpoints folder.
+        if args.remote_sync is not None:
+            if args.save_most_recent:
+                raise ValueError("Cannot use save-most-recent with remote_sync and resume latest.")
+            if args.remote_sync_protocol != "s3":
+                raise ValueError("Sync protocol not supported when using resume latest.")
+
+    if args.lr_scheduler != "cosine":
+        raise ValueError(
+            f"Unknown scheduler, {args.lr_scheduler}. Available options are: cosine, const, const-cooldown."
+        )
+
+    if args.experimental_meta_device:
+        print("WARNING: Meta device initialization requested, but this is not currently fully tested.")
+
 
 def parse_args(args):
     parser = argparse.ArgumentParser()

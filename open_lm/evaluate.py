@@ -36,8 +36,8 @@ def evaluate(model, data, start_epoch, args, writer):
     data["val"].set_epoch(start_epoch)  # set epoch in process safe manner via sampler or shared_epoch
     dataloader = data["val"].dataloader
 
-    # NOTE: max_num_batches = 0 corresponds to exhausting iterator
-    max_num_batches = dataloader.num_batches
+    # NOTE: dataloader.num_batches = 0 corresponds to exhausting iterator by convention
+    exhaust_loader = dataloader.num_batches == 0
 
     losses_m = AverageMeter()
     batch_time_m = AverageMeter()
@@ -50,8 +50,9 @@ def evaluate(model, data, start_epoch, args, writer):
     end = time.time()
     loss = torch.nn.CrossEntropyLoss(reduction="none")
 
+    # by default the dataloader will be exhausted
     for i, batch in enumerate(dataloader):
-        if i == max_num_batches and max_num_batches != 0:
+        if i == dataloader.num_batches and not exhaust_loader:
             break
 
         (texts,) = batch
@@ -89,14 +90,6 @@ def evaluate(model, data, start_epoch, args, writer):
 
         sps_m.update(inputs.numel() * args.world_size / batch_time_m.val)
         spspg_m.update(inputs.numel() / batch_time_m.val)
-
-        if is_master(args) and (i % args.log_every_n_steps == 0):
-            samples_per_second = inputs.numel() * args.world_size / batch_time_m.val
-            samples_per_second_per_gpu = inputs.numel() / batch_time_m.val
-            logging.info(
-                f"Data (t): {data_time_m.avg:.3f} "
-                f"Batch (t): {batch_time_m.avg:.3f}, {samples_per_second:#g}/s, {samples_per_second_per_gpu:#g}/s/gpu "
-            )
 
     if args.distributed:
         dist.barrier()

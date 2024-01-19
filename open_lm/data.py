@@ -584,47 +584,108 @@ def get_data(args, epoch=0, tokenizer=None, skip_train=False, floor=True):
 
 
 def squash_tok(seqs, mask, pad):
-    # Get the count of non-delimiter elements in each batch
-    count_non_squash = mask.sum(dim=1)
+    """This function squashes all non-delimiter elements to the left side of the tensor, and replaces the rest elements with pad tokens in a given sequence.
 
-    # Create a tensor of pad tokens with the same shape as the input tensor
+    Args:
+        seqs: torch.Tensor, input tensor with batch size as first dimension
+        mask: torch.Tensor, binary mask tensor indicating non-delimiter elements of the same shape as 'seqs'
+        pad: int, pad token to be used to fill in the non-masked areas of 'seqs'
+    Returns:
+        out_tensor: torch.Tensor, resulting tensor after squashing non-delimiter elements and padding on the right
+
+    """
+    # Calculate count of non-delimiter (mask values are True) elements in each batch
+    valid_token_count = mask.sum(dim=1)
+
+    # Create a tensor filled with pad tokens having the same shape as the input tensor 'seqs'
     out_tensor = torch.full(seqs.shape, pad, dtype=seqs.dtype, device=seqs.device)
 
-    # Place all non-delimiter elements at the left of the output tensor, pad tokens to the right
+    # For each sequence in the batch
     for i in range(seqs.shape[0]):
-        if count_non_squash[i].item() != 0:
-            out_tensor[i, : count_non_squash[i]] = seqs[i, mask[i]]
-        else:
-            out_tensor[i] = seqs[i]
+        # assign n non-delimiter tokens to the first n entries of the output
+        # where n is given by indexing valid_token_count along the batch dim
+        out_tensor[i, : valid_token_count[i]] = seqs[i, mask[i]]
 
     return out_tensor
 
 
 def mask_sequence(chunk, start_idx, args, ignore_tok=-100):
-    # NOTE: this implementation supports 0 or 1 instance of tok in a sequence.
-    #       if more than one instance appears, the last instace of tok is used.
+    """Generate inputs and targets, aware of arg.target_mask_left, args.target_mask_individual, args.squash_mask_left
+    The function generate an input in the following way:
+        1.  get the input as chunck[start_idx : start_idx+seq_len]
+        2.  if args.squash_mask_left is specified, remove instance of arg.target_mask_left and slide everything to the left
+            In the event that we need to slide things left, we pad the sequence with args.target_mask_individual
 
-    tensor = torch.clone(chunk)
+    The function generate a target in the following way:
+        1.  get the target as chunk[start_idx+1 : start_idx+seq_len]
+        2a. if args.squash_mask_left, replace all tokens to the left of the rightmost arg.target_mask_left token with ignore_token
+            excluding instances of arg.target_mask_left. then slide everything left and pad with args.target_mask_individual
+        2b. if not args.squash_mask_left, replace all tokens to the left of the rightmost arg.target_mask_left token with ignore_token
+            including instances of arg.target_mask_left
+        3.  replace instances of args.target_mask_individual with ignore_tok
 
-    inputs = tensor[:, start_idx : start_idx + args.seq_len]
-    targets = tensor[:, start_idx + 1 : start_idx + args.seq_len + 1]
+
+    Args:
+        chunk: chunk implicitly containing input and target sequences (batch_size, seq_len+1).
+        start_idx: the starting index of the input with sequence length args.seq_len.
+        args: An object containing necessary arguments for masking.
+              Must include 'seq_len' for specifying sequence length, 'target_mask_left' to specify token to mask,
+              to the left of. 'squash_mask_left' a boolean indicating if 'target_mask_left' should be removed
+              from the input and target, and 'target_mask_individual' to mask individual targets and pad the
+              input to the right should 'target_mask_left' appear and 'squash_mask_left'=True.
+        ignore_tok: The token to replace masked tokens with in the target. Defaults to -100.
+
+    Returns:
+        inputs: The masked inputs.
+        targets: The masked targets.
+
+    Example hand simulation for clarity:
+        # L = args.target_mask_left
+        # _ = ignore_tok
+        # P = pad token (args.target_mask_individual)
+        inputs                      = [a, b, c, L, d, e, L, f, P]
+        targets                     = [b, c, L, d, e, L, f, P, P]
+        targets_mask_left_positions = [0, 0, 1, 0, 0, 1, 0, 0, 0]
+        cumsum_mask                 = [2, 2, 2, 1, 1, 1, 0, 0, 0] # warning: >1 L
+        tok_mask                    = [1, 1, 1, 1, 1, 1, 0, 0, 0]
+        # after tok_mask &= ~targets_mask_left_positions
+        tok_mask                    = [1, 1, 0, 1, 1, 0, 0, 0, 0]
+        # after targets[tok_mask] = ignore_tok; let _ = ignore_tok
+        targets                     = [_, _, L, _, _, L, f, P, P]
+        selected_inputs             = [1, 1, 1, 0, 1, 1, 0, 1, 1]
+        selected_targets            = [1, 1, 0, 1, 1, 0, 1, 1, 1]
+        # after squash, let P = pad token (args.target_mask_individual)
+        inputs                      = [a, b, c, d, e, f, P, P, P]
+        targets                     = [_, _, _, _, f, P, P, P, P]
+        # after  args.target_mask_individual is not None
+        inputs                      = [a, b, c, d, e, f, P, P, P]
+        targets                     = [_, _, _, _, f, _, _, _, _]
+
+    """
+
+    inputs = torch.clone(chunk[:, start_idx : start_idx + args.seq_len])
+    targets = torch.clone(chunk[:, start_idx + 1 : start_idx + args.seq_len + 1])
 
     if args.target_mask_left is not None:
-        tok_positions_targets = targets == args.target_mask_left
+        targets_mask_left_positions = targets == args.target_mask_left
 
         # construct cumulative mask for positions before (last) tok (if it appears)
-        cumsum_mask = tok_positions_targets.flip(dims=[-1]).cumsum(dim=-1).flip(dims=[-1])
+        cumsum_mask = targets_mask_left_positions.flip(dims=[-1]).cumsum(dim=-1).flip(dims=[-1])
+
+        if torch.any(cumsum_mask > 1):
+            logging.warning(
+                "> 1 target_mask_left tokens found in a sequence, using the last instance in the sequence for masking."
+                "Please ensure data is correct."
+            )
 
         # create mask for positions before (last) tok in each row (batch)
-        tok_mask = cumsum_mask > 0
+        ignore_mask = cumsum_mask > 0
 
         if args.squash_mask_left:
-            # retain tok in the output as makes squashing easier
-            tok_mask &= ~tok_positions_targets
+            # exclude target_mask_left in the ignore_mask as makes squashing easier
+            ignore_mask &= ~targets_mask_left_positions
 
-            # ensure we dont modify input
-            targets = torch.clone(targets)
-            targets[tok_mask] = ignore_tok
+            targets[ignore_mask] = ignore_tok
 
             # code to squash the left mask and pad with args.target_mask_individual
             selected_inputs = inputs != args.target_mask_left
@@ -634,13 +695,9 @@ def mask_sequence(chunk, start_idx, args, ignore_tok=-100):
             targets = squash_tok(targets, selected_targets, args.target_mask_individual)
 
         else:
-            # ensure we dont modify input
-            targets = torch.clone(targets)
-            targets[tok_mask] = ignore_tok
+            targets[ignore_mask] = ignore_tok
 
     if args.target_mask_individual is not None:
-        # ensure we dont modify input
-        targets = torch.clone(targets)
         targets[targets == args.target_mask_individual] = ignore_tok
 
     return inputs, targets
