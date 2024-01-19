@@ -186,6 +186,66 @@ def maybe_load_config(parser, args):
     return updated_args
 
 
+def check_args(args):
+    # data checks
+    if args.dataset_type == "synthetic":
+        assert args.train_data is None, "--train-data must not be specified if --dataset-type='synthetic'"
+        assert args.dataset_manifest is None, "--dataset-manifest must not be specified if --dataset-type='synthetic'"
+
+    if args.val_data is not None and args.global_val_batch_size is None:
+        # Make sure that val batch size is set to micro batch size
+        args.global_val_batch_size = args.global_batch_size // args.accum_freq
+
+    # custom_attn checks
+    if args.attn_name == "custom_attn":
+        assert (
+            args.attn_activation is not None
+            and args.attn_seq_scalar is not None
+            and args.attn_seq_scalar_alpha is not None
+        ), "must provide attn-activation, attn-seq-scalar, attn-seq-scalar-alpha to use non-linear-attn"
+    else:
+        assert (
+            args.attn_activation is None and args.attn_seq_scalar is None and args.attn_seq_scalar_alpha is None
+        ), "attn-activation, attn-seq-scalar, attn-seq-scalar-alpha must be None unless using non-linear-attn"
+
+    # masking checks
+    if args.squash_mask_left:
+        assert (
+            args.target_mask_left is not None and args.target_mask_individual is not None
+        ), "must pass target-mask-left and target-mask-individual to use squash-mask-left"
+
+    if args.target_mask_left is not None and args.target_mask_individual == args.target_mask_left:
+        raise ValueError(
+            f"--target-mask-left and --target-mask-individual set to same value of {args.target_mask_left}."
+        )
+
+    # hf checks
+    if args.hf_model is not None and args.hf_seq_len is None:
+        raise ValueError("If passing --hf-model, must also pass --hf-seq-len to be used for training/fine-tuning.")
+
+    if args.hf_model is not None and args.fsdp and args.hf_fsdp_block is None:
+        raise ValueError("If passing --hf-model and --fsdp, must also pass --hf-fsdp-block.")
+
+    resume_latest = args.resume == "latest"
+
+    # resuming checkpoing checks
+    if resume_latest:
+        # If using remote_sync, need to check the remote instead of the local checkpoints folder.
+        if args.remote_sync is not None:
+            if args.save_most_recent:
+                raise ValueError("Cannot use save-most-recent with remote_sync and resume latest.")
+            if args.remote_sync_protocol != "s3":
+                raise ValueError("Sync protocol not supported when using resume latest.")
+
+    if args.lr_scheduler != "cosine":
+        raise ValueError(
+            f"Unknown scheduler, {args.lr_scheduler}. Available options are: cosine, const, const-cooldown."
+        )
+
+    if args.experimental_meta_device:
+        print("WARNING: Meta device initialization requested, but this is not currently fully tested.")
+
+
 def parse_args(args):
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -382,6 +442,18 @@ def parse_args(args):
         nargs="+",
         default=None,
         help="what is the extension fore each val-data source.",
+    )
+    parser.add_argument(
+        "--val-seq-ci",
+        default=False,
+        action="store_true",
+        help="comput sequence loss 0.95 ci.",
+    )
+    parser.add_argument(
+        "--val-tok-ci",
+        default=False,
+        action="store_true",
+        help="compute token loss 0.95 ci.",
     )
     parser.add_argument(
         "--resume",
@@ -623,6 +695,12 @@ def parse_args(args):
         help="Mask the loss to the left of a specified token (including the specified token).",
     )
     parser.add_argument(
+        "--squash-mask-left",
+        default=False,
+        action="store_true",
+        help="squash the target-mask-left tokens in the sequence and pad from right with target-mask-individual",
+    )
+    parser.add_argument(
         "--target-mask-individual",
         type=int,
         default=None,
@@ -655,25 +733,6 @@ def parse_args(args):
     else:
         args = parser.parse_args(args)
 
-    # basic error checks
-    # TODO: move all error checking we can do after argparse to a seperate function
-    if args.dataset_type == "synthetic":
-        assert args.train_data is None, "--train-data must not be specified if --dataset-type='synthetic'"
-        assert args.dataset_manifest is None, "--dataset-manifest must not be specified if --dataset-type='synthetic'"
-
-    if args.val_data is not None and args.global_val_batch_size is None:
-        # Make sure that val batch size is set to micro batch size
-        args.global_val_batch_size = args.global_batch_size // args.accum_freq
-
-    if args.attn_name == "custom_attn":
-        assert (
-            args.attn_activation is not None
-            and args.attn_seq_scalar is not None
-            and args.attn_seq_scalar_alpha is not None
-        ), "must provide attn-activation, attn-seq-scalar, attn-seq-scalar-alpha to use non-linear-attn"
-    else:
-        assert (
-            args.attn_activation is None and args.attn_seq_scalar is None and args.attn_seq_scalar_alpha is None
-        ), "attn-activation, attn-seq-scalar, attn-seq-scalar-alpha must be None unless using non-linear-attn"
+    check_args(args)
 
     return args
