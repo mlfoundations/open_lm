@@ -125,8 +125,16 @@ def get_attn_func(
     attn_seq_scalar=None,
     alpha=None,
 ):
-    if attn_name == "xformers_attn":
+    if attn_name == "auto":
+        return xformers_attn if torch.cuda.is_available() else torch_attn
+    elif attn_name == "xformers_attn":
         return xformers_attn
+    elif attn_name == "xformers_attn_variable_length":
+        # Upon changing the input sequence length, xformers attention changes
+        # the stride dimension of the output tensor. This makes future calls to
+        # .view() that collapses last two dimensions fail. One thus needs to
+        # call .contiguous() on the output tensor. [#188]
+        return lambda *args, **kwargs: xformers_attn(*args, **kwargs).contiguous()
     elif attn_name == "torch_attn":
         return torch_attn
     elif attn_name == "custom_attn":
