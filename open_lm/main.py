@@ -712,6 +712,7 @@ def main(args):
                 args.train_data_mix_weights,
                 args.workers,
                 args.world_size,
+                multi_epoch=args.multiple_data_passes,
                 shard_shuffle_seed=args.shard_shuffle_seed,
             )
 
