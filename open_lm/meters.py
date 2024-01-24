@@ -36,7 +36,7 @@ class ConfidenceIntervalMeter(object):
     def update(self, val):
         self.points.append(val)
 
-    def compute_bootstrap_ci(self, num_samples=10_000, interval=95):
+    def compute_bootstrap_ci(self, max_population, num_iteration, interval=95):
         lower = None
         upper = None
 
@@ -44,10 +44,14 @@ class ConfidenceIntervalMeter(object):
 
         num_points = self.points_array.shape[0]
 
+        population_size = self.points_array.shape[0]
+        if max_population is not None:
+            population_size = max_population
+
         estimates = []
-        for _ in range(num_samples):
-            i = np.random.choice(num_points, size=num_points)
-            estimate = np.sum(self.points_array[i]) / num_points
+        for _ in range(num_iteration):
+            i = np.random.choice(num_points, size=population_size)
+            estimate = np.sum(self.points_array[i]) / population_size
             estimates.append(estimate.item())
 
         half = (100 - interval) / 2

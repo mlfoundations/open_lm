@@ -117,10 +117,10 @@ def evaluate(model, data, start_epoch, args, writer):
 
     lower_seq, upper_seq, lower_tok, upper_tok = -1.0, -1.0, -1.0, -1.0
     if args.val_seq_ci:
-        lower_seq, upper_seq = losses_seq_ci_m.compute_bootstrap_ci()
+        lower_seq, upper_seq = losses_seq_ci_m.compute_bootstrap_ci(args.val_max_pop_ci, args.val_iter_ci)
 
     if args.val_tok_ci:
-        lower_tok, upper_tok = losses_tok_ci_m.compute_bootstrap_ci()
+        lower_tok, upper_tok = losses_tok_ci_m.compute_bootstrap_ci(args.val_max_pop_ci, args.val_iter_ci)
 
     num_seqs = sum([len(p) for p in losses_seq_ci_m.points])
     num_toks = sum([len(p) for p in losses_tok_ci_m.points])

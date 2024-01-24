@@ -456,6 +456,20 @@ def parse_args(args):
         help="compute token loss 0.95 ci.",
     )
     parser.add_argument(
+        "--val-max-pop-ci",
+        default=None,
+        action="store",
+        type=int,
+        help="when running CIs what is the maximum population size for the inner loop",
+    )
+    parser.add_argument(
+        "--val-iter-ci",
+        default=10_000,
+        action="store",
+        type=int,
+        help="how many times to sample to construct the CI for the outer loop",
+    )
+    parser.add_argument(
         "--resume",
         default=None,
         type=str,
