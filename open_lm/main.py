@@ -701,12 +701,18 @@ def main(args):
 
         if args.dataset_manifest is not None:
             assert not args.dataset_resampled, "dataset_manifest and dataset_resampled are mutually exclusive"
+
+            steps_left = total_steps - global_step
+            assert steps_left > 0, "Training should have ended without reaching this point."
+            samples_to_request = min(
+                args.train_num_samples, steps_left * args.global_batch_size
+            )  # Do not request too many samples if only a few are left.
             (
                 train_data_string_per_source,
                 num_samples_per_source,
                 next_shard_per_source,
             ) = get_string_for_epoch(
-                args.train_num_samples,
+                samples_to_request,
                 next_shard_per_source,
                 args.dataset_manifest,
                 args.train_data_mix_weights,
