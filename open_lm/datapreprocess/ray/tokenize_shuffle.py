@@ -43,6 +43,7 @@ from ray.data.datasource import Datasource, ReadTask
 from ray.runtime_context import RuntimeContext
 from tqdm import tqdm
 from transformers import GPTNeoXTokenizerFast
+import uuid
 
 import logging
 
@@ -393,7 +394,7 @@ def map_write_wds(batch, batch_size, folder, counter):
             tokens = [int(x) for x in batch["tokens"][i]]
             token_count += len(tokens)
             json_string = json.dumps(tokens)
-            uid = hashlib.md5(json_string.encode()).hexdigest()
+            uid = str(uuid.uuid4())
             sample = {"__key__": uid, "json.gz": json_string}
             sink.write(sample)
     bio.seek(0)
