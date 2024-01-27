@@ -593,7 +593,7 @@ def main(args):
     input_folders = args.input.split(",")
     input_paths = []
     for inp_folder in input_folders:
-        input_paths += glob_files(inp_folder, suffix=args.suffixes)
+        input_paths += glob_files(inp_folder, suffixes=args.suffixes)
     rng = random.Random(args.seed)
     rng.shuffle(input_paths)  # shuffle before selecting subsets
     if args.subset is not None:
