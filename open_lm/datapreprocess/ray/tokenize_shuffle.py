@@ -268,7 +268,7 @@ def preprocess(
         if file_type == RawFileType.UNKNOWN:
             return []
         file_reader = get_reader(file_type, content_key)
-        pbar = tqdm(file_reader(fh))
+        pbar = tqdm(file_reader(fh), mininterval=10)
         pbar.set_description(key)
         for string in pbar:
             tokens = tokenizer_fn(string)
