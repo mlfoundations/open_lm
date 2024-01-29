@@ -161,6 +161,17 @@ Note that `--positional-embedding-type head_rotary` is only necessary if using t
 
 ## Generate Text
 One can also use a trained model to generate text. This is accessible via the script located at [scripts/generate.py](scripts/generate.py). The parameters are similar to those used in evaluation:
+
+- checkpoint: local path to the checkopint of the trained model
+- model: name of the model to use. Should match one of the model configurations in [open_lm/model_configs](open_lm/model_configs/) or be a valid json file containing a model configuration.
+- max-gen-len: maximum length of generated text in tokens
+- temperature: temperature of the softmax used to sample from the model.
+- top-p: top-p sampling parameter
+- use-cache: whether to use the kv-cache for decoding. This is an efficient way to generate text, but demands more memory.
+- tokenizer: tokenizer to use, openlm default is `EleutherAI/gpt-neox-20b`
+- num-beams: number of beams to use for beam search
+
+
 ```
 cd scripts
 
