@@ -268,7 +268,7 @@ def preprocess(
         if file_type == RawFileType.UNKNOWN:
             return []
         file_reader = get_reader(file_type, content_key)
-        pbar = tqdm(file_reader(fh))
+        pbar = tqdm(file_reader(fh), mininterval=10)
         pbar.set_description(key)
         for string in pbar:
             tokens = tokenizer_fn(string)
@@ -443,7 +443,7 @@ def load_tokenizer(tokenizer):
         raise ValueError(f"Unknown Tokenizer: {tokenizer}")
 
 
-def glob_files(path, suffix=".jsonl"):
+def glob_files(path, suffixes):
     """
     Glob files based on a given path and suffix.
     Supports both local and S3 paths.
@@ -467,14 +467,16 @@ def glob_files(path, suffix=".jsonl"):
         all_files = [f"s3://{bucket_name}/{obj['Key']}" for objects in pages for obj in objects.get("Contents", [])]
 
         # Filter out the files based on the suffix
-        matching_files = [f for f in all_files if f.endswith(suffix)]
+        matching_files = [f for f in all_files if any(f.endswith(suffix) for suffix in suffixes)]
 
     else:
         # Use glob for local paths
-        search_pattern = f"{path.rstrip('/')}/**/*{suffix}"
-        matching_files = glob.glob(search_pattern, recursive=True)
-        print("matching files with suffix: ", suffix)
-        print(matching_files)
+        matching_files = []
+        for suffix in suffixes:
+            search_pattern = f"{path.rstrip('/')}/**/*{suffix}"
+            matching_files.extend(glob.glob(search_pattern, recursive=True))
+            print("matching files with suffix: ", suffix)
+            print(matching_files)
 
     return matching_files
 
@@ -551,6 +553,7 @@ def main(args):
     parser.add_argument(
         "--ray_dashboard_host", type=str, default="127.0.0.1"
     )  # default is localhost; for slurm jobs do 0.0.0.0
+    parser.add_argument("--suffixes", nargs="+", default=[".json", ".jsonl", ".zst", ".zstd", ".tar", ".gz"])
 
     args = parser.parse_args(args)
     if args.do_sample:
@@ -586,12 +589,8 @@ def main(args):
     input_folders = args.input.split(",")
     input_paths = []
     for inp_folder in input_folders:
-        input_paths += glob_files(inp_folder, suffix=".json")
-        input_paths += glob_files(inp_folder, suffix=".jsonl")
-        input_paths += glob_files(inp_folder, suffix=".zst")
-        input_paths += glob_files(inp_folder, suffix=".jsonl.gz")
-        input_paths += glob_files(inp_folder, suffix=".tar")
-        input_paths += glob_files(inp_folder, suffix=".gz")
+        input_paths += glob_files(inp_folder, suffixes=args.suffixes)
+    input_paths = sorted(set(input_paths))
     rng = random.Random(args.seed)
     rng.shuffle(input_paths)  # shuffle before selecting subsets
     if args.subset is not None:
