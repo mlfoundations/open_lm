@@ -554,7 +554,7 @@ def main(args):
         "--ray_dashboard_host", type=str, default="127.0.0.1"
     )  # default is localhost; for slurm jobs do 0.0.0.0
     parser.add_argument(
-        "--suffixes", nargs="+", default=[".json", ".jsonl", ".zst", ".zstd", ".jsonl.gz", ".tar", ".gz"]
+        "--suffixes", nargs="+", default=[".json", ".jsonl", ".zst", ".zstd", ".tar", ".gz"]
     )
 
     args = parser.parse_args(args)
