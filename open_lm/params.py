@@ -742,6 +742,11 @@ def parse_args(args):
         action="store_true",
         help="If set, allow model to do multiple data passes over our dataset, in order to reach the desired number of tokens.",
     )
+    parser.add_argument(
+        "--mask-across-documents",
+        action="store_true",
+        help="If set, then tokens in the same sequence will be masked across EOT."
+    )
 
     add_model_args(parser)
 

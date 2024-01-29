@@ -16,24 +16,36 @@ def get_rectangular_mask(shape, q_seq_len, k_seq_len, device, dtype):
     )[:, :, :, :k_seq_len]
 
 
-def xformers_attn(queries, keys, values, is_causal):
+def xformers_attn(queries, keys, values, is_causal, document_seqlens = None):
     # xformers assumes q, k, v are [batch, seq_len, heads, embed_dim]
     # We assume that queries match the last part of the key / value sequences
     # see (https://facebookresearch.github.io/xformers/components/ops.html#xformers.ops.fmha.attn_bias.LowerTriangularFromBottomRightMask)
     # we would like to replace the mask generation with: mask = xops.fmha.attn_bias.LowerTriangularFromBottomRightMask()
     # sadly we cannot us this because it needs xformers>=0.0.23 and this is not compatible with torch<2.1.1 while llm-foundry requires torch<2.1.1
 
-    mask = None
-    # If queries have shape [batch, 1, heads, dim] it means there is only one query in the sequence.
-    # In this case, there is no notion of causal masking, so we can just set the mask to None.
-    # This is actually needed to get the desired behavior with seq_len=1.
-    if is_causal and queries.shape[1] == keys.shape[1]:
-        mask = xops.LowerTriangularMask()
-    elif is_causal and queries.shape[1] > 1:
-        # Build causal mask that assumes queries are in the end of the sequence.
-        batch, q_seq_len, heads, _ = queries.shape
-        k_seq_len = keys.shape[1]
-        mask = get_rectangular_mask((batch, heads), q_seq_len, k_seq_len, queries.device, queries.dtype)
+    if document_seqlens is None or len(document_seqlens) == 1:
+        # In this case, all the tokens inside the sequence (are considered to) come from the same document.
+        # The attention mask is constructed as a simple causal mask
+
+        mask = None
+        # If queries have shape [batch, 1, heads, dim] it means there is only one query in the sequence.
+        # In this case, there is no notion of causal masking, so we can just set the mask to None.
+        # This is actually needed to get the desired behavior with seq_len=1.
+        if is_causal and queries.shape[1] == keys.shape[1]:
+            mask = xops.LowerTriangularMask()
+        elif is_causal and queries.shape[1] > 1:
+            # Build causal mask that assumes queries are in the end of the sequence.
+            batch, q_seq_len, heads, _ = queries.shape
+            k_seq_len = keys.shape[1]
+            mask = get_rectangular_mask((batch, heads), q_seq_len, k_seq_len, queries.device, queries.dtype)
+
+    else:
+        mask = None
+        if is_causal and queries.shape[1] == keys.shape[1]:
+            mask = xops.fmha.attn_bias.BlockDiagonalCausalMask.from_seqlens(document_seqlens)
+        elif is_causal and queries.shape[1] > 1:
+            mask = xops.fmha.attn_bias.BlockDiagonalCausalFromBottomRightMask.from_seqlens(document_seqlens)
+
     return xops.memory_efficient_attention(queries, keys, values, attn_bias=mask)
 
 
