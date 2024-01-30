@@ -22,9 +22,11 @@ except ImportError:
     wandb = None
 
 from open_lm.data import sample_chunk
+from open_lm.datapreprocess.ray.tokenize_shuffle import SpecialTokens
 from open_lm.distributed import is_master
 from open_lm.precision import get_autocast
 from open_lm.meters import AverageMeter
+
 
 
 def unwrap_model(model):
@@ -109,13 +111,34 @@ def train_one_epoch(model, data, loss, epoch, step, optimizer, scaler, scheduler
 
         (texts,) = batch
         texts = torch.LongTensor(texts).to(device)
+
         data_time_m.update(time.time() - end)
         optimizer.zero_grad()
 
         if args.accum_freq == 1:
             with autocast():
                 inputs, targets = sample_chunk(texts, args)
-                out, _, _ = model(inputs)
+
+                if args.mask_across_documents:
+                    document_seqlens = []
+                    for idx in range(inputs.shape[0]):
+                        eot_idx = torch.nonzero(inputs[idx] == SpecialTokens.END_OF_TEXT.value)
+                        if len(eot_idx.shape) == 0:
+                            # Fallback case - an eot token should appear at the end.
+                            document_seqlens.append([args.seq_len + 1])
+                        else:
+                            start_idx = 0
+                            seqlens = []
+                            for eidx in eot_idx:
+                                seqlens.append(eidx - start_idx + 1)
+                                start_idx = eidx + 1
+                            if start_idx < args.seq_len + 1:
+                                seqlens.append(args.seq_len - start_idx)
+                            document_seqlens.append(seqlens)
+                else:
+                    document_seqlens = None
+
+                out, _, _ = model(inputs, document_seqlens=document_seqlens)
 
                 if args.log_logit_mean:
                     logit_m.update(torch.mean(out).item())
