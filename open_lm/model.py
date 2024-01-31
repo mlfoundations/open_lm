@@ -180,6 +180,7 @@ class CustomAttn(nn.Module):
             keys,
             vals,
             is_causal=is_causal,
+            document_seqlens=document_seqlens
         )
 
         output = output.view(batchsize, q_len, -1)

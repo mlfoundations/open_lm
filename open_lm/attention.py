@@ -23,7 +23,7 @@ def xformers_attn(queries, keys, values, is_causal, document_seqlens = None):
     # we would like to replace the mask generation with: mask = xops.fmha.attn_bias.LowerTriangularFromBottomRightMask()
     # sadly we cannot us this because it needs xformers>=0.0.23 and this is not compatible with torch<2.1.1 while llm-foundry requires torch<2.1.1
 
-    if document_seqlens is None or all(len(d) == 1 for ds in document_seqlens):
+    if document_seqlens is None or all(len(ds) == 1 for ds in document_seqlens):
         # In this case, all the tokens inside the sequence (are considered to) come from the same document.
         # The attention mask is constructed as a simple causal mask
 
@@ -41,11 +41,15 @@ def xformers_attn(queries, keys, values, is_causal, document_seqlens = None):
 
     else:
         masks = []
+        batch, q_seq_len, heads, _ = queries.shape
+        k_seq_len = keys.shape[1]
+        dtype = queries.dtype
+        device = queries.device
         for ds in document_seqlens:
             if is_causal and queries.shape[1] == keys.shape[1]:
-                masks.append(xops.fmha.attn_bias.BlockDiagonalCausalMask.from_seqlens(document_seqlens).materialize(shape=(1, queries.shape[1], queries.shape[1])))
+                masks.append(xops.fmha.attn_bias.BlockDiagonalCausalMask.from_seqlens(ds).materialize(shape=(1, heads, q_seq_len, k_seq_len), device=device, dtype=dtype))
             elif is_causal and queries.shape[1] > 1:
-                masks.append(xops.fmha.attn_bias.BlockDiagonalCausalFromBottomRightMask.from_seqlens(document_seqlens).materialize(shape=(1, queries.shape[1], keys.shape[1])))
+                masks.append(xops.fmha.attn_bias.BlockDiagonalCausalFromBottomRightMask.from_seqlens(ds).materialize(shape=(1, heads, q_seq_len, k_seq_len), device=device, dtype=dtype))
         mask = torch.cat(masks, dim=0)
 
     return xops.memory_efficient_attention(queries, keys, values, attn_bias=mask)

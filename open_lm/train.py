@@ -43,6 +43,34 @@ def backward(total_loss, scaler):
         total_loss.backward()
 
 
+def get_document_seqlens(inputs, args):
+    """Get list of document sequence lengths.
+    
+    Return a list of lists. The length of the outer list is equal to the batch size, while the length of the inner list
+    is equal to the the number of distinct documents (recognized by EOT tokens). Each element of the inner lists is the
+    length of that corresponding document
+    """
+    if args.mask_across_documents:
+        document_seqlens = []
+        for idx in range(inputs.shape[0]):
+            eot_idx = torch.nonzero(inputs[idx] == SpecialTokens.END_OF_TEXT.value)
+            if len(eot_idx.shape) == 0:
+                # Fallback case - an eot token should appear at the end.
+                document_seqlens.append([args.seq_len + 1])
+            else:
+                start_idx = 0
+                seqlens = []
+                for k in range(eot_idx.shape[0]):
+                    seqlens.append(eot_idx[k] - start_idx + 1)
+                    start_idx = eot_idx[k] + 1
+                if start_idx < args.seq_len + 1:
+                    seqlens.append(args.seq_len - start_idx)
+                document_seqlens.append(seqlens)
+    else:
+        document_seqlens = None
+    return document_seqlens
+
+
 def train_one_epoch(model, data, loss, epoch, step, optimizer, scaler, scheduler, total_steps, args, tb_writer=None):
     """Trains model for one epoch on the provided data.
 
@@ -118,25 +146,7 @@ def train_one_epoch(model, data, loss, epoch, step, optimizer, scaler, scheduler
         if args.accum_freq == 1:
             with autocast():
                 inputs, targets = sample_chunk(texts, args)
-
-                if args.mask_across_documents:
-                    document_seqlens = []
-                    for idx in range(inputs.shape[0]):
-                        eot_idx = torch.nonzero(inputs[idx] == SpecialTokens.END_OF_TEXT.value)
-                        if len(eot_idx.shape) == 0:
-                            # Fallback case - an eot token should appear at the end.
-                            document_seqlens.append([args.seq_len + 1])
-                        else:
-                            start_idx = 0
-                            seqlens = []
-                            for eidx in eot_idx:
-                                seqlens.append(eidx - start_idx + 1)
-                                start_idx = eidx + 1
-                            if start_idx < args.seq_len + 1:
-                                seqlens.append(args.seq_len - start_idx)
-                            document_seqlens.append(seqlens)
-                else:
-                    document_seqlens = None
+                document_seqlens = get_document_seqlens(inputs, args)
 
                 out, _, _ = model(inputs, document_seqlens=document_seqlens)
 
@@ -170,7 +180,8 @@ def train_one_epoch(model, data, loss, epoch, step, optimizer, scaler, scheduler
                         if inputs_ii.shape[0] == 0:
                             break
                         targets_ii = targets[ii * per_batch : (ii + 1) * per_batch]
-                        out, _, _ = model(inputs_ii)
+                        document_seqlens = get_document_seqlens(inputs_ii, args)
+                        out, _, _ = model(inputs_ii, document_seqlens=document_seqlens)
 
                         if args.log_logit_mean:
                             logit_m.update(torch.mean(out).item())
