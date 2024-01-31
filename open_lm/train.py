@@ -147,6 +147,11 @@ def train_one_epoch(model, data, loss, epoch, step, optimizer, scaler, scheduler
             with autocast():
                 inputs, targets = sample_chunk(texts, args)
                 document_seqlens = get_document_seqlens(inputs, args)
+                if args.mask_across_documents:
+                    # Some input samples contain EOT as the final token. The prediction after that is meaningless, so it
+                    # should not contribute to the loss.
+                    ignore_indices = torch.nonzero(inputs == SpecialTokens.END_OF_TEXT, as_tuple=True)
+                    targets[ignore_indices] = loss.ignore_index
 
                 out, _, _ = model(inputs, document_seqlens=document_seqlens)
 
@@ -168,6 +173,11 @@ def train_one_epoch(model, data, loss, epoch, step, optimizer, scaler, scheduler
             per_batch = args.per_gpu_batch_size // args.accum_freq
 
             inputs, targets = sample_chunk(texts, args)
+            if args.mask_across_documents:
+                # Some input samples contain EOT as the final token. The prediction after that is meaningless, so it
+                # should not contribute to the loss.
+                ignore_indices = torch.nonzero(inputs == SpecialTokens.END_OF_TEXT, as_tuple=True)
+                targets[ignore_indices] = loss.ignore_index
 
             for ii in range(args.accum_freq):
                 maybe_no_sync = nullcontext
