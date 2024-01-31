@@ -1,17 +1,27 @@
+from argparse import Namespace
 from transformers import PreTrainedModel
 from transformers.modeling_outputs import CausalLMOutputWithPast
 from open_lm.utils.transformers.hf_config import OpenLMConfig
-from open_lm.model import Transformer
+from open_lm.model import Transformer, create_params
 import torch
 from typing import Union, Tuple, Optional, List
+import os
 
 
 class OpenLMModel(PreTrainedModel):
     config_class = OpenLMConfig
 
     def __init__(self, config):
+        # This has to be done before init as it sets makes sure hf config is correct
+        if hasattr(config, "params"):
+            params = config.params
+        else:
+            params = create_params(Namespace(**config.params_args_dict))
+        config.set_params(params)
+
         super().__init__(config)
-        self.model = Transformer(config)
+
+        self.model = Transformer(params)
 
     def forward(self, tokens):
         return self.model(tokens)
@@ -22,7 +32,6 @@ class OpenLMforCausalLM(OpenLMModel):
 
     def __init__(self, config):
         super().__init__(config)
-        self.model = Transformer(config)
         self.lm_head = None
         # Initialize weights and apply final processing
         self.post_init()
@@ -121,6 +130,32 @@ class OpenLMforCausalLM(OpenLMModel):
         for layer_past in past_key_values:
             reordered_cache += (tuple(past_state.index_select(0, beam_idx) for past_state in layer_past),)
         return reordered_cache
+
+    @classmethod
+    def from_pretrained(cls, pretrained_model_name_or_path: Optional[Union[str, os.PathLike]], **kwargs):
+        if (
+            os.path.isdir(pretrained_model_name_or_path)
+            and kwargs.get("config", None) is not None
+            and getattr(kwargs["config"], "checkpoint_file", None) is not None
+        ):
+            # Setting torch default dtype
+            torch_dtype = getattr(kwargs["config"], "torch_dtype", None)
+            if isinstance(torch_dtype, str):
+                torch_dtype = getattr(torch, torch_dtype)
+            if torch_dtype is not None:
+                torch.set_default_dtype(torch_dtype)
+
+            print("Loading checkpoint from directory")
+            checkpoint_path = kwargs["config"].checkpoint_file
+            checkpoint = torch.load(checkpoint_path)
+
+            state_dict = checkpoint["state_dict"]
+            state_dict = {x.replace("module.", ""): y for x, y in state_dict.items()}
+            state_dict = {f"model.{x}": y for x, y in state_dict.items()}
+
+            return super().from_pretrained(None, state_dict=state_dict, **kwargs)
+        else:
+            return super().from_pretrained(pretrained_model_name_or_path, **kwargs)
 
 
 if __name__ == "__main__":

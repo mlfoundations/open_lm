@@ -51,7 +51,8 @@ from open_lm.distributed import is_master, init_distributed_device, broadcast_ob
 from open_lm.logger import setup_logging
 from open_lm.params import parse_args
 from open_lm.scheduler import cosine_lr
-from open_lm.train import train_one_epoch, evaluate_loop
+from open_lm.train import train_one_epoch
+from open_lm.evaluate import evaluate_loop
 from open_lm.file_utils import (
     pt_load,
     check_exists,
@@ -247,37 +248,6 @@ def save_checkpoint(
                     os.remove(prev)
 
 
-def check_args(args):
-    resume_latest = args.resume == "latest"
-
-    if args.hf_model is not None and args.hf_seq_len is None:
-        raise ValueError("If passing --hf-model, must also pass --hf-seq-len to be used for training/fine-tuning.")
-
-    if args.hf_model is not None and args.fsdp and args.hf_fsdp_block is None:
-        raise ValueError("If passing --hf-model and --fsdp, must also pass --hf-fsdp-block.")
-
-    if resume_latest:
-        # If using remote_sync, need to check the remote instead of the local checkpoints folder.
-        if args.remote_sync is not None:
-            if args.save_most_recent:
-                raise ValueError("Cannot use save-most-recent with remote_sync and resume latest.")
-            if args.remote_sync_protocol != "s3":
-                raise ValueError("Sync protocol not supported when using resume latest.")
-
-    if args.target_mask_left is not None and args.target_mask_individual == args.target_mask_left:
-        raise ValueError(
-            f"--target-mask-left and --target-mask-individual set to same value of {args.target_mask_left}."
-        )
-
-    if args.lr_scheduler != "cosine":
-        raise ValueError(
-            f"Unknown scheduler, {args.lr_scheduler}. Available options are: cosine, const, const-cooldown."
-        )
-
-    if args.experimental_meta_device:
-        print("WARNING: Meta device initialization requested, but this is not currently fully tested.")
-
-
 def cleanup(sync_process, distributed=False):
     if sync_process:
         terminate_sync_process(sync_process)
@@ -287,9 +257,6 @@ def cleanup(sync_process, distributed=False):
 
 def main(args):
     args = parse_args(args)
-
-    # Check the arg list for any incompatibilities.
-    check_args(args)
 
     requires_training = args.train_data or args.dataset_type == "synthetic" or args.dataset_manifest is not None
 
@@ -462,6 +429,10 @@ def main(args):
     if args.train_num_samples is not None:
         args.train_num_samples //= args.seq_len
     if args.val_num_samples is not None:
+        if args.val_num_samples // args.seq_len == 0:
+            raise ValueError(
+                f"number of requested evaluation val_num_samples (tokens): {args.val_num_samples} is less than seq_len: {args.seq_len}"
+            )
         args.val_num_samples //= args.seq_len
 
     random_seed(args.seed, args.rank)
@@ -741,6 +712,7 @@ def main(args):
                 args.train_data_mix_weights,
                 args.workers,
                 args.world_size,
+                multi_epoch=args.multiple_data_passes,
                 shard_shuffle_seed=args.shard_shuffle_seed,
             )
 

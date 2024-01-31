@@ -1,7 +1,6 @@
 import torch
 
-from open_lm.data import get_wds_dataset
-from open_lm.train import sample_chunk
+from open_lm.data import get_wds_dataset, sample_chunk
 from tests.shared import MockDataArgs
 
 

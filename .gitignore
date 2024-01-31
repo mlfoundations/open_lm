@@ -137,7 +137,8 @@ eval/*.jsonl
 eval/*.jsonl_tmp
 weights*
 out*
-tests/assets/*
+tests/assets/*.tar
+tests/assets/source_*/*
 .vscode/
 secrets.env
 checkpoints/
