@@ -175,13 +175,7 @@ class CustomAttn(nn.Module):
         if use_cache:
             past_key_value = [keys, vals]
 
-        output = self.attn_fn(
-            queries,
-            keys,
-            vals,
-            is_causal=is_causal,
-            document_seqlens=document_seqlens
-        )
+        output = self.attn_fn(queries, keys, vals, is_causal=is_causal, document_seqlens=document_seqlens)
 
         output = output.view(batchsize, q_len, -1)
 
@@ -258,7 +252,7 @@ class Block(nn.Module):
             is_causal=True,
             past_key_value=past_key_value,
             use_cache=use_cache,
-            document_seqlens=document_seqlens
+            document_seqlens=document_seqlens,
         )
         h = x + h
         if self._ffn_type == "moe":
@@ -335,7 +329,9 @@ class Transformer(nn.Module, PyTorchModelHubMixin):
             if self.grad_checkpointing:
                 x, past_key_values[i] = checkpoint(layer, x, past_key_values[i], use_cache, document_seqlens)
             else:
-                x, past_key_values[i] = layer(x, past_key_values[i], use_cache=use_cache, document_seqlens=document_seqlens)
+                x, past_key_values[i] = layer(
+                    x, past_key_values[i], use_cache=use_cache, document_seqlens=document_seqlens
+                )
         if past_key_values[0] is None:
             past_key_values = None
         x = self.norm(x)

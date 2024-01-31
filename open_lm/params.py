@@ -745,7 +745,7 @@ def parse_args(args):
     parser.add_argument(
         "--mask-across-documents",
         action="store_true",
-        help="If set, then tokens in the same sequence will be masked across EOT."
+        help="If set, then tokens in the same sequence will be masked across EOT.",
     )
 
     add_model_args(parser)

@@ -28,7 +28,6 @@ from open_lm.precision import get_autocast
 from open_lm.meters import AverageMeter
 
 
-
 def unwrap_model(model):
     if hasattr(model, "module"):
         return model.module
@@ -45,7 +44,7 @@ def backward(total_loss, scaler):
 
 def get_document_seqlens(inputs, args):
     """Get list of document sequence lengths.
-    
+
     Return a list of lists. The length of the outer list is equal to the batch size, while the length of the inner list
     is equal to the the number of distinct documents (recognized by EOT tokens). Each element of the inner lists is the
     length of that corresponding document

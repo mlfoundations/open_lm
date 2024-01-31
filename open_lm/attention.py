@@ -16,7 +16,7 @@ def get_rectangular_mask(shape, q_seq_len, k_seq_len, device, dtype):
     )[:, :, :, :k_seq_len]
 
 
-def xformers_attn(queries, keys, values, is_causal, document_seqlens = None):
+def xformers_attn(queries, keys, values, is_causal, document_seqlens=None):
     # xformers assumes q, k, v are [batch, seq_len, heads, embed_dim]
     # We assume that queries match the last part of the key / value sequences
     # see (https://facebookresearch.github.io/xformers/components/ops.html#xformers.ops.fmha.attn_bias.LowerTriangularFromBottomRightMask)
@@ -47,18 +47,24 @@ def xformers_attn(queries, keys, values, is_causal, document_seqlens = None):
         device = queries.device
         for ds in document_seqlens:
             if is_causal and queries.shape[1] == keys.shape[1]:
-                masks.append(xops.fmha.attn_bias.BlockDiagonalCausalMask.from_seqlens(ds).materialize(shape=(1, heads, q_seq_len, k_seq_len), device=device, dtype=dtype))
+                masks.append(
+                    xops.fmha.attn_bias.BlockDiagonalCausalMask.from_seqlens(ds).materialize(
+                        shape=(1, heads, q_seq_len, k_seq_len), device=device, dtype=dtype
+                    )
+                )
             elif is_causal and queries.shape[1] > 1:
-                masks.append(xops.fmha.attn_bias.BlockDiagonalCausalFromBottomRightMask.from_seqlens(ds).materialize(shape=(1, heads, q_seq_len, k_seq_len), device=device, dtype=dtype))
+                masks.append(
+                    xops.fmha.attn_bias.BlockDiagonalCausalFromBottomRightMask.from_seqlens(ds).materialize(
+                        shape=(1, heads, q_seq_len, k_seq_len), device=device, dtype=dtype
+                    )
+                )
         mask = torch.cat(masks, dim=0)
 
     return xops.memory_efficient_attention(queries, keys, values, attn_bias=mask)
 
 
-def torch_attn(queries, keys, values, is_causal, document_seqlens = None):
-
+def torch_attn(queries, keys, values, is_causal, document_seqlens=None):
     if document_seqlens is None or len(document_seqlens) == 1:
-
         # Need to call contiguous in torch >=2.1, otherwise later calls to .view() fail.
         # Possibly related: https://github.com/pytorch/pytorch/issues/110213 - behavior of scaled_dot_product_attention
         # changed between 2.0 and 2.1
@@ -89,7 +95,7 @@ def torch_attn(queries, keys, values, is_causal, document_seqlens = None):
                 .transpose(1, 2)
                 .contiguous()
             )
-        
+
     else:
         raise NotImplementedError("Currently supporting --mask-across-documents only with xformers attention.")
 
