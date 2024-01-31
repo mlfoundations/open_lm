@@ -2,6 +2,7 @@ import math
 import json
 import re
 from copy import deepcopy
+from functools import partial
 from pathlib import Path
 from dataclasses import dataclass
 from typing import Callable
@@ -26,9 +27,7 @@ try:
     from megablocks.layers.moe import MoE
     from megablocks.layers.arguments import Arguments as MoEArgs
 except ImportError:
-    import logging
-
-    logging.warning(f"Megablocks not installed. To train MoE, install with pip install megablocks.")
+    pass
 
 try:  # optional import
     from mamba_ssm import MambaLMHeadModel
@@ -112,13 +111,47 @@ def get_pos_embed(args: Params):
         raise RuntimeError(f"Unknown positional embedding type {args.positional_embedding_type}")
 
 
+def get_trunc_normal_init_fn(std):
+    def reset_parameters(self):
+        print("Called reset_parameters in trunc_normal_init_fn")
+        torch.nn.init.trunc_normal_(self.weight, std=std, a=-3 * std, b=3 * std)
+    return reset_parameters
+
+
+class LinearTruncNormalInit(nn.Linear):
+    """Creates an nn.Linear without bias, and initializes the weight with a custom trunc normal."""
+
+    def __init__(self, in_features: int, out_features: int, std: float, device=None, dtype=None) -> None:
+        self.std = std
+        # Calls reset_parameters()
+        super().__init__(in_features, out_features, bias=False, device=device, dtype=dtype)
+
+    def reset_parameters(self):
+        torch.nn.init.trunc_normal_(self.weight, std=self.std, a=-3 * self.std, b=3 * self.std)
+
+
+class EmbeddingTruncNormalInit(nn.Embedding):
+    def __init__(self, num_embeddings, embedding_dim, std):
+        self.std = std
+        super().__init__(num_embeddings, embedding_dim)
+        self.reset_parameters()
+
+    def reset_parameters(self):
+        torch.nn.init.trunc_normal_(self.weight, std=self.std, a=-3 * self.std, b=3 * self.std)
+
+
 class CustomAttn(nn.Module):
     def __init__(self, layer_id, args: Params):
         super().__init__()
         self.n_heads = args.n_heads
         self.head_dim = args.dim // args.n_heads
-        self.in_proj = nn.Linear(args.dim, 3 * args.n_heads * self.head_dim, bias=False)
-        self.out_proj = nn.Linear(args.n_heads * self.head_dim, args.dim, bias=False)
+
+        # initialize weights by trunc_normal(1/sqrt(fan_in))
+        std = 1.0 / math.sqrt(args.dim)
+        self.in_proj = LinearTruncNormalInit(args.dim, 3 * args.n_heads * self.head_dim, std=std)
+        # scale init by depth as in https://arxiv.org/abs/1908.11365 -- worked slightly better.
+        std = std / math.sqrt(2 * (layer_id + 1))
+        self.out_proj = LinearTruncNormalInit(args.n_heads * self.head_dim, args.dim, std=std)
         self.pos_embed = get_pos_embed(args)
         self.attn_fn = args.attn_func
         self.apply_qk_norm = args.apply_qk_norm
@@ -140,18 +173,6 @@ class CustomAttn(nn.Module):
             if self.apply_qk_norm
             else nn.Identity()
         )
-
-        self.layer_id = layer_id
-        self.dim = args.dim
-        self.reset_parameters()
-
-    def reset_parameters(self):
-        # initialize weights by trunc_normal(1/sqrt(fan_in))
-        std = 1.0 / math.sqrt(self.dim)
-        torch.nn.init.trunc_normal_(self.in_proj.weight, std=std, a=-3 * std, b=3 * std)
-        # scale init by depth as in https://arxiv.org/abs/1908.11365 -- worked slightly better.
-        std = std / math.sqrt(2 * (self.layer_id + 1))
-        torch.nn.init.trunc_normal_(self.out_proj.weight, std=std, a=-3 * std, b=3 * std)
 
     def forward(self, x: torch.Tensor, is_causal=True, past_key_value=None, use_cache=False):
         batchsize, q_len, _ = x.shape
@@ -190,7 +211,6 @@ class Block(nn.Module):
     def __init__(self, layer_id, args: Params):
         super().__init__()
         self.n_heads = args.n_heads
-        self.dim = args.dim
 
         self.head_dim = args.dim // args.n_heads
         self.attention = CustomAttn(layer_id, args)
@@ -198,12 +218,28 @@ class Block(nn.Module):
         if args.ffn_type == "swiglu":
             # this follows llama / lit llama -- go to multiple of 256
             self.hidden_dim = 256 * ((int(2 * 4 * args.dim / 3) + 256 - 1) // 256)
-            self.feed_forward = xops.SwiGLU(args.dim, self.hidden_dim, args.dim, bias=False)
+            ff = xops.SwiGLU(args.dim, self.hidden_dim, args.dim)
+
+            # initialize weights trunc_normal(1/sqrt(fan_in))
+            std12 = 1.0 / math.sqrt(args.dim)
+            # scale init by depth as in https://arxiv.org/abs/1908.11365 -- worked slightly better.
+            std3 = 1.0 / math.sqrt(self.hidden_dim)
+            std3 = std3 / math.sqrt(2 * (layer_id + 1))
+
+            ff.w12.reset_parameters = get_trunc_normal_init_fn(std=std12).__get__(ff.w12)
+            ff.w3.reset_parameters = get_trunc_normal_init_fn(std=std3).__get__(ff.w3)
+            self.feed_forward = ff
         elif args.ffn_type == "gelu":
             # Follows mosaic mpt7b, but without a bias.
             self.hidden_dim = args.dim * 4
-            self._ff_w1 = nn.Linear(args.dim, self.hidden_dim, bias=False)
-            self._ff_w2 = nn.Linear(self.hidden_dim, args.dim, bias=False)
+
+            std = 1.0 / math.sqrt(args.dim)
+            self._ff_w1 = LinearTruncNormalInit(args.dim, self.hidden_dim, bias=False, std=std)
+
+            std = 1.0 / math.sqrt(self.hidden_dim)
+            std = std / math.sqrt(2 * (self._layer_id + 1))
+            self._ff_w2 = LinearTruncNormalInit(self.hidden_dim, args.dim, bias=False)
+
             self.feed_forward = nn.Sequential(self._ff_w1, nn.GELU(approximate="none"), self._ff_w2)
         elif args.ffn_type == "moe":
             moe_args = MoEArgs(
@@ -221,7 +257,6 @@ class Block(nn.Module):
             )
             self.feed_forward = MoE(moe_args)
 
-        self.layer_id = layer_id
         self.attention_norm = args.norm_type(
             args.dim,
             eps=args.norm_eps,
@@ -231,24 +266,6 @@ class Block(nn.Module):
             eps=args.norm_eps,
         )
         self.attention.seq_len = args.seq_len
-        self.reset_parameters()
-
-    def reset_parameters(self):
-        if self._ffn_type == "swiglu":
-            # initialize weights trunc_normal(1/sqrt(fan_in))
-            std = 1.0 / math.sqrt(self.dim)
-            torch.nn.init.trunc_normal_(self.feed_forward.w12.weight, std=std, a=-3 * std, b=3 * std)
-            # scale init by depth as in https://arxiv.org/abs/1908.11365 -- worked slightly better.
-            std = 1.0 / math.sqrt(self.hidden_dim)
-            std = std / math.sqrt(2 * (self.layer_id + 1))
-            torch.nn.init.trunc_normal_(self.feed_forward.w3.weight, std=std, a=-3 * std, b=3 * std)
-        elif self._ffn_type == "gelu":
-            std = 1.0 / math.sqrt(self.dim)
-            torch.nn.init.trunc_normal_(self._ff_w1.weight, std=std, a=-3 * std, b=3 * std)
-
-            std = 1.0 / math.sqrt(self.hidden_dim)
-            std = std / math.sqrt(2 * (self._layer_id + 1))
-            torch.nn.init.trunc_normal_(self._ff_w2.weight, std=std, a=-3 * std, b=3 * std)
 
     def forward(self, x, past_key_value=None, use_cache=False):
         h, past_key_value = self.attention(
@@ -271,7 +288,6 @@ class Transformer(nn.Module, PyTorchModelHubMixin):
         super().__init__()
         # for convenience we often share param names with llama
         self.params = params
-        self.dim = params.dim
         self.vocab_size = params.vocab_size
         self.n_layers = params.n_layers
         self.moe_num_experts = params.moe_num_experts
@@ -286,7 +302,11 @@ class Transformer(nn.Module, PyTorchModelHubMixin):
         )
         self.weight_tying = params.weight_tying
 
-        self.tok_embeddings = nn.Embedding(params.vocab_size, params.dim)
+        # initialize weight 1/sqrt(dim)
+        # this is 1/fan_in for output, as is default, and Maciej Kilian tried another option
+        # for the embed layer (from RWKV paper) but this was better.
+        std = 1.0 / math.sqrt(self.params.dim)
+        self.tok_embeddings = EmbeddingTruncNormalInit(params.vocab_size, params.dim, std=std)
 
         self.layers = torch.nn.ModuleList()
         ffn_type_ = params.ffn_type
@@ -302,19 +322,10 @@ class Transformer(nn.Module, PyTorchModelHubMixin):
             params.dim,
             eps=params.norm_eps,
         )
-        self.output = nn.Linear(params.dim, params.vocab_size, bias=False)
+        self.output = LinearTruncNormalInit(params.dim, params.vocab_size, std=std)
         if self.weight_tying:
             self.tok_embeddings.weight = self.output.weight
         self.grad_checkpointing = False
-        self.reset_parameters()
-
-    def reset_parameters(self):
-        # initialize weight 1/sqrt(dim)
-        # this is 1/fan_in for output, as is default, and Maciej Kilian tried another option
-        # for the embed layer (from RWKV paper) but this was better.
-        std = 1.0 / math.sqrt(self.params.dim)
-        torch.nn.init.trunc_normal_(self.output.weight, std=std, a=-3 * std, b=3 * std)
-        torch.nn.init.trunc_normal_(self.tok_embeddings.weight, std=std, a=-3 * std, b=3 * std)
 
     @torch.jit.ignore
     def set_grad_checkpointing(self, enable=True):
