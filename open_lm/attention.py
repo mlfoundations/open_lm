@@ -22,7 +22,7 @@ def xformers_attn(queries, keys, values, is_causal, document_seqlens=None):
     # see (https://facebookresearch.github.io/xformers/components/ops.html#xformers.ops.fmha.attn_bias.LowerTriangularFromBottomRightMask)
     # we would like to replace the mask generation with: mask = xops.fmha.attn_bias.LowerTriangularFromBottomRightMask()
     # sadly we cannot us this because it needs xformers>=0.0.23 and this is not compatible with torch<2.1.1 while llm-foundry requires torch<2.1.1
-
+    print("attention called")
     if document_seqlens is None or all(len(ds) == 1 for ds in document_seqlens):
         # In this case, all the tokens inside the sequence (are considered to) come from the same document.
         # The attention mask is constructed as a simple causal mask

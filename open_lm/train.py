@@ -53,16 +53,16 @@ def get_document_seqlens(inputs, args):
         document_seqlens = []
         for idx in range(inputs.shape[0]):
             eot_idx = torch.nonzero(inputs[idx] == SpecialTokens.END_OF_TEXT.value)
-            if len(eot_idx.shape) == 0:
-                # Fallback case - an eot token should appear at the end.
-                document_seqlens.append([args.seq_len + 1])
+            if eot_idx.shape[0] == 0:
+                # All tokens come from the same document.
+                document_seqlens.append([args.seq_len])
             else:
                 start_idx = 0
                 seqlens = []
                 for k in range(eot_idx.shape[0]):
-                    seqlens.append(eot_idx[k] - start_idx + 1)
-                    start_idx = eot_idx[k] + 1
-                if start_idx < args.seq_len + 1:
+                    seqlens.append(eot_idx[k].item() - start_idx + 1)
+                    start_idx = eot_idx[k].item() + 1
+                if start_idx < args.seq_len:
                     seqlens.append(args.seq_len - start_idx)
                 document_seqlens.append(seqlens)
     else:
