@@ -41,7 +41,8 @@ from ray.data.context import DataContext
 from ray.data.datasource import Datasource, ReadTask
 from ray.runtime_context import RuntimeContext
 from tqdm import tqdm
-from transformers import GPTNeoXTokenizerFast
+from transformers import GPTNeoXTokenizerFast, LlamaTokenizerFast
+import uuid
 
 import logging
 
@@ -383,6 +384,9 @@ def write_to_location(folder, tar_name, bio):
 def load_tokenizer(tokenizer):
     if tokenizer == "EleutherAI/gpt-neox-20b":
         enc = GPTNeoXTokenizerFast.from_pretrained("EleutherAI/gpt-neox-20b")
+        return (lambda x: enc(x).input_ids, enc.vocab_size)
+    elif "llama" in tokenizer:
+        enc = LlamaTokenizerFast.from_pretrained(tokenizer)
         return (lambda x: enc(x).input_ids, enc.vocab_size)
     else:
         raise ValueError(f"Unknown Tokenizer: {tokenizer}")
