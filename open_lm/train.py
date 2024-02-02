@@ -149,7 +149,7 @@ def train_one_epoch(model, data, loss, epoch, step, optimizer, scaler, scheduler
                 if args.mask_across_documents:
                     # Some input samples contain EOT as the final token. The prediction after that is meaningless, so it
                     # should not contribute to the loss.
-                    ignore_indices = torch.nonzero(inputs == SpecialTokens.END_OF_TEXT, as_tuple=True)
+                    ignore_indices = torch.nonzero(inputs == SpecialTokens.END_OF_TEXT.value, as_tuple=True)
                     targets[ignore_indices] = loss.ignore_index
 
                 out, _, _ = model(inputs, document_seqlens=document_seqlens)
@@ -175,7 +175,7 @@ def train_one_epoch(model, data, loss, epoch, step, optimizer, scaler, scheduler
             if args.mask_across_documents:
                 # Some input samples contain EOT as the final token. The prediction after that is meaningless, so it
                 # should not contribute to the loss.
-                ignore_indices = torch.nonzero(inputs == SpecialTokens.END_OF_TEXT, as_tuple=True)
+                ignore_indices = torch.nonzero(inputs == SpecialTokens.END_OF_TEXT.value, as_tuple=True)
                 targets[ignore_indices] = loss.ignore_index
 
             for ii in range(args.accum_freq):
