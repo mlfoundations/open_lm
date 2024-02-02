@@ -100,18 +100,20 @@ def get_state_dict(name):
     return sd
 
 
-def load_model(args, model):
+def load_model(args, model, different_seed=False):
     checkpoint = pt_load(args.resume, map_location="cpu")
     if "epoch" in checkpoint:
-        if "shard_shuffle_seed" in checkpoint:
+        if not different_seed and "shard_shuffle_seed" in checkpoint:
             pretrained_seed = checkpoint["shard_shuffle_seed"]
             assert (
                 pretrained_seed == args.seed
             ), f"This checkpoint was trained with a random seed of {pretrained_seed}. Since this seed affects shard shuffling, resuming training must use the same seed."
         else:
-            logging.info(
-                "Resuming a checkpoint that does not have a seed saved. This means that the shards were not shuffled, so they will remain unshuffled."
-            )
+            if different_seed:
+                message = "Resuming a checkpoint without checking that the seed match. This means that training might not be reproducible."
+            else:
+                message = "Resuming a checkpoint that does not have a seed saved. This means that the shards were not shuffled, so they will remain unshuffled."
+            logging.info(message)
             pretrained_seed = None
 
         # resuming a train checkpoint w/ epoch and optimizer state
