@@ -155,7 +155,6 @@ class CustomAttn(nn.Module):
         torch.nn.init.trunc_normal_(self.out_proj.weight, std=std, a=-3 * std, b=3 * std)
 
     def forward(self, x: torch.Tensor, is_causal=True, past_key_value=None, use_cache=False, document_seqlens=None):
-        print("attention called")
         batchsize, q_len, _ = x.shape
         queries, keys, vals = self.in_proj(x).chunk(3, dim=-1)
 
@@ -248,7 +247,6 @@ class Block(nn.Module):
             torch.nn.init.trunc_normal_(self._ff_w2.weight, std=std, a=-3 * std, b=3 * std)
 
     def forward(self, x, past_key_value=None, use_cache=False, document_seqlens=None):
-        print("block called")
         h, past_key_value = self.attention(
             self.attention_norm(x),
             is_causal=True,
