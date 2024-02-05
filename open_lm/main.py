@@ -825,7 +825,7 @@ def main(args):
     # Final sync of all procs.
     if args.distributed:
         dist.barrier()
-    
+
     return args
 
 
