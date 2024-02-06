@@ -157,7 +157,7 @@ def get_reader(file_type, content_key: str):
 def get_raw_filetype(key: str):
     if key.endswith(".jsonl") or key.endswith(".json"):
         return RawFileType.JSONL
-    elif key.endswith(".jsonl.zst") or key.endswith(".json.zst"):
+    elif key.endswith(".jsonl.zst") or key.endswith(".json.zst") or key.endswith(".jsonl.zstd") key.endswith(".json.zstd"):
         return RawFileType.ZSTD_JSONL_COMPRESSED
     elif key.endswith(".jsonl.gz") or key.endswith(".json.gz"):
         return RawFileType.GZIP_JSONL_COMPRESSED
@@ -514,7 +514,7 @@ def main(args):
         input_paths += glob_files(inp_folder, suffix=".json")
         input_paths += glob_files(inp_folder, suffix=".jsonl")
         input_paths += glob_files(inp_folder, suffix=".zst")
-        input_paths += glob_files(inp_folder, suffix=".jsonl.gz")
+        input_paths += glob_files(inp_folder, suffix=".zstd")
         input_paths += glob_files(inp_folder, suffix=".tar")
         input_paths += glob_files(inp_folder, suffix=".gz")
     input_paths = sorted(set(input_paths))
