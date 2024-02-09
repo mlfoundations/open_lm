@@ -468,7 +468,6 @@ def glob_files(path, suffixes):
 
         # Filter out the files based on the suffix
         matching_files = [f for f in all_files if any(f.endswith(suffix) for suffix in suffixes)]
-
     else:
         # Use glob for local paths
         matching_files = []
@@ -515,7 +514,14 @@ def buffer_write(row, folder, counter, buffer_size, num_writers_per_node):
     buffer_writers = []
     for k in range(num_writers_per_node):
         buffer_writer_name = f"{node_id}_buffer_writer_{k}"
-        buffer_writer = BufferedShardWriter.options(name=buffer_writer_name, get_if_exists=True).remote()
+        # force shard writer to be on this node (to avoid comms)
+        buffer_writer = BufferedShardWriter.options(
+            name=buffer_writer_name,
+            get_if_exists=True,
+            scheduling_strategy=ray.util.scheduling_strategies.NodeAffinitySchedulingStrategy(
+                node_id=node_id, soft=False
+            ),
+        ).remote()
         ray.get(counter.add_buffer_writer.remote(buffer_writer_name, buffer_writer))
         buffer_writers.append(buffer_writer)
     # This will run the job on an idle actor
@@ -659,14 +665,14 @@ def main(args):
         },
     ).take_all()
     # after the write is done, grab all actors of class BufferedShardWriter
-    buffer_writers = [ray.get_actor(x.name) for x in list_actors(filters=[("class_name", "=", "BufferedShardWriter")])]
+    buffer_writers_names = set([x.name for x in list_actors(filters=[("class_name", "=", "BufferedShardWriter")])])
+    buffer_writers = [ray.get_actor(x) for x in buffer_writers_names]
     # flush the remaining buffers, this should be the *only* shards that are less than wds_chunk_size
     flushed_buffers = [bw._flush_buffer.remote(out_folder, counter) for bw in buffer_writers]
     tail_write_status = [ray.get(buf) for buf in flushed_buffers]
     # Grab manifests which are stored in the buffer writers
     manifests = [manifest_row for bw in buffer_writers for manifest_row in ray.get(bw.get_manifests.remote())]
     manifests_sorted = sorted(manifests, key=lambda x: x["shard"])
-    print(manifests_sorted)
     write_manifest(manifests_sorted, args)
     end_time = time.time()
     duration = end_time - start_time
