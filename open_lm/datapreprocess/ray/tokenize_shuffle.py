@@ -514,6 +514,7 @@ def buffer_write(row, folder, counter, buffer_size, num_writers_per_node):
     buffer_writers = []
     for k in range(num_writers_per_node):
         buffer_writer_name = f"{node_id}_buffer_writer_{k}"
+        logger.info(f"Create or getting {buffer_writer_name}")
         # force shard writer to be on this node (to avoid comms)
         buffer_writer = BufferedShardWriter.options(
             name=buffer_writer_name,
