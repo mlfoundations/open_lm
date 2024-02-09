@@ -666,7 +666,9 @@ def main(args):
         },
     ).take_all()
     # after the write is done, grab all actors of class BufferedShardWriter
-    buffer_writers_names = set([x.name for x in list_actors(filters=[("class_name", "=", "BufferedShardWriter")])])
+    buffer_writers_names = set(
+        [x.name for x in list_actors(filters=[("class_name", "=", "BufferedShardWriter"), ("state", "=", "ALIVE")])]
+    )
     buffer_writers = [ray.get_actor(x) for x in buffer_writers_names]
     # flush the remaining buffers, this should be the *only* shards that are less than wds_chunk_size
     flushed_buffers = [bw._flush_buffer.remote(out_folder, counter) for bw in buffer_writers]
