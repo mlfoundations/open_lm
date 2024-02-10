@@ -240,7 +240,7 @@ class BufferedShardWriter:
         bio.seek(0)
         token_count = ray.get(counter.increment_token_count.remote(token_count))
         write_to_location(folder, tar_name, bio)
-        return_dict = {"shard": tar_name.split(".")[0], "num_sequences": len(self.buffer)}
+        return_dict = {"shard": tar_name.split(".")[0], "num_sequences": write_count}
         self.buffer = self.buffer[write_count:]
         self.manifests.append(return_dict)
         return return_dict["num_sequences"]
