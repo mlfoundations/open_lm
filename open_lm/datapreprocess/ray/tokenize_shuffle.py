@@ -201,13 +201,14 @@ class BufferedShardWriter:
     Utility class for writing equal sized webdataset shards to disk
     """
 
-    def __init__(self):
+    def __init__(self, buffer_size):
         self.buffer = []
         self.manifests = []
+        self.buffer_size = buffer_size
 
-    def write(self, row, folder, counter, buffer_size=1024):
-        self.buffer.append(row)
-        if len(self.buffer) == buffer_size:
+    def write(self, rows, folder, counter, buffer_size=1024):
+        self.buffer += rows.to_dict(orient="records")
+        if len(self.buffer) >= buffer_size:
             num_sequences_written = self._flush_buffer(folder, counter)
         else:
             num_sequences_written = 0
@@ -227,8 +228,9 @@ class BufferedShardWriter:
         token_count = 0
         # Write the batch to a tarball using webdataset's TarWriter
         bio = io.BytesIO()
+        write_count = min(self.buffer_size, len(self.buffer))
         with wds.TarWriter(bio) as sink:
-            for i in range(len(self.buffer)):
+            for i in range(write_count):
                 tokens = [int(x) for x in self.buffer[i]["tokens"]]
                 token_count += len(tokens)
                 json_string = json.dumps(tokens)
@@ -239,7 +241,7 @@ class BufferedShardWriter:
         token_count = ray.get(counter.increment_token_count.remote(token_count))
         write_to_location(folder, tar_name, bio)
         return_dict = {"shard": tar_name.split(".")[0], "num_sequences": len(self.buffer)}
-        self.buffer = []
+        self.buffer = self.buffer[write_count:]
         self.manifests.append(return_dict)
         return return_dict["num_sequences"]
 
@@ -503,7 +505,7 @@ def write_manifest(jsonl_lines, args):
                 f.write("\n")
 
 
-def buffer_write(row, folder, counter, buffer_size, num_writers_per_node):
+def buffer_write(rows, folder, counter, buffer_size, num_writers_per_node):
     """
     Use ray's actor logic to write equal sized shards, BufferedShardWriter will
     only flush a shard if it is exactly buffer_size, except for the last N % args.wds_chunk_size
@@ -522,12 +524,12 @@ def buffer_write(row, folder, counter, buffer_size, num_writers_per_node):
             scheduling_strategy=ray.util.scheduling_strategies.NodeAffinitySchedulingStrategy(
                 node_id=node_id, soft=False
             ),
-        ).remote()
+        ).remote(buffer_size=buffer_size)
         ray.get(counter.add_buffer_writer.remote(buffer_writer_name, buffer_writer))
         buffer_writers.append(buffer_writer)
     # This will run the job on an idle actor
     buffer_writer_pool = ray.util.ActorPool(buffer_writers)
-    buffer_writer_pool.submit(lambda a, row: a.write.remote(row, folder, counter, buffer_size), row)
+    buffer_writer_pool.submit(lambda a, rows: a.write.remote(rows, folder, counter, buffer_size), rows)
     return buffer_writer_pool.get_next()
 
 
@@ -656,7 +658,7 @@ def main(args):
     counter = GlobalCounter.remote()
     out_folder = args.output.rstrip("/")
     # first map buffer_write over rows, it will create an actor (which hopefully will be scheduled locally)
-    write_status = ds.map(
+    write_status = ds.map_batches(
         buffer_write,
         fn_kwargs={
             "folder": out_folder,
@@ -664,6 +666,9 @@ def main(args):
             "buffer_size": args.wds_chunk_size,
             "num_writers_per_node": num_writers_per_node,
         },
+        zero_copy_batch=True,
+        batch_size=args.wds_chunk_size,
+        batch_format="pandas",
     ).take_all()
     # after the write is done, grab all actors of class BufferedShardWriter
     buffer_writers_names = set(
