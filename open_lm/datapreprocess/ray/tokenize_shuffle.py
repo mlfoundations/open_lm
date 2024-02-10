@@ -530,7 +530,7 @@ def buffer_write(rows, folder, counter, buffer_size, num_writers_per_node):
     # This will run the job on an idle actor
     buffer_writer_pool = ray.util.ActorPool(buffer_writers)
     buffer_writer_pool.submit(lambda a, rows: a.write.remote(rows, folder, counter, buffer_size), rows)
-    return [buffer_writer_pool.get_next()]
+    return {x: [y] for x, y in buffer_writer_pool.get_next().items()}
 
 
 def main(args):
