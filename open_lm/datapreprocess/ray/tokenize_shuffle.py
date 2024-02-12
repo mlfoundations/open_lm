@@ -159,7 +159,7 @@ def get_reader(file_type, content_key: str):
 def get_raw_filetype(key: str):
     if key.endswith(".jsonl") or key.endswith(".json"):
         return RawFileType.JSONL
-    elif key.endswith(".jsonl.zst") or key.endswith(".json.zst"):
+    elif key.endswith(".jsonl.zst") or key.endswith(".json.zst") or key.endswith(".jsonl.zstd"):
         return RawFileType.ZSTD_JSONL_COMPRESSED
     elif key.endswith(".jsonl.gz") or key.endswith(".json.gz"):
         return RawFileType.GZIP_JSONL_COMPRESSED
