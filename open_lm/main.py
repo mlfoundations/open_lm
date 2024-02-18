@@ -820,8 +820,12 @@ def main(args):
             logging.info("Final remote sync successful.")
         else:
             logging.info("Final remote sync failed.")
-    cleanup(remote_sync_process, args.distributed)
 
+    # Final sync of all procs.
+    if args.distributed:
+        dist.barrier()
+
+    cleanup(remote_sync_process, args.distributed)
     return args
 
 
