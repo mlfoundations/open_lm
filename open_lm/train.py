@@ -31,11 +31,13 @@ using_te = False
 try:
     import transformer_engine.pytorch as te
     from transformer_engine.common import recipe
+
     fp8_format = recipe.Format.HYBRID
     fp8_recipe = recipe.DelayedScaling(fp8_format=fp8_format, amax_history_len=32, amax_compute_algo="max")
     using_te = True
 except ImportError as ie:
     using_te = False
+
 
 def unwrap_model(model):
     if hasattr(model, "module"):
@@ -51,7 +53,9 @@ def backward(total_loss, scaler):
         total_loss.backward()
 
 
-def train_one_epoch(model, data, loss, epoch, step, optimizer, scaler, scheduler, total_steps, args, tb_writer=None, all_gpus=None):
+def train_one_epoch(
+    model, data, loss, epoch, step, optimizer, scaler, scheduler, total_steps, args, tb_writer=None, all_gpus=None
+):
     """Trains model for one epoch on the provided data.
 
     Returns:
@@ -126,7 +130,7 @@ def train_one_epoch(model, data, loss, epoch, step, optimizer, scaler, scheduler
             if using_te:
                 with te.fp8_autocast(enabled=True, fp8_recipe=fp8_recipe, fp8_group=all_gpus):
                     inputs, targets = sample_chunk(texts, args)
-                    
+
                     out, _, _ = model(inputs)
 
                     if args.log_logit_mean:
@@ -137,7 +141,7 @@ def train_one_epoch(model, data, loss, epoch, step, optimizer, scaler, scheduler
                     if args.moe_freq > 0:
                         total_load_balancing_loss = batched_load_balancing_loss(moe_args)
                         clear_load_balancing_loss()
-                        total_loss += total_load_balancing_loss          
+                        total_loss += total_load_balancing_loss
             else:
                 with autocast():
                     inputs, targets = sample_chunk(texts, args)

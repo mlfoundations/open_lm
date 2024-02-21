@@ -438,7 +438,7 @@ def main(args):
 
     random_seed(args.seed, args.rank)
 
-    all_gpus = dist.new_group(backend='nccl')
+    all_gpus = dist.new_group(backend="nccl")
 
     if args.distributed:
         if args.fsdp:
@@ -757,7 +757,7 @@ def main(args):
             total_steps=total_steps,
             args=args,
             tb_writer=writer,
-            all_gpus=all_gpus
+            all_gpus=all_gpus,
         )
 
         if args.distributed:

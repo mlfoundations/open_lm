@@ -13,11 +13,13 @@ using_te = False
 try:
     import transformer_engine.pytorch as te
     from transformer_engine.common import recipe
+
     fp8_format = recipe.Format.HYBRID
     fp8_recipe = recipe.DelayedScaling(fp8_format=fp8_format, amax_history_len=32, amax_compute_algo="max")
     using_te = True
 except ImportError as ie:
     using_te = False
+
 
 class LayerNorm(nn.Module):
     # NOTE: taken from official pytorch implementation and modified
@@ -66,7 +68,9 @@ class LayerNorm(nn.Module):
 
     def forward(self, input: Tensor) -> Tensor:
         if using_te:
-            layer_norm_module = te.LayerNorm(self.normalized_shape, eps=self.eps, device='cuda', params_dtype=input.dtype)
+            layer_norm_module = te.LayerNorm(
+                self.normalized_shape, eps=self.eps, device="cuda", params_dtype=input.dtype
+            )
             output_tensor = layer_norm_module(input)
             if self.weight is not None and self.bias is not None:
                 output_tensor = output_tensor * self.weight + self.bias
@@ -95,7 +99,9 @@ class LPLayerNorm(LayerNorm):
         downcast_bias = _cast_if_autocast_enabled(self.bias) if self.bias is not None else self.bias
         with torch.autocast(enabled=False, device_type=module_device.type):
             if using_te:
-                layer_norm_module = te.LayerNorm(self.normalized_shape, eps=self.eps, device='cuda', params_dtype=downcast_x.dtype)
+                layer_norm_module = te.LayerNorm(
+                    self.normalized_shape, eps=self.eps, device="cuda", params_dtype=downcast_x.dtype
+                )
                 output_tensor = layer_norm_module(downcast_x)
                 if downcast_weight is not None and downcast_bias is not None:
                     output_tensor = output_tensor * downcast_weight + downcast_bias

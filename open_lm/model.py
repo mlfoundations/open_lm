@@ -40,6 +40,7 @@ using_te = False
 try:
     import transformer_engine.pytorch as te
     from transformer_engine.common import recipe
+
     fp8_format = recipe.Format.HYBRID
     fp8_recipe = recipe.DelayedScaling(fp8_format=fp8_format, amax_history_len=32, amax_compute_algo="max")
     using_te = True
@@ -129,8 +130,8 @@ class CustomAttn(nn.Module):
         self.n_heads = args.n_heads
         self.head_dim = args.dim // args.n_heads
         if using_te:
-            self.in_proj = te.Linear(args.dim, 3 * args.n_heads * self.head_dim, bias=False, device='cuda')
-            self.out_proj = te.Linear(args.n_heads * self.head_dim, args.dim, bias=False, device='cuda')
+            self.in_proj = te.Linear(args.dim, 3 * args.n_heads * self.head_dim, bias=False, device="cuda")
+            self.out_proj = te.Linear(args.n_heads * self.head_dim, args.dim, bias=False, device="cuda")
         else:
             self.in_proj = nn.Linear(args.dim, 3 * args.n_heads * self.head_dim, bias=False)
             self.out_proj = nn.Linear(args.n_heads * self.head_dim, args.dim, bias=False)
@@ -139,7 +140,7 @@ class CustomAttn(nn.Module):
         self.apply_qk_norm = args.apply_qk_norm
 
         if using_te:
-                # initialize norm layers for queries and keys if needed
+            # initialize norm layers for queries and keys if needed
             self.q_norm = (
                 te.LayerNorm(
                     args.n_heads * self.head_dim,
@@ -245,8 +246,8 @@ class Block(nn.Module):
             # Follows mosaic mpt7b, but without a bias.
             self.hidden_dim = args.dim * 4
             if using_te:
-                self._ff_w1 = te.Linear(args.dim, self.hidden_dim, bias=False, device='cuda')
-                self._ff_w2 = te.Linear(self.hidden_dim, self.dim, bias=False, device='cuda')
+                self._ff_w1 = te.Linear(args.dim, self.hidden_dim, bias=False, device="cuda")
+                self._ff_w2 = te.Linear(self.hidden_dim, self.dim, bias=False, device="cuda")
                 self.feed_forward = nn.Sequential(self._ff_w1, nn.GELU(approximate="none"), self._ff_w2)
             else:
                 self._ff_w1 = nn.Linear(args.dim, self.hidden_dim, bias=False)
