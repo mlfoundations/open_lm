@@ -1,6 +1,6 @@
 # This is from open_clip.
 import os
-
+import logging
 import torch
 import torch.distributed as dist
 
@@ -61,7 +61,14 @@ def init_distributed_device(args):
     if is_using_distributed() or args.force_distributed:
         if "SLURM_PROCID" in os.environ:
             # DDP via SLURM
-            args.local_rank, args.rank, args.world_size = world_info_from_env()
+            args.local_rank, args.rank, env_world_size = world_info_from_env()
+            if args.world_size is None:
+                args.world_size = env_world_size
+            else:
+                if args.rank >= args.world_size:
+                    logging.info(f"Rank {args.rank} not needed with world size {args.world_size}. Exiting.")
+                    exit(0)
+
             # SLURM var -> torch.distributed vars in case needed
             os.environ["LOCAL_RANK"] = str(args.local_rank)
             os.environ["RANK"] = str(args.rank)
@@ -74,6 +81,8 @@ def init_distributed_device(args):
             )
         else:
             # DDP via torchrun, torch.distributed.launch
+            # Note that this currently assumes that the world size is all gpus in a node.
+            assert args.world_size is None, "Setting --world_size with torchrun is not currently supported."
             args.local_rank, _, _ = world_info_from_env()
             torch.distributed.init_process_group(backend=args.dist_backend, init_method=args.dist_url)
             args.world_size = torch.distributed.get_world_size()
