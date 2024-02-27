@@ -410,3 +410,22 @@ def test_lr_scheduling_from_main(cleanup_test_logs):
     expected_lr = np.array([1e0 * i / 100 for i in range(1, 101)] + [compute_lr(_) for _ in range(100, 1000)])
     max_diff = (abs(expected_lr - lr_array)).max()
     assert max_diff < 1e-7
+
+
+# =========================================================
+# =             main.py tests for no positional           =
+# =========================================================
+def test_train_no_positional():
+    seq_len = 16
+    num_batches = 5
+    batch_size = 1
+    # fmt: off
+    main([
+        "--train-num-samples", str(num_batches * seq_len),
+        "--global-batch-size", str(batch_size),
+        "--dataset-type", "synthetic",
+        "--model", "open_lm_test_tiny",
+        "--epochs", "1",
+        "--positional-embedding-type", "none",
+    ])
+    # fmt: on
