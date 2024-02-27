@@ -19,7 +19,7 @@ from open_lm.norms import get_norm_class
 from open_lm.positional_embedding.head_rotary import HeadRotaryWithCast
 from open_lm.positional_embedding.rotary import RotaryWithCast
 from open_lm.positional_embedding.llama_rotary import LLaMARotaryWithCast
-
+from open_lm.positional_embedding.none import identity_with_cast
 
 # from open_lm.moe.mixture_of_experts import MoE
 try:
@@ -108,6 +108,8 @@ def get_pos_embed(args: Params):
         return LLaMARotaryWithCast(head_dim, args.n_heads, args.seq_len)
     elif args.positional_embedding_type == "head_rotary":
         return HeadRotaryWithCast(head_dim, args.seq_len)
+    elif args.positional_embedding_type == "none":
+        return identity_with_cast
     else:
         raise RuntimeError(f"Unknown positional embedding type {args.positional_embedding_type}")
 
