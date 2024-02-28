@@ -157,11 +157,11 @@ def get_reader(file_type, content_key: str):
 
 
 def get_raw_filetype(key: str):
-    if any(key.endswith(e) for e in [".jsonl", ".json"]):
+    if any(key.endswith(e) for e in [".jsonl"]):
         return RawFileType.JSONL
-    elif any(key.endswith(e) for e in [".jsonl.zst", "json.zst", "jsonl.zstd", "json.zstd"]):
+    elif any(key.endswith(e) for e in [".jsonl.zst", "jsonl.zstd", "json.zstd"]):
         return RawFileType.ZSTD_JSONL_COMPRESSED
-    elif any(key.endswith(e) for e in [".jsonl.gz", ".json.gz"]):
+    elif any(key.endswith(e) for e in [".jsonl.gz"]):
         return RawFileType.GZIP_JSONL_COMPRESSED
     elif key.endswith(".tar"):
         return RawFileType.TAR
