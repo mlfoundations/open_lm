@@ -98,7 +98,7 @@ class Params:
     seq_len: int = 2048
     post_embed_norm: bool = False
     weight_tying: bool = False
-    norm_type: nn.Module = nn.LayerNorm
+    norm_type: nn.Module = te.LayerNorm if using_te else nn.LayerNorm
     attn_func: Callable = xformers_attn if torch.cuda.is_available() else torch_attn
     apply_qk_norm: bool = False
     moe_loss_weight: float = 0.1
@@ -129,72 +129,41 @@ class CustomAttn(nn.Module):
         super().__init__()
         self.n_heads = args.n_heads
         self.head_dim = args.dim // args.n_heads
-        if using_te:
-            self.in_proj = te.Linear(args.dim, 3 * args.n_heads * self.head_dim, bias=False, device="cuda")
-            self.out_proj = te.Linear(args.n_heads * self.head_dim, args.dim, bias=False, device="cuda")
-        else:
-            self.in_proj = nn.Linear(args.dim, 3 * args.n_heads * self.head_dim, bias=False)
-            self.out_proj = nn.Linear(args.n_heads * self.head_dim, args.dim, bias=False)
+        self.in_proj = nn.Linear(args.dim, 3 * args.n_heads * self.head_dim, bias=False)
+        self.out_proj = nn.Linear(args.n_heads * self.head_dim, args.dim, bias=False)
         self.pos_embed = get_pos_embed(args)
         self.attn_fn = args.attn_func
         self.apply_qk_norm = args.apply_qk_norm
 
-        if using_te:
-            # initialize norm layers for queries and keys if needed
-            self.q_norm = (
-                te.LayerNorm(
-                    args.n_heads * self.head_dim,
-                    eps=args.norm_eps,
-                )
-                if self.apply_qk_norm
-                else nn.Identity()
+        # initialize norm layers for queries and keys if needed
+        self.q_norm = (
+            args.norm_type(
+                args.n_heads * self.head_dim,
+                eps=args.norm_eps,
             )
-            self.k_norm = (
-                te.LayerNorm(
-                    args.n_heads * self.head_dim,
-                    eps=args.norm_eps,
-                )
-                if self.apply_qk_norm
-                else nn.Identity()
+            if self.apply_qk_norm
+            else nn.Identity()
+        )
+        self.k_norm = (
+            args.norm_type(
+                args.n_heads * self.head_dim,
+                eps=args.norm_eps,
             )
-        else:
-            # initialize norm layers for queries and keys if needed
-            self.q_norm = (
-                args.norm_type(
-                    args.n_heads * self.head_dim,
-                    eps=args.norm_eps,
-                )
-                if self.apply_qk_norm
-                else nn.Identity()
-            )
-            self.k_norm = (
-                args.norm_type(
-                    args.n_heads * self.head_dim,
-                    eps=args.norm_eps,
-                )
-                if self.apply_qk_norm
-                else nn.Identity()
-            )
+            if self.apply_qk_norm
+            else nn.Identity()
+        )
 
         self.layer_id = layer_id
         self.dim = args.dim
         self.reset_parameters()
 
     def reset_parameters(self):
-        if using_te:
-            # initialize weights by trunc_normal(1/sqrt(fan_in))
-            std = 1.0 / math.sqrt(self.dim)
-            torch.nn.init.trunc_normal_(self.in_proj.weight_tensor.float(), std=std, a=-3 * std, b=3 * std)
-            # scale init by depth as in https://arxiv.org/abs/1908.11365 -- worked slightly better.
-            std = std / math.sqrt(2 * (self.layer_id + 1))
-            torch.nn.init.trunc_normal_(self.out_proj.weight_tensor.float(), std=std, a=-3 * std, b=3 * std)
-        else:
-            # initialize weights by trunc_normal(1/sqrt(fan_in))
-            std = 1.0 / math.sqrt(self.dim)
-            torch.nn.init.trunc_normal_(self.in_proj.weight, std=std, a=-3 * std, b=3 * std)
-            # scale init by depth as in https://arxiv.org/abs/1908.11365 -- worked slightly better.
-            std = std / math.sqrt(2 * (self.layer_id + 1))
-            torch.nn.init.trunc_normal_(self.out_proj.weight, std=std, a=-3 * std, b=3 * std)
+        # initialize weights by trunc_normal(1/sqrt(fan_in))
+        std = 1.0 / math.sqrt(self.dim)
+        torch.nn.init.trunc_normal_(self.in_proj.weight, std=std, a=-3 * std, b=3 * std)
+        # scale init by depth as in https://arxiv.org/abs/1908.11365 -- worked slightly better.
+        std = std / math.sqrt(2 * (self.layer_id + 1))
+        torch.nn.init.trunc_normal_(self.out_proj.weight, std=std, a=-3 * std, b=3 * std)
 
     def forward(self, x: torch.Tensor, is_causal=True, past_key_value=None, use_cache=False):
         batchsize, q_len, _ = x.shape
@@ -245,14 +214,9 @@ class Block(nn.Module):
         elif args.ffn_type == "gelu":
             # Follows mosaic mpt7b, but without a bias.
             self.hidden_dim = args.dim * 4
-            if using_te:
-                self._ff_w1 = te.Linear(args.dim, self.hidden_dim, bias=False, device="cuda")
-                self._ff_w2 = te.Linear(self.hidden_dim, self.dim, bias=False, device="cuda")
-                self.feed_forward = nn.Sequential(self._ff_w1, nn.GELU(approximate="none"), self._ff_w2)
-            else:
-                self._ff_w1 = nn.Linear(args.dim, self.hidden_dim, bias=False)
-                self._ff_w2 = nn.Linear(self.hidden_dim, args.dim, bias=False)
-                self.feed_forward = nn.Sequential(self._ff_w1, nn.GELU(approximate="none"), self._ff_w2)
+            self._ff_w1 = nn.Linear(args.dim, self.hidden_dim, bias=False)
+            self._ff_w2 = nn.Linear(self.hidden_dim, args.dim, bias=False)
+            self.feed_forward = nn.Sequential(self._ff_w1, nn.GELU(approximate="none"), self._ff_w2)
         elif args.ffn_type == "moe":
             moe_args = MoEArgs(
                 hidden_size=args.dim,
@@ -270,24 +234,14 @@ class Block(nn.Module):
             self.feed_forward = MoE(moe_args)
 
         self.layer_id = layer_id
-        if using_te:
-            self.attention_norm = te.LayerNorm(
-                args.dim,
-                eps=args.norm_eps,
-            )
-            self.ffn_norm = te.LayerNorm(
-                args.dim,
-                eps=args.norm_eps,
-            )
-        else:
-            self.attention_norm = args.norm_type(
-                args.dim,
-                eps=args.norm_eps,
-            )
-            self.ffn_norm = args.norm_type(
-                args.dim,
-                eps=args.norm_eps,
-            )
+        self.attention_norm = args.norm_type(
+            args.dim,
+            eps=args.norm_eps,
+        )
+        self.ffn_norm = args.norm_type(
+            args.dim,
+            eps=args.norm_eps,
+        )
         self.attention.seq_len = args.seq_len
         self.reset_parameters()
 
@@ -301,20 +255,12 @@ class Block(nn.Module):
             std = std / math.sqrt(2 * (self.layer_id + 1))
             torch.nn.init.trunc_normal_(self.feed_forward.w3.weight, std=std, a=-3 * std, b=3 * std)
         elif self._ffn_type == "gelu":
-            if using_te:
-                std = 1.0 / math.sqrt(self.dim)
-                torch.nn.init.trunc_normal_(self._ff_w1.weight_tensor.float(), std=std, a=-3 * std, b=3 * std)
+            std = 1.0 / math.sqrt(self.dim)
+            torch.nn.init.trunc_normal_(self._ff_w1.weight, std=std, a=-3 * std, b=3 * std)
 
-                std = 1.0 / math.sqrt(self.hidden_dim)
-                std = std / math.sqrt(2 * (self._layer_id + 1))
-                torch.nn.init.trunc_normal_(self._ff_w2.weight_tensor.float(), std=std, a=-3 * std, b=3 * std)
-            else:
-                std = 1.0 / math.sqrt(self.dim)
-                torch.nn.init.trunc_normal_(self._ff_w1.weight, std=std, a=-3 * std, b=3 * std)
-
-                std = 1.0 / math.sqrt(self.hidden_dim)
-                std = std / math.sqrt(2 * (self._layer_id + 1))
-                torch.nn.init.trunc_normal_(self._ff_w2.weight, std=std, a=-3 * std, b=3 * std)
+            std = 1.0 / math.sqrt(self.hidden_dim)
+            std = std / math.sqrt(2 * (self._layer_id + 1))
+            torch.nn.init.trunc_normal_(self._ff_w2.weight, std=std, a=-3 * std, b=3 * std)
 
     def forward(self, x, past_key_value=None, use_cache=False):
         h, past_key_value = self.attention(
@@ -487,10 +433,33 @@ class Mamba(nn.Module):
         return out, None, None
 
 
+def nn_linear_to_te_linear(model, include_modules=[], exclude_modules=['output'], copy_weights=True):
+    for name, module in model.named_children():
+        if len(list(module.children())) > 0:
+            nn_linear_to_te_linear(module, include_modules, exclude_modules, copy_weights)
+
+        if isinstance(module, torch.nn.Linear) and name in include_modules and name not in exclude_modules:
+            old_module = model._modules[name]
+            model._modules[name] = te.Linear(
+                module.in_features,
+                module.out_features,
+                module.bias is not None,
+                device = 'cuda'
+            )
+            if copy_weights:
+                model._modules[name].weight_tensor.data.copy_(old_module.weight.data)
+                if model._modules[name].bias is not None and old_module.bias is not None:
+                    model._modules[name].bias.data.copy_(old_module.bias)
+    return model
+
 def create_model(args):
     if "mamba" in args.model:
         model = Mamba(create_params(args))
+        if using_te:
+            model = nn_linear_to_te_linear(model)
         return model
     else:
         model = Transformer(create_params(args))
+        if using_te:
+            model = nn_linear_to_te_linear(model)
         return model

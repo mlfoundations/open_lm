@@ -742,17 +742,6 @@ def parse_args(args):
         action="store_true",
         help="If set, allow model to do multiple data passes over our dataset, in order to reach the desired number of tokens.",
     )
-    parser.add_argument(
-        "--use-smp-flash-attention",
-        type=int,
-        default=None,
-        help="Using SMP Flash Attention.",
-    )
-    parser.add_argument(
-        "--sharding-strategy",
-        default=None,
-        help="Sharding Strategy",
-    )
 
     add_model_args(parser)
 
