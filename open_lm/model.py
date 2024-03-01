@@ -433,7 +433,7 @@ class Mamba(nn.Module):
         return out, None, None
 
 
-def nn_linear_to_te_linear(model, include_modules=[], exclude_modules=['output'], copy_weights=True):
+def nn_linear_to_te_linear(model, include_modules=[], exclude_modules=["output"], copy_weights=True):
     for name, module in model.named_children():
         if len(list(module.children())) > 0:
             nn_linear_to_te_linear(module, include_modules, exclude_modules, copy_weights)
@@ -441,16 +441,14 @@ def nn_linear_to_te_linear(model, include_modules=[], exclude_modules=['output']
         if isinstance(module, torch.nn.Linear) and name in include_modules and name not in exclude_modules:
             old_module = model._modules[name]
             model._modules[name] = te.Linear(
-                module.in_features,
-                module.out_features,
-                module.bias is not None,
-                device = 'cuda'
+                module.in_features, module.out_features, module.bias is not None, device="cuda"
             )
             if copy_weights:
                 model._modules[name].weight_tensor.data.copy_(old_module.weight.data)
                 if model._modules[name].bias is not None and old_module.bias is not None:
                     model._modules[name].bias.data.copy_(old_module.bias)
     return model
+
 
 def create_model(args):
     if "mamba" in args.model:
