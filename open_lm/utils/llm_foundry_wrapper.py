@@ -11,6 +11,7 @@ from composer.metrics.nlp import (
     InContextLearningMCExpectedCalibrationError,
     InContextLearningMultipleChoiceAccuracy,
     InContextLearningQAAccuracy,
+    InContextLearningCodeEvalAccuracy,
     LanguageCrossEntropy,
     LanguagePerplexity,
 )
@@ -35,6 +36,7 @@ EVAL_METRICS = [
     InContextLearningQAAccuracy(),
     InContextLearningLMExpectedCalibrationError(),
     InContextLearningMCExpectedCalibrationError(),
+    InContextLearningCodeEvalAccuracy()
 ]
 
 
