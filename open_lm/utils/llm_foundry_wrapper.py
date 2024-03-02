@@ -36,7 +36,7 @@ EVAL_METRICS = [
     InContextLearningQAAccuracy(),
     InContextLearningLMExpectedCalibrationError(),
     InContextLearningMCExpectedCalibrationError(),
-    InContextLearningCodeEvalAccuracy()
+    InContextLearningCodeEvalAccuracy(),
 ]
 
 
