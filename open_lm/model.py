@@ -155,7 +155,7 @@ class CustomAttn(nn.Module):
         torch.nn.init.trunc_normal_(self.in_proj.weight, std=std, a=-3 * std, b=3 * std)
         # scale init by depth as in https://arxiv.org/abs/1908.11365 -- worked slightly better.
         if self.enable_depth_scale_init:
-            std = std / math.sqrt(2 * (self.n_layers + 1))
+            std = std / math.sqrt(2 * (self.n_layers ))
         else:
             std = std / math.sqrt(2 * (self.layer_id + 1))
         torch.nn.init.trunc_normal_(self.out_proj.weight, std=std, a=-3 * std, b=3 * std)
@@ -250,7 +250,7 @@ class Block(nn.Module):
             # scale init by depth as in https://arxiv.org/abs/1908.11365 -- worked slightly better.
             std = 1.0 / math.sqrt(self.hidden_dim)
             if self.enable_depth_scale_init:
-                std = std / math.sqrt(2 * (self.n_layers + 1))
+                std = std / math.sqrt(2 * (self.n_layers))
             else:
                 std = std / math.sqrt(2 * (self.layer_id + 1))
             torch.nn.init.trunc_normal_(self.feed_forward.w3.weight, std=std, a=-3 * std, b=3 * std)
@@ -260,7 +260,7 @@ class Block(nn.Module):
 
             std = 1.0 / math.sqrt(self.hidden_dim)
             if self.enable_depth_scale_init:
-                std = std / math.sqrt(2 * (self.n_layers + 1))
+                std = std / math.sqrt(2 * (self.n_layers))
             else:
                 std = std / math.sqrt(2 * (self._layer_id + 1))
             torch.nn.init.trunc_normal_(self._ff_w2.weight, std=std, a=-3 * std, b=3 * std)
