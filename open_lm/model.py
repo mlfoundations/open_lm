@@ -85,6 +85,7 @@ class Params:
     norm_eps: float = 1e-5
     seq_len: int = 2048
     post_embed_norm: bool = False
+    enable_depth_scale_init:bool = False
     weight_tying: bool = False
     norm_type: nn.Module = nn.LayerNorm
     attn_func: Callable = xformers_attn if torch.cuda.is_available() else torch_attn
@@ -123,6 +124,9 @@ class CustomAttn(nn.Module):
         self.attn_fn = args.attn_func
         self.apply_qk_norm = args.apply_qk_norm
 
+        self.enable_depth_scale_init = args.enable_depth_scale_init
+        self.n_layers = args.n_layers
+
         # initialize norm layers for queries and keys if needed
         self.q_norm = (
             args.norm_type(
@@ -150,7 +154,10 @@ class CustomAttn(nn.Module):
         std = 1.0 / math.sqrt(self.dim)
         torch.nn.init.trunc_normal_(self.in_proj.weight, std=std, a=-3 * std, b=3 * std)
         # scale init by depth as in https://arxiv.org/abs/1908.11365 -- worked slightly better.
-        std = std / math.sqrt(2 * (self.layer_id + 1))
+        if self.enable_depth_scale_init:
+            std = std / math.sqrt(2 * (self.n_layers + 1))
+        else:
+            std = std / math.sqrt(2 * (self.layer_id + 1))
         torch.nn.init.trunc_normal_(self.out_proj.weight, std=std, a=-3 * std, b=3 * std)
 
     def forward(self, x: torch.Tensor, is_causal=True, past_key_value=None, use_cache=False):
@@ -191,6 +198,8 @@ class Block(nn.Module):
         super().__init__()
         self.n_heads = args.n_heads
         self.dim = args.dim
+        self.enable_depth_scale_init = args.enable_depth_scale_init
+        self.n_layers = args.n_layers
 
         self.head_dim = args.dim // args.n_heads
         self.attention = CustomAttn(layer_id, args)
@@ -240,14 +249,20 @@ class Block(nn.Module):
             torch.nn.init.trunc_normal_(self.feed_forward.w12.weight, std=std, a=-3 * std, b=3 * std)
             # scale init by depth as in https://arxiv.org/abs/1908.11365 -- worked slightly better.
             std = 1.0 / math.sqrt(self.hidden_dim)
-            std = std / math.sqrt(2 * (self.layer_id + 1))
+            if self.enable_depth_scale_init:
+                std = std / math.sqrt(2 * (self.n_layers + 1))
+            else:
+                std = std / math.sqrt(2 * (self.layer_id + 1))
             torch.nn.init.trunc_normal_(self.feed_forward.w3.weight, std=std, a=-3 * std, b=3 * std)
         elif self._ffn_type == "gelu":
             std = 1.0 / math.sqrt(self.dim)
             torch.nn.init.trunc_normal_(self._ff_w1.weight, std=std, a=-3 * std, b=3 * std)
 
             std = 1.0 / math.sqrt(self.hidden_dim)
-            std = std / math.sqrt(2 * (self._layer_id + 1))
+            if self.enable_depth_scale_init:
+                std = std / math.sqrt(2 * (self.n_layers + 1))
+            else:
+                std = std / math.sqrt(2 * (self._layer_id + 1))
             torch.nn.init.trunc_normal_(self._ff_w2.weight, std=std, a=-3 * std, b=3 * std)
 
     def forward(self, x, past_key_value=None, use_cache=False):
@@ -274,6 +289,7 @@ class Transformer(nn.Module, PyTorchModelHubMixin):
         self.dim = params.dim
         self.vocab_size = params.vocab_size
         self.n_layers = params.n_layers
+        self.enable_depth_scale_init = params.enable_depth_scale_init
         self.moe_num_experts = params.moe_num_experts
         self.seq_len = params.seq_len
         self.post_embed_norm = (
@@ -385,6 +401,7 @@ def create_params(args):
             attn_func=get_attn_func(
                 args.attn_name, args.attn_activation, args.attn_seq_scalar, args.attn_seq_scalar_alpha
             ),
+            enable_depth_scale_init = args.enable_depth_scale_init,
             apply_qk_norm=cfg.get("qk_norm", args.qk_norm),
             positional_embedding_type=cfg.get("positional_embedding_type", args.positional_embedding_type),
             ffn_type=cfg.get("ffn_type", args.ffn_type),

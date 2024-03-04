@@ -376,6 +376,14 @@ def parse_args(args):
         help="Whether to log the logit mean to wandb etc.",
     )
     parser.add_argument(
+        "--enable-depth-scale-init",
+        default=False,
+        action="store_true",
+        help="Enable depth scale init",
+    )
+
+
+    parser.add_argument(
         "--use-bn-sync",
         default=False,
         action="store_true",
