@@ -738,7 +738,7 @@ def parse_args(args):
         help="Allow forcing distributed mode even when running on one gpu. Mostly useful for testing.",
     )
     parser.add_argument(
-        "--world-size",
+        "--preset-world-size",
         type=int,
         default=None,
         help="Explicitly set the world size. Useful in cases where a different number of gpus per node need to be used."
