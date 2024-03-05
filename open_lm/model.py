@@ -242,8 +242,8 @@ class Block(nn.Module):
             self._ff_w2 = nn.Linear(self.hidden_dim, args.dim, bias=False)
             self.feed_forward = nn.Sequential(self._ff_w1, nn.GELU(approximate="none"), self._ff_w2)
         elif args.ffn_type == "gemma_geglu":
-            # Follows https://github.com/google/gemma_pytorch/blob/01062c9ef4cf89ac0c985b25a734164ede017d0b/gemma/model.py#L182-L201
-            self.hidden_dim = args.dim * 8
+            # this follows llama / lit llama -- go to multiple of 256
+            self.hidden_dim = 256 * ((int(2 * 4 * args.dim / 3) + 256 - 1) // 256)
             self.feed_forward = GemmaMLP(args.dim, self.hidden_dim, layer_id)
         elif args.ffn_type == "moe":
             moe_args = MoEArgs(
