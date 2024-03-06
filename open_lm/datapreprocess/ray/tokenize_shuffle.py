@@ -42,7 +42,7 @@ from ray.data.context import DataContext
 from ray.data.datasource import Datasource, ReadTask
 from ray.runtime_context import RuntimeContext
 from tqdm import tqdm
-from transformers import GPTNeoXTokenizerFast, AutoTokenizer
+from transformers import GPTNeoXTokenizerFast, PreTrainedTokenizerFast, AutoTokenizer
 import uuid
 
 import logging
@@ -439,11 +439,14 @@ def write_to_location(folder, tar_name, bio):
 
 def load_tokenizer(tokenizer):
     enc = None
-    try:
-        enc = AutoTokenizer.from_pretrained(tokenizer, use_fast=True)
-    except Exception as e:
-        print(str(e))
-        raise ValueError(f"Unknown Tokenizer: {tokenizer}")
+    if pathlib.Path(tokenizer).exists():
+        enc = PreTrainedTokenizerFast(tokenizer_file=tokenizer)
+    else:
+        try:
+            enc = AutoTokenizer.from_pretrained(tokenizer, use_fast=True)
+        except Exception as e:
+            print(str(e))
+            raise ValueError(f"Unknown Tokenizer: {tokenizer}")
 
     return (lambda x: enc(x).input_ids, enc.vocab_size)
 
