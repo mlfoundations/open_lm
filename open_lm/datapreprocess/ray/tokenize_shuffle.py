@@ -90,6 +90,7 @@ class RawFileType(enum.Enum):
     ZSTD_JSONL_COMPRESSED = 2
     GZIP_JSONL_COMPRESSED = 3
     TAR = 4
+    TAR_PRETOK = 5
     UNKNOWN = -1
 
 
@@ -118,13 +119,17 @@ def tar_reader(fh: BinaryIO, content_key: str):
     """
     content_key: where in the tarfile to find the text/tokens. Options:
         "txt" - read text file as string
+        "json" - read json file
         "json:key" - read json[key] as string
+        "json.gz" - same as json, but also gzipped
+        "json.gz:key" - same as json.gz, but also gzipped
         "npy" - read numpy array as tokens
     """
+    # TODO(gsmyrnis) - I think some of the modes (namely npy) are not clean on whether they are still useful - consider
+    # removing them in the future.
     content_ext = content_key.split(":")[0]
     buffer = io.BytesIO(fh.read())
     with tarfile.open(fileobj=buffer, mode="r") as tar:
-        samples = []
         for member in tar.getmembers():
             if member.isfile() and member.name.endswith(f".{content_ext}"):
                 with tar.extractfile(member) as fileobj:
@@ -132,8 +137,20 @@ def tar_reader(fh: BinaryIO, content_key: str):
                         if content_ext == "txt":
                             content = fileobj.read().decode("utf-8")
                         elif content_ext == "json":
-                            json_dict, json_key = json.load(fileobj), content_key.split(":")[1]
-                            content = json_dict[json_key]
+                            json_data = json.load(fileobj)
+                            if isinstance(json_data, dict):
+                                json_key = content_key.split(":")[1]
+                                content = json_data[json_key]
+                            else:
+                                content = json_data
+                        elif content_ext == "json.gz":
+                            with gzip.open(fileobj, "rb") as fileobj_unzip:
+                                json_data = json.load(fileobj_unzip)
+                            if isinstance(json_data, dict):
+                                json_key = content_key.split(":")[1]
+                                content = json_data[json_key]
+                            else:
+                                content = json_data
                         elif content_ext == "npy":
                             token_array = np.load(io.BytesIO(fileobj.read()), allow_pickle=True)
                             content = token_array.reshape(-1).tolist()
@@ -256,6 +273,7 @@ def preprocess(
     do_sample: bool = False,
     sources: enum.Enum = None,
     source_counter: GlobalCounter = None,
+    pretok_tars: bool = False
 ):
     tokenizer_fn, vocab_size = tokenizer
     rng = random.Random(hash(key) + seed)
@@ -273,7 +291,10 @@ def preprocess(
         pbar = tqdm(file_reader(fh), mininterval=10)
         pbar.set_description(key)
         for string in pbar:
-            tokens = tokenizer_fn(string)
+            if file_type == RawFileType.TAR and pretok_tars:
+                tokens = string
+            else:
+                tokens = tokenizer_fn(string)
             tokens.append(EOT)
             buffer += tokens
             while len(buffer) >= seqlen:
@@ -308,7 +329,7 @@ def preprocess(
         return []
 
 
-def process_keys(data, tokenizer, seqlen, seed, content_key, do_sample, sources=None, source_counters=None):
+def process_keys(data, tokenizer, seqlen, seed, content_key, do_sample, pretok_tars, sources=None, source_counters=None):
     path = data["path"]
 
     if path.startswith("s3"):
@@ -337,6 +358,7 @@ def process_keys(data, tokenizer, seqlen, seed, content_key, do_sample, sources=
             do_sample=do_sample,
             sources=sources,
             source_counter=source_counter,
+            pretok_tars=pretok_tars
         )
 
         # Ensure that all operations on the file handle are done within this block
@@ -569,6 +591,7 @@ def main(args):
         "--ray_dashboard_host", type=str, default="127.0.0.1"
     )  # default is localhost; for slurm jobs do 0.0.0.0
     parser.add_argument("--suffixes", nargs="+", default=[".json", ".jsonl", ".zst", ".zstd", ".tar", ".gz"])
+    parser.add_argument("--pretok-tars", action="store_true", help="Assume tars contain pretokenized data.")
 
     args = parser.parse_args(args)
     if args.do_sample:
@@ -650,6 +673,7 @@ def main(args):
             seed=args.seed,
             content_key=content_key,
             do_sample=args.do_sample,
+            pretok_tars=args.pretok_tars,
             sources=Sources,
             source_counters=source_counters,
         )
