@@ -439,7 +439,7 @@ def write_to_location(folder, tar_name, bio):
 
 def load_tokenizer(tokenizer):
     enc = None
-    if pathlib.Path(tokenizer).exists():
+    if pathlib.Path(tokenizer).exists() and pathlib.Path(tokenizer).isfile():
         enc = PreTrainedTokenizerFast(tokenizer_file=tokenizer)
     else:
         try:
