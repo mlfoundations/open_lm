@@ -273,7 +273,7 @@ def preprocess(
     do_sample: bool = False,
     sources: enum.Enum = None,
     source_counter: GlobalCounter = None,
-    pretok_tars: bool = False
+    pretok_tars: bool = False,
 ):
     tokenizer_fn, vocab_size = tokenizer
     rng = random.Random(hash(key) + seed)
@@ -329,7 +329,9 @@ def preprocess(
         return []
 
 
-def process_keys(data, tokenizer, seqlen, seed, content_key, do_sample, pretok_tars, sources=None, source_counters=None):
+def process_keys(
+    data, tokenizer, seqlen, seed, content_key, do_sample, pretok_tars, sources=None, source_counters=None
+):
     path = data["path"]
 
     if path.startswith("s3"):
@@ -358,7 +360,7 @@ def process_keys(data, tokenizer, seqlen, seed, content_key, do_sample, pretok_t
             do_sample=do_sample,
             sources=sources,
             source_counter=source_counter,
-            pretok_tars=pretok_tars
+            pretok_tars=pretok_tars,
         )
 
         # Ensure that all operations on the file handle are done within this block
@@ -591,7 +593,7 @@ def main(args):
         "--ray_dashboard_host", type=str, default="127.0.0.1"
     )  # default is localhost; for slurm jobs do 0.0.0.0
     parser.add_argument("--suffixes", nargs="+", default=[".json", ".jsonl", ".zst", ".zstd", ".tar", ".gz"])
-    parser.add_argument("--pretok-tars", action="store_true", help="Assume tars contain pretokenized data.")
+    parser.add_argument("--pretok_tars", action="store_true", help="Assume tars contain pretokenized data.")
 
     args = parser.parse_args(args)
     if args.do_sample:
