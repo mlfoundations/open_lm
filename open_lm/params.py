@@ -741,7 +741,7 @@ def parse_args(args):
         "--preset-world-size",
         type=int,
         default=None,
-        help="Explicitly set the world size. Useful in cases where a different number of gpus per node need to be used."
+        help="Explicitly set the world size. Useful in cases where a different number of gpus per node need to be used.",
     )
     parser.add_argument(
         "--multiple-data-passes",
