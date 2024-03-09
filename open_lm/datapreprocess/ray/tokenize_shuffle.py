@@ -596,6 +596,9 @@ def main(args):
     parser.add_argument("--pretok_tars", action="store_true", help="Assume tars contain pretokenized data.")
 
     args = parser.parse_args(args)
+
+    assert not args.pretok_tars or args.suffixes == [".tar"], "Currently mixing with tokenized and untokenized data at the same time is not supported."
+
     if args.do_sample:
         Sources, SAMPLING_FREQUENCIES = load_from_yaml(args.default_dataset_yaml)
         logger.info(f"SOURCES:\n {Sources}")
@@ -637,6 +640,7 @@ def main(args):
         input_paths = input_paths[: args.subset]
     if args.subfraction is not None:
         input_paths = input_paths[: int(args.subfraction * len(input_paths))]
+
     print("Files considered: \n", input_paths)
     print(f"num files ={len(input_paths)}")
     num_files = len(input_paths)

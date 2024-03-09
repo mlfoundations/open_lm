@@ -137,7 +137,7 @@ def test_tokenize_shuffle_with_pretokenized():
     os.system("mkdir test_output_2")
 
     exit_value_2 = os.system(
-        f"python open_lm/datapreprocess/ray/tokenize_shuffle.py --input ./test_input_2a,./test_input_2b --content_key json.gz --seqlen {content_len} --output ./test_output_2 --pretok_tars"
+        f"python open_lm/datapreprocess/ray/tokenize_shuffle.py --input ./test_input_2a,./test_input_2b --content_key json.gz --seqlen {content_len} --output ./test_output_2 --pretok_tars --suffixes .tar"
     )
     assert exit_value_2 == 0
 
