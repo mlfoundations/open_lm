@@ -132,8 +132,10 @@ def test_tokenize_shuffle_with_pretokenized():
     )
     assert exit_value_1 == 0
 
-    os.system("cp -r ./test_output ./test_input_2a")
-    os.system("cp -r ./test_output ./test_input_2b")
+    os.system("mkdir test_input_2a")
+    os.system("mkdir test_input_2b")
+    os.system("cp -r ./test_output/00000001.tar ./test_input_2a/")
+    os.system("cp -r ./test_output/00000002.tar ./test_input_2b/")
     os.system("mkdir test_output_2")
 
     exit_value_2 = os.system(
@@ -148,4 +150,9 @@ def test_tokenize_shuffle_with_pretokenized():
         for x in ds:
             assert len(x["json.gz"]) == content_len + 1
             total += len(x["json.gz"])
-    assert total == 2 * NUM_TOKENS
+
+    os.system("rm -rf test_input_2a")
+    os.system("rm -rf test_input_2b")
+    os.system("rm -rf test_output_2")
+
+    assert total == NUM_TOKENS

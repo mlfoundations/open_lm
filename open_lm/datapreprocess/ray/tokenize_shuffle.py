@@ -295,7 +295,7 @@ def preprocess(
                 tokens = string
             else:
                 tokens = tokenizer_fn(string)
-            tokens.append(EOT)
+                tokens.append(EOT)
             buffer += tokens
             while len(buffer) >= seqlen:
                 if do_sample:
