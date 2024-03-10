@@ -597,7 +597,9 @@ def main(args):
 
     args = parser.parse_args(args)
 
-    assert not args.pretok_tars or args.suffixes == [".tar"], "Currently mixing with tokenized and untokenized data at the same time is not supported."
+    assert not args.pretok_tars or args.suffixes == [
+        ".tar"
+    ], "Currently mixing with tokenized and untokenized data at the same time is not supported."
 
     if args.do_sample:
         Sources, SAMPLING_FREQUENCIES = load_from_yaml(args.default_dataset_yaml)
