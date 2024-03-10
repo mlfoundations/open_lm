@@ -251,7 +251,7 @@ class BufferedShardWriter:
                 tokens = [int(x) for x in self.buffer[i]["tokens"]]
                 token_count += len(tokens)
                 json_string = json.dumps(tokens)
-                uid = hashlib.md5(json_string.encode()).hexdigest()
+                uid = f"{tar_index_str}_{i:0{digits}}"
                 sample = {"__key__": uid, "json.gz": json_string}
                 sink.write(sample)
         bio.seek(0)
