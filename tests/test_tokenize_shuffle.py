@@ -115,3 +115,56 @@ def test_tokenize_shuffle_local_read_local_write():
             total += len(x["json.gz"])
     assert total == NUM_TOKENS
     assert exit_value == 0
+
+
+def test_mixing_no_sampling():
+    content_len = 2048
+    docs_a = 1000
+    docs_b = 500
+
+    # Tokens for gpt-neox tokenizer (default)
+    token_a = 247
+    token_b = 270
+
+    # Store some fake sources in ./test_input
+    os.system("mkdir test_input")
+    os.system("mkdir test_input/source_a/")
+    os.system("mkdir test_input/source_b/")
+    os.system("mkdir test_output")
+
+    with open("test_input/source_a/input.jsonl", "w") as f:
+        # This will create 2048 copies of the " a" string
+        data = {"text": " " + " ".join(["a" for _ in range(content_len)])}
+        json_string = json.dumps(data)
+        for _ in range(docs_a):
+            f.write(json_string)
+            f.write("\n")
+
+    with open("test_input/source_b/input.jsonl", "w") as f:
+        data = {"text": " " + " ".join(["b" for _ in range(content_len)])}
+        json_string = json.dumps(data)
+        for _ in range(docs_b):
+            f.write(json_string)
+            f.write("\n")
+
+    # run tokenize script
+    exit_value = os.system(
+        f"python open_lm/datapreprocess/ray/tokenize_shuffle.py --input ./test_input --content_key text --seqlen {content_len} --output ./test_output/"
+    )
+
+    tars = [os.path.join("test_output", fname) for fname in os.listdir("test_output") if fname.endswith(".tar")]
+    total_a = total_b = 0
+    for tar in tars:
+        ds = wds.WebDataset(tar).decode()
+        for x in ds:
+            assert len(x["json.gz"]) == content_len + 1
+            if x["json.gz"][0] == token_a:
+                total_a += len(x["json.gz"])
+            elif x["json.gz"][0] == token_b:
+                total_b += len(x["json.gz"])
+            else:
+                assert False, f"Unrecognized tokens {x['json.gz'][0]} - probably using a different tokenizer?"
+
+    assert total_a == docs_a * (content_len + 1)
+    assert total_b == docs_b * (content_len + 1)
+    assert exit_value == 0
