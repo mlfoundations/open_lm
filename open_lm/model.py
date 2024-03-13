@@ -36,6 +36,18 @@ try:  # optional import
 except ImportError:
     MambaLMHeadModel = None
 
+# Adding flag if using TE FP8
+using_te = False
+try:
+    import transformer_engine.pytorch as te
+    from transformer_engine.common import recipe
+
+    fp8_format = recipe.Format.HYBRID
+    fp8_recipe = recipe.DelayedScaling(fp8_format=fp8_format, amax_history_len=32, amax_compute_algo="max")
+    using_te = True
+except ImportError as ie:
+    using_te = False
+
 # from openclip
 _MODEL_CONFIG_PATHS = [Path(__file__).parent / f"model_configs/"]
 _MODEL_CONFIGS = {}  # directory (model_name: config) of model architecture configs
@@ -87,7 +99,7 @@ class Params:
     seq_len: int = 2048
     post_embed_norm: bool = False
     weight_tying: bool = False
-    norm_type: nn.Module = nn.LayerNorm
+    norm_type: nn.Module = te.LayerNorm if using_te else nn.LayerNorm
     attn_func: Callable = xformers_attn if torch.cuda.is_available() else torch_attn
     apply_qk_norm: bool = False
     moe_loss_weight: float = 0.1
@@ -461,10 +473,31 @@ class Mamba(nn.Module):
         return out, None, None
 
 
+def nn_linear_to_te_linear(model, include_modules=[], exclude_modules=["output"], copy_weights=True):
+    for name, module in model.named_children():
+        if len(list(module.children())) > 0:
+            nn_linear_to_te_linear(module, include_modules, exclude_modules, copy_weights)
+
+        if isinstance(module, torch.nn.Linear) and name in include_modules and name not in exclude_modules:
+            old_module = model._modules[name]
+            model._modules[name] = te.Linear(
+                module.in_features, module.out_features, module.bias is not None, device="cuda"
+            )
+            if copy_weights:
+                model._modules[name].weight_tensor.data.copy_(old_module.weight.data)
+                if model._modules[name].bias is not None and old_module.bias is not None:
+                    model._modules[name].bias.data.copy_(old_module.bias)
+    return model
+
+
 def create_model(args):
     if "mamba" in args.model:
         model = Mamba(create_params(args))
+        if using_te:
+            model = nn_linear_to_te_linear(model)
         return model
     else:
         model = Transformer(create_params(args))
+        if using_te:
+            model = nn_linear_to_te_linear(model)
         return model
