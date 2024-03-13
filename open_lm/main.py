@@ -439,6 +439,9 @@ def main(args):
 
     random_seed(args.seed, args.rank)
 
+    if args.grad_checkpointing:
+        model.set_grad_checkpointing()
+
     if args.distributed:
         if args.fsdp:
             transformer_layer_cls = None
@@ -515,9 +518,6 @@ def main(args):
                 # this doesn't exist in older PyTorch, arg only added if enabled
                 ddp_args["static_graph"] = True
             model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[device], **ddp_args)
-
-    if args.grad_checkpointing:
-        model.set_grad_checkpointing()
 
     if is_master(args):
         logging.info(f"Model (has {sum(p.numel() for p in model.parameters() if p.requires_grad)} parameters):")
