@@ -2,6 +2,7 @@ import json
 import os
 import pytest
 import webdataset as wds
+import numpy as np
 
 
 @pytest.fixture(autouse=True)
@@ -117,35 +118,51 @@ def test_tokenize_shuffle_local_read_local_write():
     assert exit_value == 0
 
 
-def test_mixing_no_sampling():
+@pytest.mark.parametrize("num_sources", [2, 3])
+@pytest.mark.parametrize("generation_length", [1024, 2048, 2500])
+def test_mixing_no_sampling(num_sources, generation_length):
     content_len = 2048
     docs_a = 1000
     docs_b = 500
+    docs_c = 2000
 
     # Tokens for gpt-neox tokenizer (default)
     token_a = 247
     token_b = 270
+    token_c = 260
 
     # Store some fake sources in ./test_input
     os.system("mkdir test_input")
     os.system("mkdir test_input/source_a/")
     os.system("mkdir test_input/source_b/")
+    os.system("mkdir test_input/source_c/")
     os.system("mkdir test_output")
 
-    with open("test_input/source_a/input.jsonl", "w") as f:
-        # This will create 2048 copies of the " a" string
-        data = {"text": " " + " ".join(["a" for _ in range(content_len)])}
-        json_string = json.dumps(data)
-        for _ in range(docs_a):
-            f.write(json_string)
-            f.write("\n")
+    for i in range(docs_a // 100):
+        with open(f"test_input/source_a/input_{i:08d}.jsonl", "w") as f:
+            # This will create 2048 copies of the " a" string
+            data = {"text": " " + " ".join(["a" for _ in range(generation_length)])}
+            json_string = json.dumps(data)
+            for _ in range(100):
+                f.write(json_string)
+                f.write("\n")
 
-    with open("test_input/source_b/input.jsonl", "w") as f:
-        data = {"text": " " + " ".join(["b" for _ in range(content_len)])}
-        json_string = json.dumps(data)
-        for _ in range(docs_b):
-            f.write(json_string)
-            f.write("\n")
+    for i in range(docs_b // 100):
+        with open(f"test_input/source_b/input_{i:08d}.jsonl", "w") as f:
+            data = {"text": " " + " ".join(["b" for _ in range(generation_length)])}
+            json_string = json.dumps(data)
+            for _ in range(100):
+                f.write(json_string)
+                f.write("\n")
+
+    if num_sources == 3:
+        for i in range(docs_c // 100):
+            with open(f"test_input/source_c/input_{i:08d}.jsonl", "w") as f:
+                data = {"text": " " + " ".join(["c" for _ in range(generation_length)])}
+                json_string = json.dumps(data)
+                for _ in range(100):
+                    f.write(json_string)
+                    f.write("\n")
 
     # run tokenize script
     exit_value = os.system(
@@ -153,24 +170,26 @@ def test_mixing_no_sampling():
     )
 
     tars = [os.path.join("test_output", fname) for fname in os.listdir("test_output") if fname.endswith(".tar")]
-    total_a = total_b = 0
+    total_a = total_b = total_c = 0
     for tar in tars:
         ds = wds.WebDataset(tar).decode()
         for x in ds:
             assert len(x["json.gz"]) == content_len + 1
-            if x["json.gz"][0] == token_a:
-                total_a += len(x["json.gz"])
-            elif x["json.gz"][0] == token_b:
-                total_b += len(x["json.gz"])
-            else:
-                assert False, f"Unrecognized tokens {x['json.gz'][0]} - probably using a different tokenizer?"
+            tokens = np.array(x["json.gz"])
+            total_a += np.sum(tokens == token_a)
+            total_b += np.sum(tokens == token_b)
+            total_c += np.sum(tokens == token_c)
 
-    assert total_a == docs_a * (content_len + 1)
-    assert total_b == docs_b * (content_len + 1)
+    assert total_a == docs_a * generation_length
+    assert total_b == docs_b * generation_length
+    if num_sources == 3:
+        assert total_c == docs_c * generation_length
+
     assert exit_value == 0
 
 
-def test_mixing_sampling():
+@pytest.mark.parametrize("generation_length", [1024, 2048, 2500])
+def test_mixing_sampling(generation_length):
     content_len = 2048
     docs_a = 10000
     docs_b = 10000
@@ -185,20 +204,22 @@ def test_mixing_sampling():
     os.system("mkdir test_input/source_b/")
     os.system("mkdir test_output")
 
-    with open("test_input/source_a/input.jsonl", "w") as f:
-        # This will create 2048 copies of the " a" string
-        data = {"text": " " + " ".join(["a" for _ in range(content_len)])}
-        json_string = json.dumps(data)
-        for _ in range(docs_a):
-            f.write(json_string)
-            f.write("\n")
+    for i in range(docs_a // 100):
+        with open(f"test_input/source_a/input_{i:08d}.jsonl", "w") as f:
+            # This will create 2048 copies of the " a" string
+            data = {"text": " " + " ".join(["a" for _ in range(generation_length)])}
+            json_string = json.dumps(data)
+            for _ in range(100):
+                f.write(json_string)
+                f.write("\n")
 
-    with open("test_input/source_b/input.jsonl", "w") as f:
-        data = {"text": " " + " ".join(["b" for _ in range(content_len)])}
-        json_string = json.dumps(data)
-        for _ in range(docs_b):
-            f.write(json_string)
-            f.write("\n")
+    for i in range(docs_b // 100):
+        with open(f"test_input/source_b/input_{i:08d}.jsonl", "w") as f:
+            data = {"text": " " + " ".join(["b" for _ in range(generation_length)])}
+            json_string = json.dumps(data)
+            for _ in range(100):
+                f.write(json_string)
+                f.write("\n")
 
     # run tokenize script
     exit_value = os.system(
@@ -212,20 +233,17 @@ def test_mixing_sampling():
         ds = wds.WebDataset(tar).decode()
         for x in ds:
             assert len(x["json.gz"]) == content_len + 1
-            if x["json.gz"][0] == token_a:
-                total_a += len(x["json.gz"])
-            elif x["json.gz"][0] == token_b:
-                total_b += len(x["json.gz"])
-            else:
-                assert False, f"Unrecognized tokens {x['json.gz'][0]} - probably using a different tokenizer?"
+            tokens = np.array(x["json.gz"])
+            total_a += np.sum(tokens == token_a)
+            total_b += np.sum(tokens == token_b)
 
     # Sampling for source a should be 2.0, so it should be exactly 2
-    assert total_a == 2 * docs_a * (content_len + 1)
+    assert total_a == 2 * docs_a * generation_length
 
     # Source b is sampled with probability 0.5, so the number of documents from source b follows Bin(10000, 0.5).
     # Via (multiplicative) Chernoff bounds, for margin delta the error probability is 2 * exp(-delta**2 * mu / 3)
     # In this case for error probability <= 1e-4, we need delta * mu = sqrt(-3 * ln(0.5e-10) / mu) * mu ~= 386
     # TODO (gsmyrnis): I think you can get a better bound here.
     mixing_error = 386
-    assert total_b <= (0.5 * docs_b + mixing_error) * (content_len + 1)
-    assert total_b >= (0.5 * docs_b - mixing_error) * (content_len + 1)
+    assert total_b <= (0.5 * docs_b + mixing_error) * generation_length
+    assert total_b >= (0.5 * docs_b - mixing_error) * generation_length

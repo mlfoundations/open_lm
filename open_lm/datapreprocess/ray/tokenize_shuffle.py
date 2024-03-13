@@ -304,9 +304,21 @@ def preprocess(
             buffer = buffer[idx:]
 
         if len(buffer) > 0:
-            if source_counter is not None:
-                ray.get(source_counter.increment_token_count.remote(len(buffer)))
-            yield buffer + [PAD] * (seqlen - len(buffer))
+            if do_sample:
+                local_sample_freq = sample_freq
+                while local_sample_freq > 1:
+                    if source_counter is not None:
+                        ray.get(source_counter.increment_token_count.remote(len(buffer)))
+                    yield buffer + [PAD] * (seqlen - len(buffer))
+                    local_sample_freq -= 1
+                if rng.random() < local_sample_freq:
+                    if source_counter is not None:
+                        ray.get(source_counter.increment_token_count.remote(len(buffer)))
+                    yield buffer + [PAD] * (seqlen - len(buffer))
+            else:
+                if source_counter is not None:
+                    ray.get(source_counter.increment_token_count.remote(len(buffer)))
+                yield buffer + [PAD] * (seqlen - len(buffer))
 
     except (IncompleteReadError, ReadTimeoutError, ResponseStreamingError) as e:
         logger.error(f"There was an incomplete read error: {e} for key {key}")
