@@ -25,7 +25,7 @@ def test_tokenize_shuffle_simple():
     for x in ds:
         assert len(x["json.gz"]) == content_len + 1
         total += len(x["json.gz"])
-    # assert total == NUM_TOKENS
+    assert total == NUM_TOKENS
 
     with open("test_output/manifest.jsonl", "rb") as f:
         out = f.read()
@@ -57,7 +57,7 @@ def test_tokenize_shuffle_tar(content_key, NUM_TOKENS):
 
 def test_tokenize_shuffle_simple_do_sample():
     content_len = 2048
-    NUM_TOKENS = 32784
+    NUM_TOKENS = 86058
     exit_value = os.system(
         f"python open_lm/datapreprocess/ray/tokenize_shuffle.py --input s3://dcnlp-west-test/tokenize_shuffle_test/C4_V3_tiny/ --content_key content --output test_output/ --seqlen {content_len} --do_sample"
     )
@@ -67,7 +67,12 @@ def test_tokenize_shuffle_simple_do_sample():
     for x in ds:
         assert len(x["json.gz"]) == content_len + 1
         total += len(x["json.gz"])
-    assert total == NUM_TOKENS
+
+    # The sampling prob is 1.037142857 for the C4 source. This means that we will see all tokens at least once. For
+    # error at most 1e-4, we will need an error of 13950 tokens (by Chernoff bounds).
+    # TODO(gsmyrnis): Improve this.
+    assert total <= 1.037142857 * NUM_TOKENS + 13950
+    assert total >= 1.037142857 * NUM_TOKENS - 13950
 
 
 @pytest.mark.s3
@@ -242,7 +247,7 @@ def test_mixing_sampling(generation_length):
 
     # Source b is sampled with probability 0.5, so the number of documents from source b follows Bin(10000, 0.5).
     # Via (multiplicative) Chernoff bounds, for margin delta the error probability is 2 * exp(-delta**2 * mu / 3)
-    # In this case for error probability <= 1e-4, we need delta * mu = sqrt(-3 * ln(0.5e-10) / mu) * mu ~= 386
+    # In this case for error probability <= 1e-4, we need delta * mu = sqrt(-3 * ln(0.5e-4) / mu) * mu ~= 386
     # TODO (gsmyrnis): I think you can get a better bound here.
     mixing_error = 386
     assert total_b <= (0.5 * docs_b + mixing_error) * generation_length
