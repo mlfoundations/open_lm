@@ -68,7 +68,7 @@ def load_from_yaml(filename):
     # Add get_source and get_sampling_frequency methods to Sources
     def get_source_dynamic(self, key):
         for item in data["sources"]:
-            if any(marker in key.lower() for marker in item["markers"]):
+            if any(marker.lower() in key.lower() for marker in item["markers"]):
                 return Sources[item["source"]]
         return Sources.UNKNOWN
 
