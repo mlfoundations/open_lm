@@ -6,35 +6,65 @@ import xformers.ops as xops
 
 
 def get_rectangular_mask(shape, q_seq_len, k_seq_len, device, dtype):
+    """
+    >>> get_rectangular_mask((1, 1), 2, 2, "cpu", torch.float32)
+    tensor([[[[0., -inf],
+              [0., 0.]]]])
+    >>> get_rectangular_mask((1, 1), 3, 5, "cpu", torch.float32)
+    tensor([[[[0., 0., 0., -inf, -inf],
+              [0., 0., 0., 0., -inf],
+              [0., 0., 0., 0., 0.]]]])
+    >>> get_rectangular_mask((1, 1), 5, 5, "cpu", torch.float32)
+    tensor([[[[0., -inf, -inf, -inf, -inf],
+              [0., 0., -inf, -inf, -inf],
+              [0., 0., 0., -inf, -inf],
+              [0., 0., 0., 0., -inf],
+              [0., 0., 0., 0., 0.]]]])
+    """
     # xformers requires the mask to be built with a shape that is a multiple of 8
     # probably because of the way it is implemented in CUDA
     next_multiple_8 = (k_seq_len + 7) // 8 * 8  #
-    mask = torch.ones((q_seq_len, next_multiple_8), device=device, dtype=bool)
+
+    mask = torch.ones((q_seq_len, k_seq_len), device=device, dtype=bool)
     mask[:, -q_seq_len:] = torch.tril(mask[:, -q_seq_len:], diagonal=0)
-    return torch.zeros((*shape, q_seq_len, next_multiple_8), device=device, dtype=dtype).masked_fill(
-        ~mask, float("-inf")
-    )[:, :, :, :k_seq_len]
+
+    output_mask = torch.zeros((*shape, q_seq_len, next_multiple_8), device=device, dtype=dtype)
+    output_mask[:, :, :, :k_seq_len].masked_fill_(~mask, torch.finfo(dtype).min)
+    return output_mask[:, :, :, :k_seq_len]
 
 
-def xformers_attn(queries, keys, values, is_causal):
+def xformers_attn(queries, keys, values, is_causal, attention_mask=None):
     # xformers assumes q, k, v are [batch, seq_len, heads, embed_dim]
     # We assume that queries match the last part of the key / value sequences
     # see (https://facebookresearch.github.io/xformers/components/ops.html#xformers.ops.fmha.attn_bias.LowerTriangularFromBottomRightMask)
     # we would like to replace the mask generation with: mask = xops.fmha.attn_bias.LowerTriangularFromBottomRightMask()
     # sadly we cannot us this because it needs xformers>=0.0.23 and this is not compatible with torch<2.1.1 while llm-foundry requires torch<2.1.1
 
-    mask = None
     # If queries have shape [batch, 1, heads, dim] it means there is only one query in the sequence.
     # In this case, there is no notion of causal masking, so we can just set the mask to None.
     # This is actually needed to get the desired behavior with seq_len=1.
-    if is_causal and queries.shape[1] == keys.shape[1]:
-        mask = xops.LowerTriangularMask()
-    elif is_causal and queries.shape[1] > 1:
+    bias = None
+    if is_causal and queries.shape[1] == keys.shape[1] and attention_mask is None:
+        bias = xops.LowerTriangularMask()
+    elif is_causal and (queries.shape[1] > 1 or attention_mask is not None):
         # Build causal mask that assumes queries are in the end of the sequence.
         batch, q_seq_len, heads, _ = queries.shape
         k_seq_len = keys.shape[1]
-        mask = get_rectangular_mask((batch, heads), q_seq_len, k_seq_len, queries.device, queries.dtype)
-    return xops.memory_efficient_attention(queries, keys, values, attn_bias=mask)
+        bias = get_rectangular_mask((batch, heads), q_seq_len, k_seq_len, queries.device, queries.dtype)
+        if attention_mask is not None:
+            # Update mask to remove attention based on attention_mask that's passed in.
+            assert attention_mask.dim() == 2
+            # From https://github.com/huggingface/transformers/blob/f738ab3b5d30e30c43a4c3d00ca8939f8a4d4427/src/transformers/models/llama/modeling_llama.py#L1089C1-L1091C117
+            mask_length = attention_mask.shape[-1]
+            padding_mask = bias[..., :mask_length].eq(0.0) * attention_mask[:, None, None, :].eq(0.0)
+            min_dtype = torch.finfo(queries.dtype).min
+            bias[..., :mask_length] = bias[..., :mask_length].masked_fill(padding_mask, min_dtype)
+            # Disable masking for sequence indices where all attention weights are -inf
+            # We won't use these anyway, and keeping them as -inf leads to nans.
+            # See https://github.com/huggingface/transformers/blob/f738ab3b5d30e30c43a4c3d00ca8939f8a4d4427/src/transformers/modeling_attn_mask_utils.py#L189
+            # for details.
+            bias.mul_(~torch.all(bias == min_dtype, dim=-1, keepdim=True))
+    return xops.memory_efficient_attention(queries, keys, values, attn_bias=bias)
 
 
 def torch_attn(queries, keys, values, is_causal):
