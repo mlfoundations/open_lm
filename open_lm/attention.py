@@ -56,6 +56,8 @@ def xformers_attn(queries, keys, values, is_causal, attention_mask=None):
             assert attention_mask.dim() == 2
             # From https://github.com/huggingface/transformers/blob/f738ab3b5d30e30c43a4c3d00ca8939f8a4d4427/src/transformers/models/llama/modeling_llama.py#L1089C1-L1091C117
             mask_length = attention_mask.shape[-1]
+            # Set parts of bias that are zero (i.e., where attention is allowed) _and_ attention_mask is False (i.e.,
+            # where we should not attend) with min_dtype.
             padding_mask = bias[..., :mask_length].eq(0.0) * attention_mask[:, None, None, :].eq(0.0)
             min_dtype = torch.finfo(queries.dtype).min
             bias[..., :mask_length] = bias[..., :mask_length].masked_fill(padding_mask, min_dtype)
@@ -67,7 +69,9 @@ def xformers_attn(queries, keys, values, is_causal, attention_mask=None):
     return xops.memory_efficient_attention(queries, keys, values, attn_bias=bias)
 
 
-def torch_attn(queries, keys, values, is_causal):
+def torch_attn(queries, keys, values, is_causal, attention_mask=None):
+    if attention_mask is not None:
+        raise NotImplementedError("attention_mask not yet implemented for torch_attn.")
     # Need to call contiguous in torch >=2.1, otherwise later calls to .view() fail.
     # Possibly related: https://github.com/pytorch/pytorch/issues/110213 - behavior of scaled_dot_product_attention
     # changed between 2.0 and 2.1
@@ -127,9 +131,12 @@ def custom_attn(
     attn_seq_scalar,
     alpha,
     is_causal=False,
+    attention_mask=None,
 ) -> torch.Tensor:
     # naive reference implementation for relu-attention following: https://arxiv.org/pdf/2309.08586.pdf
     # code modifies: https://pytorch.org/docs/stable/generated/torch.nn.functional.scaled_dot_product_attention.html
+    if attention_mask is not None:
+        raise NotImplementedError("attention_mask not yet implemented for torch_attn.")
 
     batch, q_seq_len, heads, embed_dim = queries.shape
     _, k_seq_len, _, _ = keys.shape

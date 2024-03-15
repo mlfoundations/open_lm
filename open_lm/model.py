@@ -292,7 +292,6 @@ class Block(nn.Module):
             torch.nn.init.trunc_normal_(self._ff_w2.weight, std=std, a=-3 * std, b=3 * std)
 
     def forward(self, x, past_key_value=None, use_cache=False, attention_mask=None):
-        # import ipdb; ipdb.set_trace()
         h, past_key_value = self.attention(
             self.attention_norm(x),
             is_causal=True,
@@ -364,6 +363,15 @@ class Transformer(nn.Module, PyTorchModelHubMixin):
         self.grad_checkpointing = enable
 
     def forward(self, input, past_key_values=None, use_cache=False, attention_mask=None):
+        """
+        Args:
+            input
+            past_key_values
+            use_cache (bool)
+            attention_mask (torch.Tensor): Shape (batch_size, sequence_len), indicates tokens that should not be
+                attended to. attention_mask[s, i] = False indicates that token i should not be attended to by any other
+                token for sequence s.
+        """
         x = self.tok_embeddings(input)
         x = self.post_embed_norm(x)
 
