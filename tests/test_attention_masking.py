@@ -1,8 +1,10 @@
 import torch
+import pytest
 
-from open_lm.attention import xformers_attn, get_rectangular_mask
+from open_lm.attention import xformers_attn
 
 
+@pytest.mark.gpu
 def test_attention_masking1():
     n, d = 8, 4
     queries = torch.rand((1, n, 1, d)).cuda()
