@@ -42,7 +42,7 @@ from ray.data.context import DataContext
 from ray.data.datasource import Datasource, ReadTask
 from ray.runtime_context import RuntimeContext
 from tqdm import tqdm
-from transformers import GPTNeoXTokenizerFast
+from transformers import GPTNeoXTokenizerFast, PreTrainedTokenizerFast, AutoTokenizer
 import uuid
 
 import logging
@@ -438,11 +438,17 @@ def write_to_location(folder, tar_name, bio):
 
 
 def load_tokenizer(tokenizer):
-    if tokenizer == "EleutherAI/gpt-neox-20b":
-        enc = GPTNeoXTokenizerFast.from_pretrained("EleutherAI/gpt-neox-20b")
-        return (lambda x: enc(x).input_ids, enc.vocab_size)
+    enc = None
+    if pathlib.Path(tokenizer).exists() and pathlib.Path(tokenizer).is_file():
+        enc = PreTrainedTokenizerFast(tokenizer_file=tokenizer)
     else:
-        raise ValueError(f"Unknown Tokenizer: {tokenizer}")
+        try:
+            enc = AutoTokenizer.from_pretrained(tokenizer, use_fast=True)
+        except Exception as e:
+            print(str(e))
+            raise ValueError(f"Unknown Tokenizer: {tokenizer}")
+
+    return (lambda x: enc(x).input_ids, enc.vocab_size)
 
 
 def glob_files(path, suffixes):
@@ -540,7 +546,7 @@ def main(args):
         "--output",
         help="output path",
         type=str,
-        required=True
+        required=True,
         # e.g s3://dcnlp-data/rpj_tokenized_upsampled_eleutherai_deduplicated/
     )
     parser.add_argument("--content_key", type=str, default="text")

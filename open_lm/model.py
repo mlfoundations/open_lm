@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from typing import Callable
 
 import torch
+import torch.nn.functional as F
 from torch import nn
 from torch.utils.checkpoint import checkpoint
 
@@ -19,7 +20,7 @@ from open_lm.norms import get_norm_class
 from open_lm.positional_embedding.head_rotary import HeadRotaryWithCast
 from open_lm.positional_embedding.rotary import RotaryWithCast
 from open_lm.positional_embedding.llama_rotary import LLaMARotaryWithCast
-
+from open_lm.positional_embedding.none import identity_with_cast
 
 # from open_lm.moe.mixture_of_experts import MoE
 try:
@@ -108,6 +109,8 @@ def get_pos_embed(args: Params):
         return LLaMARotaryWithCast(head_dim, args.n_heads, args.seq_len)
     elif args.positional_embedding_type == "head_rotary":
         return HeadRotaryWithCast(head_dim, args.seq_len)
+    elif args.positional_embedding_type == "none":
+        return identity_with_cast
     else:
         raise RuntimeError(f"Unknown positional embedding type {args.positional_embedding_type}")
 
@@ -186,6 +189,39 @@ class CustomAttn(nn.Module):
         return self.out_proj(output), past_key_value
 
 
+class GemmaMLP(nn.Module):
+    """Google's Gemma model MLP (aka GeGLU).
+
+    Modified from https://github.com/google/gemma_pytorch/blob/01062c9ef4cf89ac0c985b25a734164ede017d0b/gemma/model.py#L182-L201
+    """
+
+    def __init__(self, dim: int, hidden_dim: int, layer_id: int):
+        super().__init__()
+        self.dim = dim
+        self.hidden_dim = hidden_dim
+        self.gate_proj = nn.Linear(dim, hidden_dim)
+        self.up_proj = nn.Linear(dim, hidden_dim)
+        self.down_proj = nn.Linear(hidden_dim, dim)
+        self._layer_id = layer_id
+
+    def forward(self, x):
+        gate = self.gate_proj(x)
+        gate = F.gelu(gate)
+        up = self.up_proj(x)
+        fuse = gate * up
+        outputs = self.down_proj(fuse)
+        return outputs
+
+    def reset_parameters(self):
+        std = 1.0 / math.sqrt(self.dim)
+        torch.nn.init.trunc_normal_(self.gate_proj.weight, std=std, a=-3 * std, b=3 * std)
+        torch.nn.init.trunc_normal_(self.up_proj.weight, std=std, a=-3 * std, b=3 * std)
+
+        std = 1.0 / math.sqrt(self.hidden_dim)
+        std = std / math.sqrt(2 * (self._layer_id + 1))
+        torch.nn.init.trunc_normal_(self.down_proj.weight, std=std, a=-3 * std, b=3 * std)
+
+
 class Block(nn.Module):
     def __init__(self, layer_id, args: Params):
         super().__init__()
@@ -205,6 +241,10 @@ class Block(nn.Module):
             self._ff_w1 = nn.Linear(args.dim, self.hidden_dim, bias=False)
             self._ff_w2 = nn.Linear(self.hidden_dim, args.dim, bias=False)
             self.feed_forward = nn.Sequential(self._ff_w1, nn.GELU(approximate="none"), self._ff_w2)
+        elif args.ffn_type == "gemma_geglu":
+            # this follows llama / lit llama -- go to multiple of 256
+            self.hidden_dim = 256 * ((int(2 * 4 * args.dim / 3) + 256 - 1) // 256)
+            self.feed_forward = GemmaMLP(args.dim, self.hidden_dim, layer_id)
         elif args.ffn_type == "moe":
             moe_args = MoEArgs(
                 hidden_size=args.dim,

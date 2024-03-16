@@ -41,7 +41,7 @@ def add_model_args(parser):
     )
     parser.add_argument(
         "--ffn-type",
-        choices=["swiglu", "gelu"],
+        choices=["swiglu", "gelu", "gemma_geglu"],
         default="swiglu",
         help="Type of feedforward layer to use. This might be overridden by the model config.",
     )
@@ -54,7 +54,7 @@ def add_model_args(parser):
     parser.add_argument(
         "--positional-embedding-type",
         type=str,
-        choices=["rotary", "head_rotary", "llama_rotary"],
+        choices=["rotary", "head_rotary", "llama_rotary", "none"],
         default="rotary",
         help="Type of positional embedding to use. This might be overridden by the model config.",
     )
@@ -736,6 +736,12 @@ def parse_args(args):
         "--force-distributed",
         action="store_true",
         help="Allow forcing distributed mode even when running on one gpu. Mostly useful for testing.",
+    )
+    parser.add_argument(
+        "--preset-world-size",
+        type=int,
+        default=None,
+        help="Explicitly set the world size. Useful in cases where a different number of gpus per node need to be used.",
     )
     parser.add_argument(
         "--multiple-data-passes",
