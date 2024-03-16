@@ -70,7 +70,7 @@ def xformers_attn(queries, keys, values, is_causal, attention_mask=None):
 
 
 def torch_attn(queries, keys, values, is_causal, attention_mask=None):
-    if attention_mask is not None:
+    if attention_mask is not None and any(~attention_mask):
         raise NotImplementedError("attention_mask not yet implemented for torch_attn.")
     # Need to call contiguous in torch >=2.1, otherwise later calls to .view() fail.
     # Possibly related: https://github.com/pytorch/pytorch/issues/110213 - behavior of scaled_dot_product_attention
