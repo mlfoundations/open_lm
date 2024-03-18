@@ -17,7 +17,7 @@ from composer.metrics.nlp import (
 )
 from transformers import PreTrainedTokenizer, PreTrainedTokenizerFast
 
-from llmfoundry.models.hf.model_wrapper import HuggingFaceModelWithZLoss
+from composer.models.huggingface import HuggingFaceModel
 
 
 __all__ = ["ComposerOpenLMCausalLM", "SimpleComposerOpenLMCausalLM"]
@@ -40,12 +40,15 @@ EVAL_METRICS = [
 ]
 
 
-class SimpleComposerOpenLMCausalLM(HuggingFaceModelWithZLoss):
+class SimpleComposerOpenLMCausalLM(HuggingFaceModel):
     def __init__(self, model, tokenizer):
         super().__init__(
             model=model,
             tokenizer=tokenizer,
             metrics=TRAIN_METRICS,
             eval_metrics=EVAL_METRICS,
-            z_loss=0.0,
+            shift_labels=True,
         )
+
+    def generate(self, input_ids, **kwargs):
+        return super().generate(input_ids, **kwargs)
