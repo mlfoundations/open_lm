@@ -13,6 +13,7 @@ from contextlib import contextmanager
 import argparse
 from pathlib import Path
 from transformers import GPTNeoXTokenizerFast
+from warnings import warn
 
 
 # ========================================
@@ -235,6 +236,8 @@ def main(
 
 
 if __name__ == "__main__":
+    warn("This script is deprecated - see README on how to use the updated tokenize_shuffle.py.", DeprecationWarning)
+
     parser = argparse.ArgumentParser()
     parser.add_argument("--input-files", type=str, nargs="+")
     parser.add_argument("--output-dir", type=Path)
