@@ -115,3 +115,37 @@ def test_tokenize_shuffle_local_read_local_write():
             total += len(x["json.gz"])
     assert total == NUM_TOKENS
     assert exit_value == 0
+
+
+def test_tokenize_shuffle_with_pretokenized():
+    content_len = 2048
+    NUM_TOKENS = 24508089
+    # download a small test json file and store at ./test_input
+    os.system("mkdir test_input")
+    os.system("mkdir test_output")
+    os.system(
+        "wget -O ./test_input/wikipedia_sample.jsonl https://huggingface.co/datasets/togethercomputer/RedPajama-Data-1T-Sample/resolve/main/wikipedia_sample.jsonl"
+    )
+    # run tokenize script
+    exit_value_1 = os.system(
+        f"python open_lm/datapreprocess/ray/tokenize_shuffle.py --input ./test_input --content_key text --seqlen {content_len} --output ./test_output/"
+    )
+    assert exit_value_1 == 0
+
+    os.system("cp -r ./test_output ./test_input/2a/")
+    os.system("cp -r ./test_output ./test_input/2b/")
+
+    exit_value_2 = os.system(
+        f"python open_lm/datapreprocess/ray/tokenize_shuffle.py --input ./test_input/2a,./test_input/2b --content_key json.gz --seqlen {content_len} --output ./test_output/2 --pretok_tars --suffixes .tar"
+    )
+    assert exit_value_2 == 0
+
+    tars = [os.path.join("test_output/2", fname) for fname in os.listdir("test_output/2") if fname.endswith(".tar")]
+    total = 0
+    for tar in tars:
+        ds = wds.WebDataset(tar).decode()
+        for x in ds:
+            assert len(x["json.gz"]) == content_len + 1
+            total += len(x["json.gz"])
+
+    assert total == 2 * NUM_TOKENS
