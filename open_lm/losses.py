@@ -18,4 +18,5 @@ class CrossEntropyLossWithZLoss(CrossEntropyLoss):
         self.eps = eps
 
     def forward(self, input: Tensor, target: Tensor) -> Tensor:
+        # TODO: should ignore_index be taken into account in the regularization term as well?
         return super().forward(input, target) + self.eps * torch.square(torch.logsumexp(input, dim=-1)).mean()

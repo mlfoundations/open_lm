@@ -22,6 +22,7 @@ except ImportError:
     wandb = None
 
 from open_lm.data import sample_chunk
+from open_lm.datapreprocess.ray.tokenize_shuffle import SpecialTokens
 from open_lm.distributed import is_master
 from open_lm.precision import get_autocast
 from open_lm.meters import AverageMeter
@@ -39,6 +40,34 @@ def backward(total_loss, scaler):
         scaler.scale(total_loss).backward()
     else:
         total_loss.backward()
+
+
+def get_document_seqlens(inputs, args):
+    """Get list of document sequence lengths.
+
+    Return a list of lists. The length of the outer list is equal to the batch size, while the length of the inner list
+    is equal to the the number of distinct documents (recognized by EOT tokens). Each element of the inner lists is the
+    length of that corresponding document
+    """
+    if args.mask_across_documents:
+        document_seqlens = []
+        for idx in range(inputs.shape[0]):
+            eot_idx = torch.nonzero(inputs[idx] == SpecialTokens.END_OF_TEXT.value)
+            if eot_idx.shape[0] == 0:
+                # All tokens come from the same document.
+                document_seqlens.append([args.seq_len])
+            else:
+                start_idx = 0
+                seqlens = []
+                for k in range(eot_idx.shape[0]):
+                    seqlens.append(eot_idx[k].item() - start_idx + 1)
+                    start_idx = eot_idx[k].item() + 1
+                if start_idx < args.seq_len:
+                    seqlens.append(args.seq_len - start_idx)
+                document_seqlens.append(seqlens)
+    else:
+        document_seqlens = None
+    return document_seqlens
 
 
 def train_one_epoch(model, data, loss, epoch, step, optimizer, scaler, scheduler, total_steps, args, tb_writer=None):
@@ -109,13 +138,21 @@ def train_one_epoch(model, data, loss, epoch, step, optimizer, scaler, scheduler
 
         (texts,) = batch
         texts = torch.LongTensor(texts).to(device)
+
         data_time_m.update(time.time() - end)
         optimizer.zero_grad()
 
         if args.accum_freq == 1:
             with autocast():
                 inputs, targets = sample_chunk(texts, args)
-                out, _, _ = model(inputs)
+                document_seqlens = get_document_seqlens(inputs, args)
+                if args.mask_across_documents:
+                    # Some input samples contain EOT as the final token. The prediction after that is meaningless, so it
+                    # should not contribute to the loss.
+                    ignore_indices = torch.nonzero(inputs == SpecialTokens.END_OF_TEXT.value, as_tuple=True)
+                    targets[ignore_indices] = loss.ignore_index
+
+                out, _, _ = model(inputs, document_seqlens=document_seqlens)
 
                 if args.log_logit_mean:
                     logit_m.update(torch.mean(out).item())
@@ -135,6 +172,12 @@ def train_one_epoch(model, data, loss, epoch, step, optimizer, scaler, scheduler
             per_batch = args.per_gpu_batch_size // args.accum_freq
 
             inputs, targets = sample_chunk(texts, args)
+            if args.mask_across_documents:
+                # Some input samples contain EOT as the final token. The prediction after that is meaningless, so it
+                # should not contribute to the loss.
+                ignore_indices = torch.nonzero(inputs == SpecialTokens.END_OF_TEXT.value, as_tuple=True)
+                targets = targets.detach().clone()  # Clone this because it shares mem with input!
+                targets[ignore_indices] = loss.ignore_index
 
             for ii in range(args.accum_freq):
                 maybe_no_sync = nullcontext
@@ -147,7 +190,8 @@ def train_one_epoch(model, data, loss, epoch, step, optimizer, scaler, scheduler
                         if inputs_ii.shape[0] == 0:
                             break
                         targets_ii = targets[ii * per_batch : (ii + 1) * per_batch]
-                        out, _, _ = model(inputs_ii)
+                        document_seqlens = get_document_seqlens(inputs_ii, args)
+                        out, _, _ = model(inputs_ii, document_seqlens=document_seqlens)
 
                         if args.log_logit_mean:
                             logit_m.update(torch.mean(out).item())

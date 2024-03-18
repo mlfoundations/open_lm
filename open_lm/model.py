@@ -99,6 +99,7 @@ class Params:
     moe_freq: int = 0
     positional_embedding_type: str = "rotary"
     ffn_type: str = "swiglu"
+    mask_across_documents: bool = False
 
 
 def get_pos_embed(args: Params):
@@ -156,7 +157,7 @@ class CustomAttn(nn.Module):
         std = std / math.sqrt(2 * (self.layer_id + 1))
         torch.nn.init.trunc_normal_(self.out_proj.weight, std=std, a=-3 * std, b=3 * std)
 
-    def forward(self, x: torch.Tensor, is_causal=True, past_key_value=None, use_cache=False):
+    def forward(self, x: torch.Tensor, is_causal=True, past_key_value=None, use_cache=False, document_seqlens=None):
         batchsize, q_len, _ = x.shape
         queries, keys, vals = self.in_proj(x).chunk(3, dim=-1)
 
@@ -177,12 +178,7 @@ class CustomAttn(nn.Module):
         if use_cache:
             past_key_value = [keys, vals]
 
-        output = self.attn_fn(
-            queries,
-            keys,
-            vals,
-            is_causal=is_causal,
-        )
+        output = self.attn_fn(queries, keys, vals, is_causal=is_causal, document_seqlens=document_seqlens)
 
         output = output.view(batchsize, q_len, -1)
 
@@ -290,12 +286,13 @@ class Block(nn.Module):
             std = std / math.sqrt(2 * (self.layer_id + 1))
             torch.nn.init.trunc_normal_(self._ff_w2.weight, std=std, a=-3 * std, b=3 * std)
 
-    def forward(self, x, past_key_value=None, use_cache=False):
+    def forward(self, x, past_key_value=None, use_cache=False, document_seqlens=None):
         h, past_key_value = self.attention(
             self.attention_norm(x),
             is_causal=True,
             past_key_value=past_key_value,
             use_cache=use_cache,
+            document_seqlens=document_seqlens,
         )
         h = x + h
         if self._ffn_type == "moe":
@@ -360,19 +357,20 @@ class Transformer(nn.Module, PyTorchModelHubMixin):
     def set_grad_checkpointing(self, enable=True):
         self.grad_checkpointing = enable
 
-    def forward(self, input, past_key_values=None, use_cache=False):
+    def forward(self, input, past_key_values=None, use_cache=False, document_seqlens=None):
         x = self.tok_embeddings(input)
         x = self.post_embed_norm(x)
-
         if past_key_values is None:
             past_key_values = [None] * self.n_layers
         elif isinstance(past_key_values, tuple):
             past_key_values = list(past_key_values)
         for i, layer in enumerate(self.layers):
             if self.grad_checkpointing:
-                x, past_key_values[i] = checkpoint(layer, x, past_key_values[i], use_cache)
+                x, past_key_values[i] = checkpoint(layer, x, past_key_values[i], use_cache, document_seqlens)
             else:
-                x, past_key_values[i] = layer(x, past_key_values[i], use_cache=use_cache)
+                x, past_key_values[i] = layer(
+                    x, past_key_values[i], use_cache=use_cache, document_seqlens=document_seqlens
+                )
         if past_key_values[0] is None:
             past_key_values = None
         x = self.norm(x)
