@@ -78,7 +78,7 @@ def train_one_epoch(model, data, loss, epoch, step, optimizer, scaler, scheduler
             hidden_size=model.dim,
             ffn_hidden_size=model.dim * 4,
             moe_num_experts=args.moe_num_experts,
-            num_layers=model.n_layers // 2,
+            num_layers=model.n_layers // args.moe_freq,
             moe_expert_model_parallelism=True,
             moe_top_k=args.moe_top_k,
             device=torch.cuda.current_device(),
