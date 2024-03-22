@@ -612,7 +612,6 @@ def main(args):
         input_paths = input_paths[: args.subset]
     if args.subfraction is not None:
         input_paths = input_paths[: int(args.subfraction * len(input_paths))]
-    print("Files considered: \n", input_paths)
     print(f"num files ={len(input_paths)}")
     num_files = len(input_paths)
     num_writers_per_node = args.num_writers_per_node
