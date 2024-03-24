@@ -33,6 +33,7 @@ from open_lm.data import proc_token
 from open_lm.model import Block
 from open_lm.losses import CrossEntropyLossWithZLoss
 from open_lm.utils.averaging_utils import ModelAverager
+
 try:
     import wandb
 except ImportError:
@@ -137,6 +138,7 @@ def load_model(args, model, different_seed=False):
         logging.info(f"=> loaded checkpoint '{args.resume}' (epoch {start_epoch})")
     return start_epoch, global_step, pretrained_seed
 
+
 def load_avg_models(args, averagers):
     checkpoint = pt_load(args.resume, map_location="cpu")
     if "epoch" in checkpoint:
@@ -144,12 +146,15 @@ def load_avg_models(args, averagers):
         start_epoch = checkpoint["epoch"]
         if averagers is not None:
             for k in averagers.avgs_dict:
-                avg_sd = torch.load(args.resume.replace('epoch', k), map_location='cpu')
+                avg_sd = torch.load(args.resume.replace("epoch", k), map_location="cpu")
                 if next(iter(avg_sd.items()))[0].startswith("module"):
                     avg_sd = {k[len("module.") :]: v for k, v in avg_sd.items()}
                 averagers.avgs_dict[k].load_state_dict_avg(avg_sd)
-                logging.info(f"=> resuming averager for {k} from checkpoint '{args.resume.replace('epoch', k)} (epoch {start_epoch})")
+                logging.info(
+                    f"=> resuming averager for {k} from checkpoint '{args.resume.replace('epoch', k)} (epoch {start_epoch})"
+                )
     return
+
 
 def load_optimizer(args, model, optimizer, scaler):
     potential_checkpoint = args.resume.replace("epoch_", "optimizer_")
@@ -682,9 +687,7 @@ def main(args):
                 # args.force_min_lr,
             )
         else:
-            logging.error(
-                f"Unknown scheduler, {args.lr_scheduler}. Available options are: cosine, const."
-            )
+            logging.error(f"Unknown scheduler, {args.lr_scheduler}. Available options are: cosine, const.")
             exit(1)
 
     # determine if this worker should save logs and checkpoints. only do so if it is rank == 0
@@ -717,13 +720,13 @@ def main(args):
             return
         logging.info("No training required, evaluating instead.")
         checkpoint_root = os.path.dirname(args.resume)
-        
+
         if averagers is not None:
             k = next(iter(averagers.avgs_dict.keys()))
-            logging.info(f'=> evaluation avg {k}')
+            logging.info(f"=> evaluation avg {k}")
             model = averagers.avgs_dict[k].av_model
         metrics = evaluate_loop(model, data["val_list"], start_epoch, args, writer)
-        metrics["average"] = k if averagers is not None else 'none'
+        metrics["average"] = k if averagers is not None else "none"
 
         if is_master(args):
             with fsspec.open(os.path.join(checkpoint_root, "results.jsonl"), "a") as f:

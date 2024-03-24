@@ -41,7 +41,9 @@ def backward(total_loss, scaler):
         total_loss.backward()
 
 
-def train_one_epoch(model, data, loss, epoch, step, optimizer, scaler, scheduler, total_steps, args, tb_writer=None, averagers=None):
+def train_one_epoch(
+    model, data, loss, epoch, step, optimizer, scaler, scheduler, total_steps, args, tb_writer=None, averagers=None
+):
     """Trains model for one epoch on the provided data.
 
     Returns:
@@ -176,23 +178,38 @@ def train_one_epoch(model, data, loss, epoch, step, optimizer, scaler, scheduler
 
                     backward(local_loss, scaler)
                     with autocast():
-                        if averagers is not None and args.log_avg_model_training_loss and i % args.log_avg_model_training_loss == 0:
+                        if (
+                            averagers is not None
+                            and args.log_avg_model_training_loss
+                            and i % args.log_avg_model_training_loss == 0
+                        ):
                             for key, averager in averagers.avgs_dict.items():
                                 with torch.no_grad():
                                     out_avg, _ = averager.av_model(inputs_ii).item()
-                                    local_avg_losses[key] = loss(out_avg.reshape(-1, args.vocab_size), targets.reshape(-1)) / args.accum_freq
+                                    local_avg_losses[key] = (
+                                        loss(out_avg.reshape(-1, args.vocab_size), targets.reshape(-1))
+                                        / args.accum_freq
+                                    )
                 if ii == 0:
                     total_lm_loss = local_lm_loss
                     if args.moe_freq > 0:
                         total_load_balancing_loss = local_load_balancing_loss
-                    if averagers is not None and args.log_avg_model_training_loss and i % args.log_avg_model_training_loss == 0:
+                    if (
+                        averagers is not None
+                        and args.log_avg_model_training_loss
+                        and i % args.log_avg_model_training_loss == 0
+                    ):
                         for key, averager in averagers.avgs_dict.items():
                             total_loss_avg[key] = local_avg_losses[key]
                 else:
                     total_lm_loss += local_lm_loss
                     if args.moe_freq > 0:
                         total_load_balancing_loss += local_load_balancing_loss
-                    if averagers is not None and args.log_avg_model_training_loss and i % args.log_avg_model_training_loss == 0:
+                    if (
+                        averagers is not None
+                        and args.log_avg_model_training_loss
+                        and i % args.log_avg_model_training_loss == 0
+                    ):
                         for key, averager in averagers.avgs_dict.items():
                             total_loss_avg[key] += local_avg_losses[key]
 
@@ -234,7 +251,7 @@ def train_one_epoch(model, data, loss, epoch, step, optimizer, scaler, scheduler
         step += 1
         if is_master(args):
             batch_size = len(inputs)
-            # update the loss meter with the global loss tensor every iteration, so that the logging is of the avg of loss of the last 
+            # update the loss meter with the global loss tensor every iteration, so that the logging is of the avg of loss of the last
             # args.log_every_n_steps iterations
             losses_m.update(global_loss_tensor.item(), batch_size)
             if averagers is not None and args.log_avg_model_training_loss and i % args.log_avg_model_training_loss == 0:
@@ -277,10 +294,14 @@ def train_one_epoch(model, data, loss, epoch, step, optimizer, scaler, scheduler
                     "lr": optimizer.param_groups[0]["lr"],
                     "tokens": (step + 1) * args.global_batch_size * args.seq_len,
                 }
-                
+
                 if averagers is not None and args.log_avg_model_training_loss:
                     for k in averagers.avgs_dict:
-                        if averagers is not None and args.log_avg_model_training_loss and (i % args.log_avg_model_training_loss == 0 or batch_count == num_batches_per_epoch):
+                        if (
+                            averagers is not None
+                            and args.log_avg_model_training_loss
+                            and (i % args.log_avg_model_training_loss == 0 or batch_count == num_batches_per_epoch)
+                        ):
                             log_data[k + "_loss"] = losses_avg_m[k].avg
                 if args.log_logit_mean:
                     log_data["logit_mean"] = logit_m.val
