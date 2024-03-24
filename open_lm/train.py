@@ -41,7 +41,7 @@ def backward(total_loss, scaler):
         total_loss.backward()
 
 
-def train_one_epoch(model, data, loss, epoch, step, optimizer, scaler, scheduler, total_steps, args, tb_writer=None):
+def train_one_epoch(model, data, loss, epoch, step, optimizer, scaler, scheduler, total_steps, args, tb_writer=None, averagers=None):
     """Trains model for one epoch on the provided data.
 
     Returns:
@@ -64,6 +64,10 @@ def train_one_epoch(model, data, loss, epoch, step, optimizer, scaler, scheduler
     load_balancing_losses_m = AverageMeter()
     batch_time_m = AverageMeter()
     data_time_m = AverageMeter()
+    if averagers is not None and args.log_avg_model_training_loss:
+        losses_avg_m = {key: AverageMeter() for key in averagers.avgs_dict.keys()}
+        local_avg_losses = {}
+        total_loss_avg = {}
 
     # used only if --log-logit-mean flag is passed
     logit_m = AverageMeter()
@@ -128,6 +132,13 @@ def train_one_epoch(model, data, loss, epoch, step, optimizer, scaler, scheduler
                     total_loss += total_load_balancing_loss
 
             backward(total_loss, scaler)
+            if averagers is not None and args.log_avg_model_training_loss and i % args.log_avg_model_training_loss == 0:
+                with autocast():
+                    for key, averager in averagers.avgs_dict.items():
+                        with torch.no_grad():
+                            out_avg, _ = averager.av_model(inputs)
+                            # save the loss for the average model for logging
+                            total_loss_avg[key] = loss(out_avg.reshape(-1, args.vocab_size), targets.reshape(-1))
         else:
             # split up batch into accum_freq chunks -- if you have --batch-size 8 and --accum-freq 4
             # then you only process 2 items at a time. batch-size must be divisible by accume-freq.
@@ -164,14 +175,26 @@ def train_one_epoch(model, data, loss, epoch, step, optimizer, scaler, scheduler
                         local_loss += local_load_balancing_loss
 
                     backward(local_loss, scaler)
+                    with autocast():
+                        if averagers is not None and args.log_avg_model_training_loss and i % args.log_avg_model_training_loss == 0:
+                            for key, averager in averagers.avgs_dict.items():
+                                with torch.no_grad():
+                                    out_avg, _ = averager.av_model(inputs_ii).item()
+                                    local_avg_losses[key] = loss(out_avg.reshape(-1, args.vocab_size), targets.reshape(-1)) / args.accum_freq
                 if ii == 0:
                     total_lm_loss = local_lm_loss
                     if args.moe_freq > 0:
                         total_load_balancing_loss = local_load_balancing_loss
+                    if averagers is not None and args.log_avg_model_training_loss and i % args.log_avg_model_training_loss == 0:
+                        for key, averager in averagers.avgs_dict.items():
+                            total_loss_avg[key] = local_avg_losses[key]
                 else:
                     total_lm_loss += local_lm_loss
                     if args.moe_freq > 0:
                         total_load_balancing_loss += local_load_balancing_loss
+                    if averagers is not None and args.log_avg_model_training_loss and i % args.log_avg_model_training_loss == 0:
+                        for key, averager in averagers.avgs_dict.items():
+                            total_loss_avg[key] += local_avg_losses[key]
 
             total_loss = total_lm_loss
             if args.moe_freq > 0:
@@ -191,78 +214,100 @@ def train_one_epoch(model, data, loss, epoch, step, optimizer, scaler, scheduler
                     torch.nn.utils.clip_grad_norm_(model.parameters(), args.grad_clip_norm, norm_type=2.0)
             optimizer.step()
 
+        if averagers is not None:
+            averagers.step()
         batch_time_m.update(time.time() - end)
         end = time.time()
 
         global_loss_tensor = total_loss.detach().clone()
+        if averagers is not None and args.log_avg_model_training_loss and i % args.log_avg_model_training_loss == 0:
+            # same for the average model loss
+            for key, value in total_loss_avg.items():
+                total_loss_avg[key] = value.detach().clone()
         if args.world_size > 1:
             dist.all_reduce(global_loss_tensor, op=ReduceOp.AVG)
+            if averagers is not None and args.log_avg_model_training_loss and i % args.log_avg_model_training_loss == 0:
+                for key, value in total_loss_avg.items():
+                    dist.all_reduce(value, op=ReduceOp.AVG)
 
         batch_count = i + 1
         step += 1
-
-        if is_master(args) and (
-            i % args.log_every_n_steps == 0 or batch_count == num_batches_per_epoch or step == total_steps - 1
-        ):
+        if is_master(args):
             batch_size = len(inputs)
-            num_samples = batch_count * batch_size * args.world_size
-            samples_per_epoch = dataloader.num_samples
-            percent_complete = 100.0 * batch_count / num_batches_per_epoch
+            # update the loss meter with the global loss tensor every iteration, so that the logging is of the avg of loss of the last 
+            # args.log_every_n_steps iterations
+            losses_m.update(global_loss_tensor.item(), batch_size)
+            if averagers is not None and args.log_avg_model_training_loss and i % args.log_avg_model_training_loss == 0:
+                for key, value in total_loss_avg.items():
+                    losses_avg_m[key].update(value.item(), batch_size)
+            if i % args.log_every_n_steps == 0 or batch_count == num_batches_per_epoch or step == total_steps - 1:
+                num_samples = batch_count * batch_size * args.world_size
+                samples_per_epoch = dataloader.num_samples
+                percent_complete = 100.0 * batch_count / num_batches_per_epoch
 
-            # gathered_loss = [torch.zeros_like(total_loss) for _ in range(args.world_size)]
-            # torch.distributed.all_gather(gathered_loss, total_loss)
+                # gathered_loss = [torch.zeros_like(total_loss) for _ in range(args.world_size)]
+                # torch.distributed.all_gather(gathered_loss, total_loss)
 
-            # losses_m.update(sum(gathered_loss).item() / args.world_size, batch_size * args.world_size)
-            if args.moe_freq > 0:
-                losses_m.update(global_loss_tensor.item() - total_load_balancing_loss.item(), batch_size)
-                load_balancing_losses_m.update(total_load_balancing_loss.item(), batch_size)
-            else:
-                losses_m.update(global_loss_tensor.item(), batch_size)
-            samples_per_second = inputs.numel() * args.world_size / batch_time_m.val
-            samples_per_second_per_gpu = inputs.numel() / batch_time_m.val
-            loss_str = f"Loss: {losses_m.avg:.3f}"
-            loss_str += f" LB-Loss: {load_balancing_losses_m.avg:.3f}" if args.moe_freq > 0 else ""
-            logging.info(
-                f"Train Epoch: {epoch} [{num_samples:>{sample_digits}}/{samples_per_epoch} ({percent_complete:.0f}%)] "
-                f"{loss_str} "
-                f"Data (t): {data_time_m.avg:.3f} "
-                f"Batch (t): {batch_time_m.avg:.3f}, {samples_per_second:#g}/s, {samples_per_second_per_gpu:#g}/s/gpu "
-                f"LR: {optimizer.param_groups[0]['lr']:5f} "
-            )
+                # losses_m.update(sum(gathered_loss).item() / args.world_size, batch_size * args.world_size)
+                if args.moe_freq > 0:
+                    losses_m.update(global_loss_tensor.item() - total_load_balancing_loss.item(), batch_size)
+                    load_balancing_losses_m.update(total_load_balancing_loss.item(), batch_size)
+                else:
+                    losses_m.update(global_loss_tensor.item(), batch_size)
+                samples_per_second = inputs.numel() * args.world_size / batch_time_m.val
+                samples_per_second_per_gpu = inputs.numel() / batch_time_m.val
+                loss_str = f"Loss: {losses_m.avg:.3f}"
+                loss_str += f" LB-Loss: {load_balancing_losses_m.avg:.3f}" if args.moe_freq > 0 else ""
+                logging.info(
+                    f"Train Epoch: {epoch} [{num_samples:>{sample_digits}}/{samples_per_epoch} ({percent_complete:.0f}%)] "
+                    f"{loss_str} "
+                    f"Data (t): {data_time_m.avg:.3f} "
+                    f"Batch (t): {batch_time_m.avg:.3f}, {samples_per_second:#g}/s, {samples_per_second_per_gpu:#g}/s/gpu "
+                    f"LR: {optimizer.param_groups[0]['lr']:5f} "
+                )
 
-            # Save train loss / etc. Using non avg meter values as loggers have their own smoothing
-            log_data = {
-                "loss": losses_m.val,
-                "load_balancing_loss": load_balancing_losses_m.val,
-                "data_time": data_time_m.val,
-                "batch_time": batch_time_m.val,
-                "samples_per_second": samples_per_second,
-                "samples_per_second_per_gpu": samples_per_second_per_gpu,
-                "lr": optimizer.param_groups[0]["lr"],
-                "tokens": (step + 1) * args.global_batch_size * args.seq_len,
-            }
+                # Save train loss / etc. Using non avg meter values as loggers have their own smoothing
+                log_data = {
+                    "loss": losses_m.val,
+                    "load_balancing_loss": load_balancing_losses_m.val,
+                    "data_time": data_time_m.val,
+                    "batch_time": batch_time_m.val,
+                    "samples_per_second": samples_per_second,
+                    "samples_per_second_per_gpu": samples_per_second_per_gpu,
+                    "lr": optimizer.param_groups[0]["lr"],
+                    "tokens": (step + 1) * args.global_batch_size * args.seq_len,
+                }
+                
+                if averagers is not None and args.log_avg_model_training_loss:
+                    for k in averagers.avgs_dict:
+                        if averagers is not None and args.log_avg_model_training_loss and (i % args.log_avg_model_training_loss == 0 or batch_count == num_batches_per_epoch):
+                            log_data[k + "_loss"] = losses_avg_m[k].avg
+                if args.log_logit_mean:
+                    log_data["logit_mean"] = logit_m.val
 
-            if args.log_logit_mean:
-                log_data["logit_mean"] = logit_m.val
+                for name, val in log_data.items():
+                    name = "train/" + name
+                    if tb_writer is not None:
+                        tb_writer.add_scalar(name, val, step)
+                    if args.wandb:
+                        assert wandb is not None, "Please install wandb."
+                        wandb.log({name: val, "step": step, "tokens": log_data["tokens"]})
 
-            for name, val in log_data.items():
-                name = "train/" + name
-                if tb_writer is not None:
-                    tb_writer.add_scalar(name, val, step)
-                if args.wandb:
-                    assert wandb is not None, "Please install wandb."
-                    wandb.log({name: val, "step": step, "tokens": log_data["tokens"]})
+                # resetting batch / data time meters per log window
+                batch_time_m.reset()
+                data_time_m.reset()
+                # reset all average meters
+                losses_m.reset()
+                if averagers is not None:
+                    for k in averagers.avgs_dict():
+                        losses_avg_m.reset()
 
-            # resetting batch / data time meters per log window
-            batch_time_m.reset()
-            data_time_m.reset()
-
-            if math.isnan(losses_m.val):
-                # case where loss goes to nan, we see this sometimes with bad nodes.
-                # in this case we would like to free resources and prevent other issues
-                # e.g., saving checkpoints and optmization states that may lead to skipped
-                # training on restarts.
-                return False, step
+                if math.isnan(losses_m.val):
+                    # case where loss goes to nan, we see this sometimes with bad nodes.
+                    # in this case we would like to free resources and prevent other issues
+                    # e.g., saving checkpoints and optmization states that may lead to skipped
+                    # training on restarts.
+                    return False, step
 
     # end for
     if tb_writer is not None:
