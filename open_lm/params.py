@@ -748,7 +748,17 @@ def parse_args(args):
         action="store_true",
         help="If set, allow model to do multiple data passes over our dataset, in order to reach the desired number of tokens.",
     )
-
+    
+    parser.add_argument("--averagers",
+        type=str,
+        default=None,
+        help="Optinoally average checkpoints along the trajectory.",
+    )
+    parser.add_argument("--log-avg-model-training-loss",
+        type=int,
+        default=0,
+        help="Whether to log the average model training loss. if not 0, it will log the average loss over the specified number of steps."
+    )
     add_model_args(parser)
 
     config = maybe_load_config(parser, args)
