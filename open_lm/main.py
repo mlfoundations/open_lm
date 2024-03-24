@@ -32,7 +32,7 @@ from torch.distributed.fsdp.wrap import transformer_auto_wrap_policy
 from open_lm.data import proc_token
 from open_lm.model import Block
 from open_lm.losses import CrossEntropyLossWithZLoss
-from open_lm.utils.average_utils import ModelAverager
+from open_lm.utils.averaging_utils import ModelAverager
 try:
     import wandb
 except ImportError:
