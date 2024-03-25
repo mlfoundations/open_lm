@@ -156,7 +156,7 @@ def maybe_load_config(parser, args):
     if not args.config:
         return None
 
-    assert not unknown_args, "No arguments can be passed if --config is provided."
+    # assert not unknown_args, "No arguments can be passed if --config is provided."
     logging.info(f"Loading config from: {args.config}")
     with open(args.config, "r") as f:
         if args.config.endswith(".yaml") or args.config.endswith(".yml"):
@@ -477,7 +477,7 @@ def parse_args(args):
     )
     parser.add_argument(
         "--precision",
-        choices=["amp", "amp_bf16", "amp_bfloat16", "bf16", "fp16", "fp32"],
+        choices=["amp", "amp_bf16", "amp_bfloat16", "bf16", "fp16", "fp32", "amp_fp8"],
         default="amp",
         help="Floating point precision.",
     )
