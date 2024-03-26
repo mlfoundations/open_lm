@@ -687,8 +687,7 @@ def main(args):
                 # args.force_min_lr,
             )
         else:
-            logging.error(f"Unknown scheduler, {args.lr_scheduler}. Available options are: cosine, const.")
-            exit(1)
+            raise ValueError(f"Unknown scheduler, {args.lr_scheduler}. Available options are: cosine, const.")
 
     # determine if this worker should save logs and checkpoints. only do so if it is rank == 0
     args.save_logs = args.logs and args.logs.lower() != "none" and is_master(args)
