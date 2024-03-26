@@ -1,5 +1,5 @@
 {
-    "hidden_dim": 1920,
+    "hidden_dim": 2048,
     "n_layers": 24,
     "n_heads": 16,
     "seq_len": 2048,
