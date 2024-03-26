@@ -167,7 +167,6 @@ class CustomAttn(nn.Module):
         if not self.mqa:
             queries, keys, vals = self.in_proj(x).chunk(3, dim=-1)
         else:
-            print("HI")
             qkv = self.in_proj(x)
             queries = qkv[..., :-2 * self.head_dim]
             keys = qkv[..., -2 * self.head_dim : - self.head_dim]
