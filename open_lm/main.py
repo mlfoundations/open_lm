@@ -251,7 +251,7 @@ def save_checkpoint(
 
         if averagers is not None:
             for k in averagers.avgs_dict:
-                prefixes[f"{k}_"] = averagers.avgs_dict[k].state_dict_avg()
+                prefixes[f"{k}_"] = averagers.avgs_dict[k].get_state_dict_avg()
         if (
             completed_epoch == args.epochs
             or is_final_checkpoint
