@@ -297,7 +297,7 @@ def train_one_epoch(
                 }
 
                 if averagers is not None and args.log_avg_model_training_loss:
-                    for k in averagers.avgs_dict().keys():
+                    for k in averagers.avgs_dict.keys():
                         if (
                             averagers is not None
                             and args.log_avg_model_training_loss
@@ -321,7 +321,7 @@ def train_one_epoch(
                 # reset all average meters
                 losses_m.reset()
                 if averagers is not None:
-                    for k in averagers.avgs_dict().keys():
+                    for k in averagers.avgs_dict.keys():
                         losses_avg_m[k].reset()
 
                 if math.isnan(losses_m.val):
