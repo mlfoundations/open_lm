@@ -99,6 +99,7 @@ class Params:
     moe_freq: int = 0
     positional_embedding_type: str = "rotary"
     ffn_type: str = "swiglu"
+    mqa: bool = False
 
 
 def get_pos_embed(args: Params):
@@ -120,11 +121,16 @@ class CustomAttn(nn.Module):
         super().__init__()
         self.n_heads = args.n_heads
         self.head_dim = args.dim // args.n_heads
-        self.in_proj = nn.Linear(args.dim, 3 * args.n_heads * self.head_dim, bias=False)
+        self.mqa = args.mqa
+        if not self.mqa:
+            self.in_proj = nn.Linear(args.dim, 3 * args.n_heads * self.head_dim, bias=False)
+        else:
+            self.in_proj = nn.Linear(args.dim, (args.n_heads + 2)* self.head_dim, bias=False)
         self.out_proj = nn.Linear(args.n_heads * self.head_dim, args.dim, bias=False)
         self.pos_embed = get_pos_embed(args)
         self.attn_fn = args.attn_func
         self.apply_qk_norm = args.apply_qk_norm
+        
 
         # initialize norm layers for queries and keys if needed
         self.q_norm = (
@@ -158,14 +164,27 @@ class CustomAttn(nn.Module):
 
     def forward(self, x: torch.Tensor, is_causal=True, past_key_value=None, use_cache=False, attention_mask=None):
         batchsize, q_len, _ = x.shape
-        queries, keys, vals = self.in_proj(x).chunk(3, dim=-1)
+        if not self.mqa:
+            queries, keys, vals = self.in_proj(x).chunk(3, dim=-1)
+        else:
+            print("HI")
+            qkv = self.in_proj(x)
+            queries = qkv[..., :-2 * self.head_dim]
+            keys = qkv[..., -2 * self.head_dim : - self.head_dim]
+            vals = qkv[..., - self.head_dim :]
 
         queries = self.q_norm(queries)
         keys = self.k_norm(keys)
 
         queries = queries.view(batchsize, q_len, self.n_heads, self.head_dim)
-        keys = keys.view(batchsize, q_len, self.n_heads, self.head_dim)
-        vals = vals.view(batchsize, q_len, self.n_heads, self.head_dim)
+        if not self.mqa:
+            keys = keys.view(batchsize, q_len, self.n_heads, self.head_dim)
+            vals = vals.view(batchsize, q_len, self.n_heads, self.head_dim)
+        else:
+            keys = keys.view(batchsize, q_len, 1, self.head_dim)
+            vals = vals.view(batchsize, q_len, 1, self.head_dim)
+            keys = keys.expand(-1, -1, self.n_heads, -1)
+            vals = keys.expand(-1, -1, self.n_heads, -1)
 
         past_length = 0 if past_key_value is None else past_key_value[0].shape[1]
         queries, keys, vals = self.pos_embed(queries, keys, vals, offset=past_length)
@@ -446,6 +465,7 @@ def create_params(args):
             moe_capacity_factor=cfg.get("moe_capacity_factor", args.moe_capacity_factor),
             moe_freq=cfg.get("moe_freq", args.moe_freq),
             moe_top_k=cfg.get("moe_top_k", args.moe_top_k),
+            mqa="mqa" in args.attn_name
         )
 
 

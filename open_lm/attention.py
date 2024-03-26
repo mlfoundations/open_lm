@@ -164,7 +164,7 @@ def get_attn_func(
 ):
     if attn_name == "auto":
         return xformers_attn if torch.cuda.is_available() else torch_attn
-    elif attn_name == "xformers_attn":
+    elif attn_name == "xformers_attn" or attn_name == "xformers_mqa":
         return xformers_attn
     elif attn_name == "xformers_attn_variable_length":
         # Upon changing the input sequence length, xformers attention changes
