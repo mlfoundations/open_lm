@@ -134,7 +134,7 @@ def load_model(args, model, different_seed=False):
         # loading a bare (model only) checkpoint for fine-tune or evaluation
         start_epoch, global_step = 0, 0
         pretrained_seed = None
-        model.load_state_dict(checkpoint)
+        model.load_state_dict(checkpoint['state_dict'], strict=False)
         logging.info(f"=> loaded checkpoint '{args.resume}' (epoch {start_epoch})")
     return start_epoch, global_step, pretrained_seed
 
