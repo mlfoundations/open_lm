@@ -125,12 +125,11 @@ class CustomAttn(nn.Module):
         if not self.mqa:
             self.in_proj = nn.Linear(args.dim, 3 * args.n_heads * self.head_dim, bias=False)
         else:
-            self.in_proj = nn.Linear(args.dim, (args.n_heads + 2)* self.head_dim, bias=False)
+            self.in_proj = nn.Linear(args.dim, (args.n_heads + 2) * self.head_dim, bias=False)
         self.out_proj = nn.Linear(args.n_heads * self.head_dim, args.dim, bias=False)
         self.pos_embed = get_pos_embed(args)
         self.attn_fn = args.attn_func
         self.apply_qk_norm = args.apply_qk_norm
-        
 
         # initialize norm layers for queries and keys if needed
         self.q_norm = (
@@ -143,7 +142,7 @@ class CustomAttn(nn.Module):
         )
         self.k_norm = (
             args.norm_type(
-                args.n_heads * self.head_dim,
+                args.n_heads * self.head_dim if not self.mqa else self.head_dim,
                 eps=args.norm_eps,
             )
             if self.apply_qk_norm
@@ -168,9 +167,9 @@ class CustomAttn(nn.Module):
             queries, keys, vals = self.in_proj(x).chunk(3, dim=-1)
         else:
             qkv = self.in_proj(x)
-            queries = qkv[..., :-2 * self.head_dim]
-            keys = qkv[..., -2 * self.head_dim : - self.head_dim]
-            vals = qkv[..., - self.head_dim :]
+            queries = qkv[..., : -2 * self.head_dim]
+            keys = qkv[..., -2 * self.head_dim : -self.head_dim]
+            vals = qkv[..., -self.head_dim :]
 
         queries = self.q_norm(queries)
         keys = self.k_norm(keys)
@@ -464,7 +463,7 @@ def create_params(args):
             moe_capacity_factor=cfg.get("moe_capacity_factor", args.moe_capacity_factor),
             moe_freq=cfg.get("moe_freq", args.moe_freq),
             moe_top_k=cfg.get("moe_top_k", args.moe_top_k),
-            mqa="mqa" in args.attn_name
+            mqa="mqa" in args.attn_name,
         )
 
 
