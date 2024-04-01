@@ -172,7 +172,7 @@ def get_attn_func(
         # .view() that collapses last two dimensions fail. One thus needs to
         # call .contiguous() on the output tensor. [#188]
         return lambda *args, **kwargs: xformers_attn(*args, **kwargs).contiguous()
-    elif attn_name == "torch_attn":
+    elif attn_name == "torch_attn" or attn_name == "torch_attn_mqa":
         return torch_attn
     elif attn_name == "custom_attn":
         assert (
