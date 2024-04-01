@@ -237,7 +237,7 @@ def check_args(args):
             if args.remote_sync_protocol != "s3":
                 raise ValueError("Sync protocol not supported when using resume latest.")
 
-    if args.lr_scheduler != "cosine":
+    if args.lr_scheduler not in {"cosine", "const", "const-cooldown"}:
         raise ValueError(
             f"Unknown scheduler, {args.lr_scheduler}. Available options are: cosine, const, const-cooldown."
         )
@@ -749,6 +749,18 @@ def parse_args(args):
         help="If set, allow model to do multiple data passes over our dataset, in order to reach the desired number of tokens.",
     )
 
+    parser.add_argument(
+        "--averagers",
+        type=str,
+        default=None,
+        help="Optinoally average checkpoints along the trajectory.",
+    )
+    parser.add_argument(
+        "--log-avg-model-training-loss",
+        type=int,
+        default=0,
+        help="Whether to log the average model training loss. if not 0, it will log the average loss over the specified number of steps.",
+    )
     add_model_args(parser)
 
     config = maybe_load_config(parser, args)
