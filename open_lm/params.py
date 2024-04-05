@@ -129,6 +129,12 @@ def add_model_args(parser):
         default=None,
         help="power alpha to raise L to, where L^alpha divides attention logits post activation",
     )
+    parser.add_arguments(
+        "--parallel-attn-ffn",
+        default=False,
+        action="store_true",
+        help="Parallel implementation of ffn and attn similar to PaLM and ViT-22B.",
+    )
 
 
 def check_replacement_type(replacement, original):

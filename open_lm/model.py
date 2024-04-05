@@ -99,6 +99,7 @@ class Params:
     moe_freq: int = 0
     positional_embedding_type: str = "rotary"
     ffn_type: str = "swiglu"
+    parallel_attn_ffn: bool = False
 
 
 def get_pos_embed(args: Params):
@@ -231,6 +232,8 @@ class Block(nn.Module):
 
         self.head_dim = args.dim // args.n_heads
         self.attention = CustomAttn(layer_id, args)
+        self.parallel_attn_ffn = args.parallel_attn_ffn
+
         self._ffn_type = args.ffn_type
         if args.ffn_type == "swiglu":
             # this follows llama / lit llama -- go to multiple of 256
@@ -299,6 +302,15 @@ class Block(nn.Module):
             use_cache=use_cache,
             attention_mask=attention_mask,
         )
+        if self.parallel_attn_ffn:
+            out = None
+            if self._ffn_type == "moe":
+                out, _ = self.feed_forward(self.ffn_norm(x)) + h + x
+            else:
+                out = self.feed_forward(self.ffn_norm(x)) + h + x
+
+            return out, past_key_value
+
         h = x + h
         if self._ffn_type == "moe":
             ffn_out, _ = self.feed_forward(self.ffn_norm(h))
@@ -446,6 +458,7 @@ def create_params(args):
             moe_capacity_factor=cfg.get("moe_capacity_factor", args.moe_capacity_factor),
             moe_freq=cfg.get("moe_freq", args.moe_freq),
             moe_top_k=cfg.get("moe_top_k", args.moe_top_k),
+            parallel_attn_ffn=cfg.get("parallel_attn_ffn", args.parallel_attn_ffn),
         )
 
 
