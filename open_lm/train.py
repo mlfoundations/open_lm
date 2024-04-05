@@ -320,7 +320,7 @@ def train_one_epoch(
                 data_time_m.reset()
                 # reset all average meters
                 losses_m.reset()
-                if averagers is not None:
+                if averagers is not None and args.log_avg_model_training_loss:
                     for k in averagers.avgs_dict.keys():
                         losses_avg_m[k].reset()
 
