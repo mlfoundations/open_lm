@@ -222,6 +222,20 @@ class GemmaMLP(nn.Module):
         std = std / math.sqrt(2 * (self._layer_id + 1))
         torch.nn.init.trunc_normal_(self.down_proj.weight, std=std, a=-3 * std, b=3 * std)
 
+# Same as pseudocode provided from xformers SwiGLU
+# https://github.com/facebookresearch/xformers
+class SwiGLUTorch(nn.Module):
+
+    def __init__(self, in_dim, hidden_dim, out_dim, bias=True):
+        super().__init__()
+        self.lin12 = nn.Linear(in_dim, 2 * hidden_dim, bias=bias)
+        self.lin3 = nn.Linear(hidden_dim, out_dim, bias=bias)
+
+    def forward(self, x):
+        x, gate = self.lin12(x).chunk(2, dim=-1)
+        x = F.silu(gate) * x
+        return self.lin3(x)
+
 
 class Block(nn.Module):
     def __init__(self, layer_id, args: Params):
@@ -236,6 +250,10 @@ class Block(nn.Module):
             # this follows llama / lit llama -- go to multiple of 256
             self.hidden_dim = 256 * ((int(2 * 4 * args.dim / 3) + 256 - 1) // 256)
             self.feed_forward = xops.SwiGLU(args.dim, self.hidden_dim, args.dim, bias=False)
+        elif args.ffn_type == "swiglu_torch":
+            # this follows llama / lit llama -- go to multiple of 256
+            self.hidden_dim = 256 * ((int(2 * 4 * args.dim / 3) + 256 - 1) // 256)
+            self.feed_forward = SwiGLUTorch(args.dim, self.hidden_dim, args.dim, bias=False)
         elif args.ffn_type == "gelu":
             # Follows mosaic mpt7b, but without a bias.
             self.hidden_dim = args.dim * 4
@@ -283,6 +301,14 @@ class Block(nn.Module):
             std = 1.0 / math.sqrt(self.hidden_dim)
             std = std / math.sqrt(2 * (self.layer_id + 1))
             torch.nn.init.trunc_normal_(self.feed_forward.w3.weight, std=std, a=-3 * std, b=3 * std)
+        if self._ffn_type == "swiglu_torch":
+            # initialize weights trunc_normal(1/sqrt(fan_in))
+            std = 1.0 / math.sqrt(self.dim)
+            torch.nn.init.trunc_normal_(self.feed_forward.lin12.weight, std=std, a=-3 * std, b=3 * std)
+            # scale init by depth as in https://arxiv.org/abs/1908.11365 -- worked slightly better.
+            std = 1.0 / math.sqrt(self.hidden_dim)
+            std = std / math.sqrt(2 * (self.layer_id + 1))
+            torch.nn.init.trunc_normal_(self.feed_forward.lin3.weight, std=std, a=-3 * std, b=3 * std)
         elif self._ffn_type == "gelu":
             std = 1.0 / math.sqrt(self.dim)
             torch.nn.init.trunc_normal_(self._ff_w1.weight, std=std, a=-3 * std, b=3 * std)
