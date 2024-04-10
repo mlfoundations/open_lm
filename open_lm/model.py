@@ -395,7 +395,6 @@ class Transformer(nn.Module, PyTorchModelHubMixin):
             x = inputs_embeds
         else:
             raise ValueError("Either input_ids or inputs_embeds must be provided.")
-
         x = self.post_embed_norm(x)
 
         if past_key_values is None:
