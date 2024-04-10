@@ -5,6 +5,7 @@ from open_lm.model import SwiGLUTorch
 from open_lm.precision import get_autocast
 from xformers.ops import SwiGLU
 
+
 def test_custom_attn_matches_softmax_attn(threshold=1e-7):
     for bs, q_seq_len, k_seq_len, h, d in [
         [10, 1024, 2048, 8, 128],
@@ -100,7 +101,7 @@ def test_swiglu_torch(threshold=1e-7):
         "w12.weight": state_dict["w12.weight"],
         "w3.weight": state_dict["w3.weight"],
         "w12.bias": state_dict["w12.bias"],
-        "w3.bias": state_dict["w3.bias"]
+        "w3.bias": state_dict["w3.bias"],
     }
     torch_swiglu.load_state_dict(new_state_dict)
 

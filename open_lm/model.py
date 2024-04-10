@@ -222,6 +222,7 @@ class GemmaMLP(nn.Module):
         std = std / math.sqrt(2 * (self._layer_id + 1))
         torch.nn.init.trunc_normal_(self.down_proj.weight, std=std, a=-3 * std, b=3 * std)
 
+
 # Same as pseudocode provided from xformers SwiGLU
 # https://github.com/facebookresearch/xformers
 class SwiGLUTorch(nn.Module):
