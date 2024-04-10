@@ -1,8 +1,9 @@
 import torch
 
 from open_lm.attention import torch_attn, custom_attn, xformers_attn, ATTN_ACTIVATIONS, ATTN_SEQ_SCALARS
+from open_lm.model import SwiGLUTorch
 from open_lm.precision import get_autocast
-
+from xformers.ops import SwiGLU
 
 def test_custom_attn_matches_softmax_attn(threshold=1e-7):
     for bs, q_seq_len, k_seq_len, h, d in [
@@ -79,3 +80,33 @@ def test_no_failure():
                     )
 
     assert True
+
+
+def test_swiglu_torch(threshold=1e-7):
+
+    bsz = 5
+    in_feats = 10
+    hidden_feats = 30
+    out_feats = 10
+    num_tries = 5
+
+    xops_swiglu = SwiGLU(in_features=in_feats, hidden_features=hidden_feats, out_features=out_feats)
+    torch_swiglu = SwiGLUTorch(in_dim=in_feats, hidden_dim=hidden_feats, out_dim=out_feats)
+
+    # Copy state dict from one swiglu to the other so that they have the same weights
+
+    state_dict = xops_swiglu.state_dict()
+    new_state_dict = {
+        "w12.weight": state_dict["w12.weight"],
+        "w3.weight": state_dict["w3.weight"],
+        "w12.bias": state_dict["w12.bias"],
+        "w3.bias": state_dict["w3.bias"]
+    }
+    torch_swiglu.load_state_dict(new_state_dict)
+
+    with torch.no_grad():
+        for _ in range(num_tries):
+            random_in = torch.rand((bsz, in_feats))
+            torch_out = torch_swiglu(random_in)
+            xops_out = xops_swiglu(random_in)
+            assert torch.allclose(torch_out, xops_out, atol=threshold)

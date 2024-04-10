@@ -228,13 +228,13 @@ class SwiGLUTorch(nn.Module):
 
     def __init__(self, in_dim, hidden_dim, out_dim, bias=True):
         super().__init__()
-        self.lin12 = nn.Linear(in_dim, 2 * hidden_dim, bias=bias)
-        self.lin3 = nn.Linear(hidden_dim, out_dim, bias=bias)
+        self.w12 = nn.Linear(in_dim, 2 * hidden_dim, bias=bias)
+        self.w3 = nn.Linear(hidden_dim, out_dim, bias=bias)
 
     def forward(self, x):
-        x, gate = self.lin12(x).chunk(2, dim=-1)
+        gate, x = self.w12(x).chunk(2, dim=-1)
         x = F.silu(gate) * x
-        return self.lin3(x)
+        return self.w3(x)
 
 
 class Block(nn.Module):
@@ -293,7 +293,7 @@ class Block(nn.Module):
         self.reset_parameters()
 
     def reset_parameters(self):
-        if self._ffn_type == "swiglu":
+        if self._ffn_type == "swiglu" or self._ffn_type == "swiglu_torch":
             # initialize weights trunc_normal(1/sqrt(fan_in))
             std = 1.0 / math.sqrt(self.dim)
             torch.nn.init.trunc_normal_(self.feed_forward.w12.weight, std=std, a=-3 * std, b=3 * std)
@@ -301,14 +301,6 @@ class Block(nn.Module):
             std = 1.0 / math.sqrt(self.hidden_dim)
             std = std / math.sqrt(2 * (self.layer_id + 1))
             torch.nn.init.trunc_normal_(self.feed_forward.w3.weight, std=std, a=-3 * std, b=3 * std)
-        if self._ffn_type == "swiglu_torch":
-            # initialize weights trunc_normal(1/sqrt(fan_in))
-            std = 1.0 / math.sqrt(self.dim)
-            torch.nn.init.trunc_normal_(self.feed_forward.lin12.weight, std=std, a=-3 * std, b=3 * std)
-            # scale init by depth as in https://arxiv.org/abs/1908.11365 -- worked slightly better.
-            std = 1.0 / math.sqrt(self.hidden_dim)
-            std = std / math.sqrt(2 * (self.layer_id + 1))
-            torch.nn.init.trunc_normal_(self.feed_forward.lin3.weight, std=std, a=-3 * std, b=3 * std)
         elif self._ffn_type == "gelu":
             std = 1.0 / math.sqrt(self.dim)
             torch.nn.init.trunc_normal_(self._ff_w1.weight, std=std, a=-3 * std, b=3 * std)
