@@ -4,6 +4,7 @@ from transformers.modeling_outputs import CausalLMOutputWithPast
 from open_lm.utils.transformers.hf_config import OpenLMConfig
 from open_lm.model import Transformer, create_params
 import torch
+import torch.nn as nn
 from typing import Union, Tuple, Optional, List
 import os
 
@@ -56,11 +57,12 @@ class OpenLMforCausalLM(OpenLMModel):
 
     def forward(
         self,
-        input_ids: torch.LongTensor,
+        input_ids: Optional[torch.Tensor] = None,
         attention_mask: Optional[torch.Tensor] = None,
         position_ids: Optional[torch.LongTensor] = None,
         past_key_values: Optional[List[torch.FloatTensor]] = None,
         inputs_embeds: Optional[torch.FloatTensor] = None,
+        labels: Optional[torch.LongTensor] = None,
         use_cache: Optional[bool] = False,
         output_attentions: Optional[bool] = None,
         output_hidden_states: Optional[bool] = None,
@@ -88,11 +90,16 @@ class OpenLMforCausalLM(OpenLMModel):
         assert position_ids is None, "Position IDs are not supported"
         # decoder outputs consists of (dec_features, layer_state, dec_hidden, dec_attn)
         logits, _, past_key_values = self.model(
-            input_ids, past_key_values=past_key_values, use_cache=use_cache, attention_mask=attention_mask
+            input_ids=input_ids, inputs_embeds=inputs_embeds, past_key_values=past_key_values, use_cache=use_cache, attention_mask=attention_mask
         )
+        loss = None
+        if labels is not None:
+            loss = nn.CrossEntropyLoss()(logits.view(-1, logits.size(-1)), labels.view(-1))
+
         output = CausalLMOutputWithPast(
             logits=logits,
             past_key_values=past_key_values,
+            loss=loss
         )
         return output
 
