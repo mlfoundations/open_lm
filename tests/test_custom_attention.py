@@ -84,7 +84,6 @@ def test_no_failure():
 
 
 def test_swiglu_torch(threshold=1e-7):
-
     bsz = 5
     in_feats = 10
     hidden_feats = 30
