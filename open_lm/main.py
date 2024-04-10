@@ -51,7 +51,7 @@ from open_lm.data import get_data, get_wds_dataset
 from open_lm.distributed import is_master, init_distributed_device, broadcast_object
 from open_lm.logger import setup_logging
 from open_lm.params import parse_args
-from open_lm.scheduler import cosine_lr, const_lr
+from open_lm.scheduler import cosine_lr, const_lr, cosine_rewarmed_lr
 from open_lm.train import train_one_epoch
 from open_lm.evaluate import evaluate_loop
 from open_lm.file_utils import (
@@ -686,8 +686,21 @@ def main(args):
                 # args.lr_cooldown_end,
                 # args.force_min_lr,
             )
+        elif args.lr_scheduler == "cosine-rewarmed":
+            scheduler = cosine_rewarmed_lr(
+                optimizer,
+                args.lr,
+                args.warmup,
+                total_steps,
+                args.lr_cooldown_end,
+                args.force_min_lr,
+                args.cosine_rewarmed_target_steps,
+                args.cosine_rewarmed_original_warmup,
+            )
         else:
-            raise ValueError(f"Unknown scheduler, {args.lr_scheduler}. Available options are: cosine, const.")
+            raise ValueError(
+                f"Unknown scheduler, {args.lr_scheduler}. Available options are: cosine, const, cosine-rewarned."
+            )
 
     # determine if this worker should save logs and checkpoints. only do so if it is rank == 0
     args.save_logs = args.logs and args.logs.lower() != "none" and is_master(args)
