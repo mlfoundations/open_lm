@@ -12,7 +12,6 @@ def rotate_half(x):
     return torch.cat((-x2, x1), dim=-1)
 
 
-@torch.jit.script
 def apply_rotary_pos_emb(x, cos, sin, offset: int = 0):
     # NOTE: This could probably be moved to Triton
     assert (
@@ -79,7 +78,6 @@ class RotaryEmbedding(torch.nn.Module):
             self._cos_cached = emb.cos()[None, :, None, :].to(dtype)
             self._sin_cached = emb.sin()[None, :, None, :].to(dtype)
 
-    @torch.compiler.disable
     def forward(self, q: torch.Tensor, k: torch.Tensor, offset: int = 0) -> Tuple[torch.Tensor, torch.Tensor]:
         self._update_cos_sin_tables(k.shape[1] + offset, device=k.device, dtype=k.dtype)
         return (
