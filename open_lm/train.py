@@ -54,7 +54,19 @@ def backward(total_loss, scaler):
 
 
 def train_one_epoch(
-    model, data, loss, epoch, step, optimizer, scaler, scheduler, total_steps, args, tb_writer=None, averagers=None, all_gpus=None
+    model,
+    data,
+    loss,
+    epoch,
+    step,
+    optimizer,
+    scaler,
+    scheduler,
+    total_steps,
+    args,
+    tb_writer=None,
+    averagers=None,
+    all_gpus=None,
 ):
     """Trains model for one epoch on the provided data.
 

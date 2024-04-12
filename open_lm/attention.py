@@ -16,6 +16,7 @@ try:
 except ImportError as ie:
     using_te = False
 
+
 def get_rectangular_mask(shape, q_seq_len, k_seq_len, device, dtype):
     """
     >>> get_rectangular_mask((1, 1), 2, 2, "cpu", torch.float32)

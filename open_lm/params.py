@@ -768,7 +768,7 @@ def parse_args(args):
         default=False,
         help="If set, allow FP8 training for the model.",
     )
-    
+
     add_model_args(parser)
 
     config = maybe_load_config(parser, args)

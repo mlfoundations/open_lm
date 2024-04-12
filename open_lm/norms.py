@@ -33,7 +33,7 @@ class LayerNorm(nn.Module):
         elementwise_bias: bool = True,
         device=None,
         dtype=None,
-        use_fp8: bool = False
+        use_fp8: bool = False,
     ) -> None:
         factory_kwargs = {"device": device, "dtype": dtype}
         super().__init__()
