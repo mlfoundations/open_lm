@@ -33,7 +33,7 @@ try:
     from transformer_engine.common import recipe
 
     fp8_format = recipe.Format.HYBRID
-    fp8_recipe = recipe.DelayedScaling(fp8_format=fp8_format, amax_history_len=32, amax_compute_algo="max")
+    fp8_recipe = recipe.DelayedScaling(fp8_format=fp8_format, amax_history_len=16, amax_compute_algo="max")
     using_te = True
 except ImportError as ie:
     using_te = False
@@ -54,7 +54,7 @@ def backward(total_loss, scaler):
 
 
 def train_one_epoch(
-    model, data, loss, epoch, step, optimizer, scaler, scheduler, total_steps, args, tb_writer=None, averagers=None
+    model, data, loss, epoch, step, optimizer, scaler, scheduler, total_steps, args, tb_writer=None, averagers=None, all_gpus=None
 ):
     """Trains model for one epoch on the provided data.
 
@@ -131,7 +131,7 @@ def train_one_epoch(
         optimizer.zero_grad()
 
         if args.accum_freq == 1:
-            if using_te:
+            if using_te and args.use_fp8:
                 with te.fp8_autocast(enabled=True, fp8_recipe=fp8_recipe, fp8_group=all_gpus):
                     inputs, targets = sample_chunk(texts, args)
 
@@ -190,7 +190,7 @@ def train_one_epoch(
                             break
                         targets_ii = targets[ii * per_batch : (ii + 1) * per_batch]
 
-                        if using_te:
+                        if using_te and args.use_fp8:
                             ## TODO
                             with te.fp8_autocast(enabled=True, fp8_recipe=fp8_recipe, fp8_group=all_gpus):
                                 out, _, _ = model(inputs_ii)

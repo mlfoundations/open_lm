@@ -43,7 +43,7 @@ try:
     from transformer_engine.common import recipe
 
     fp8_format = recipe.Format.HYBRID
-    fp8_recipe = recipe.DelayedScaling(fp8_format=fp8_format, amax_history_len=32, amax_compute_algo="max")
+    fp8_recipe = recipe.DelayedScaling(fp8_format=fp8_format, amax_history_len=16, amax_compute_algo="max")
     using_te = True
 except ImportError as ie:
     using_te = False
@@ -462,7 +462,7 @@ def create_params(args):
             vocab_size=cfg["vocab_size"],
             post_embed_norm=cfg["post_embed_norm"],
             weight_tying=cfg["weight_tying"],
-            norm_type=get_norm_class(cfg.get("model_norm", args.model_norm)),
+            norm_type=get_norm_class(cfg.get("model_norm", args.model_norm), args.use_fp8),
             attn_func=get_attn_func(
                 args.attn_name, args.attn_activation, args.attn_seq_scalar, args.attn_seq_scalar_alpha
             ),
@@ -522,11 +522,11 @@ def nn_linear_to_te_linear(model, include_modules=[], exclude_modules=["output"]
 def create_model(args):
     if "mamba" in args.model:
         model = Mamba(create_params(args))
-        if using_te:
+        if args.use_fp8:
             model = nn_linear_to_te_linear(model)
         return model
     else:
         model = Transformer(create_params(args))
-        if using_te:
+        if args.use_fp8:
             model = nn_linear_to_te_linear(model)
         return model

@@ -4,6 +4,17 @@ import torch
 from torch.nn import functional as F
 import xformers.ops as xops
 
+# Adding flag if using TE FP8
+using_te = False
+try:
+    import transformer_engine.pytorch as te
+    from transformer_engine.common import recipe
+
+    fp8_format = recipe.Format.HYBRID
+    fp8_recipe = recipe.DelayedScaling(fp8_format=fp8_format, amax_history_len=16, amax_compute_algo="max")
+    using_te = True
+except ImportError as ie:
+    using_te = False
 
 def get_rectangular_mask(shape, q_seq_len, k_seq_len, device, dtype):
     """
@@ -81,27 +92,57 @@ def torch_attn(queries, keys, values, is_causal, attention_mask=None):
         # Same as above, we would like to use:
         # mask = xops.fmha.attn_bias.LowerTriangularFromBottomRightMask().materialize((1, 1, q_seq_len, k_seq_len), queries.dtype, queries.device)
         mask = get_rectangular_mask((1, 1), q_seq_len, k_seq_len, queries.device, queries.dtype)
-        return (
-            F.scaled_dot_product_attention(
-                queries.transpose(1, 2), keys.transpose(1, 2), values.transpose(1, 2), attn_mask=mask
+        if using_te:
+            scaleddotproductattn_module = te.DotProductAttention(queries.size(-1), 1)
+            return (
+                scaleddotproductattn_module(
+                    queries.transpose(1, 2), keys.transpose(1, 2), values.transpose(1, 2), attn_mask=mask
+                )
+                .transpose(1, 2)
+                .contiguous()
             )
-            .transpose(1, 2)
-            .contiguous()
-        )
+        else:
+            return (
+                F.scaled_dot_product_attention(
+                    queries.transpose(1, 2), keys.transpose(1, 2), values.transpose(1, 2), attn_mask=mask
+                )
+                .transpose(1, 2)
+                .contiguous()
+            )
     elif queries.shape[1] == 1:
-        return (
-            F.scaled_dot_product_attention(queries.transpose(1, 2), keys.transpose(1, 2), values.transpose(1, 2))
-            .transpose(1, 2)
-            .contiguous()
-        )
-    else:
-        return (
-            F.scaled_dot_product_attention(
-                queries.transpose(1, 2), keys.transpose(1, 2), values.transpose(1, 2), is_causal=is_causal
+        if using_te:
+            scaleddotproductattn_module = te.DotProductAttention(queries.size(-1), 1)
+            return (
+                scaleddotproductattn_module(
+                    queries.transpose(1, 2), keys.transpose(1, 2), values.transpose(1, 2), attn_mask=mask
+                )
+                .transpose(1, 2)
+                .contiguous()
             )
-            .transpose(1, 2)
-            .contiguous()
-        )
+        else:
+            return (
+                F.scaled_dot_product_attention(queries.transpose(1, 2), keys.transpose(1, 2), values.transpose(1, 2))
+                .transpose(1, 2)
+                .contiguous()
+            )
+    else:
+        if using_te:
+            scaleddotproductattn_module = te.DotProductAttention(queries.size(-1), 1)
+            return (
+                scaleddotproductattn_module(
+                    queries.transpose(1, 2), keys.transpose(1, 2), values.transpose(1, 2), attn_mask=mask
+                )
+                .transpose(1, 2)
+                .contiguous()
+            )
+        else:
+            return (
+                F.scaled_dot_product_attention(
+                    queries.transpose(1, 2), keys.transpose(1, 2), values.transpose(1, 2), is_causal=is_causal
+                )
+                .transpose(1, 2)
+                .contiguous()
+            )
 
 
 ATTN_ACTIVATIONS = {

@@ -477,7 +477,7 @@ def parse_args(args):
     )
     parser.add_argument(
         "--precision",
-        choices=["amp", "amp_bf16", "amp_bfloat16", "bf16", "fp16", "fp32"],
+        choices=["amp", "amp_bf16", "amp_bfloat16", "bf16", "fp16", "fp32", "amp_fp8"],
         default="amp",
         help="Floating point precision.",
     )
@@ -761,6 +761,14 @@ def parse_args(args):
         default=0,
         help="Whether to log the average model training loss. if not 0, it will log the average loss over the specified number of steps.",
     )
+
+    parser.add_argument(
+        "--use-fp8",
+        action="store_true",
+        default=False,
+        help="If set, allow FP8 training for the model.",
+    )
+    
     add_model_args(parser)
 
     config = maybe_load_config(parser, args)

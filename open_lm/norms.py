@@ -15,7 +15,7 @@ try:
     from transformer_engine.common import recipe
 
     fp8_format = recipe.Format.HYBRID
-    fp8_recipe = recipe.DelayedScaling(fp8_format=fp8_format, amax_history_len=32, amax_compute_algo="max")
+    fp8_recipe = recipe.DelayedScaling(fp8_format=fp8_format, amax_history_len=16, amax_compute_algo="max")
     using_te = True
 except ImportError as ie:
     using_te = False
@@ -33,6 +33,7 @@ class LayerNorm(nn.Module):
         elementwise_bias: bool = True,
         device=None,
         dtype=None,
+        use_fp8: bool = False
     ) -> None:
         factory_kwargs = {"device": device, "dtype": dtype}
         super().__init__()
@@ -44,6 +45,7 @@ class LayerNorm(nn.Module):
         self.eps = eps
         self.elementwise_gain = elementwise_gain
         self.elementwise_bias = elementwise_bias
+        self.use_fp8 = use_fp8
 
         if self.elementwise_gain:
             self.weight = Parameter(torch.empty(self.normalized_shape, **factory_kwargs))
@@ -67,7 +69,7 @@ class LayerNorm(nn.Module):
                 self.bias.zero_()
 
     def forward(self, input: Tensor) -> Tensor:
-        if using_te:
+        if using_te and self.use_fp8:
             layer_norm_module = te.LayerNorm(
                 self.normalized_shape, eps=self.eps, device="cuda", params_dtype=input.dtype
             )
@@ -98,7 +100,7 @@ class LPLayerNorm(LayerNorm):
         downcast_weight = _cast_if_autocast_enabled(self.weight) if self.weight is not None else self.weight
         downcast_bias = _cast_if_autocast_enabled(self.bias) if self.bias is not None else self.bias
         with torch.autocast(enabled=False, device_type=module_device.type):
-            if using_te:
+            if using_te and self.use_fp8:
                 layer_norm_module = te.LayerNorm(
                     self.normalized_shape, eps=self.eps, device="cuda", params_dtype=downcast_x.dtype
                 )
@@ -163,18 +165,18 @@ class RmsNorm(nn.Module):
         return "{normalized_shape}, eps={eps} ".format(**self.__dict__)
 
 
-def get_norm_class(model_norm):
+def get_norm_class(model_norm, use_fp8=False):
     if model_norm == "default_layer_norm":
         return torch.nn.LayerNorm
     elif model_norm == "lp_layer_norm":
         return LPLayerNorm
     elif model_norm == "gain_only_lp_layer_norm":
-        return partial(LPLayerNorm, elementwise_gain=True, elementwise_bias=False)
+        return partial(LPLayerNorm, elementwise_gain=True, elementwise_bias=False, use_fp8=use_fp8)
     elif model_norm == "gain_only_layer_norm":
-        return partial(LayerNorm, elementwise_gain=True, elementwise_bias=False)
+        return partial(LayerNorm, elementwise_gain=True, elementwise_bias=False, use_fp8=use_fp8)
 
     elif model_norm == "no_wb_layer_norm":
-        return partial(LayerNorm, elementwise_gain=False, elementwise_bias=False)
+        return partial(LayerNorm, elementwise_gain=False, elementwise_bias=False, use_fp8=use_fp8)
 
     elif model_norm == "rms_norm":
         return RmsNorm
