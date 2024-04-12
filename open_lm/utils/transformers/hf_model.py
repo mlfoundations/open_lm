@@ -1,4 +1,5 @@
 from argparse import Namespace
+from torch.utils.checkpoint import checkpoint
 from transformers import PreTrainedModel
 from transformers.modeling_outputs import CausalLMOutputWithPast
 from open_lm.utils.transformers.hf_config import OpenLMConfig
@@ -19,10 +20,18 @@ class OpenLMModel(PreTrainedModel):
         else:
             params = create_params(Namespace(**config.params_args_dict))
         config.set_params(params)
-
         super().__init__(config)
 
+        self.supports_gradient_checkpointing = True
         self.model = Transformer(params)
+
+    @property
+    def gradient_checkpointing(self):
+        return self.model.grad_checkpointing
+
+    @gradient_checkpointing.setter
+    def gradient_checkpointing(self, value):
+        self.model.grad_checkpointing = value
 
     def forward(self, tokens):
         return self.model(tokens)
