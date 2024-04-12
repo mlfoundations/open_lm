@@ -41,7 +41,7 @@ def add_model_args(parser):
     )
     parser.add_argument(
         "--ffn-type",
-        choices=["swiglu", "gelu"],
+        choices=["swiglu", "swiglu_torch", "gelu", "gemma_geglu"],
         default="swiglu",
         help="Type of feedforward layer to use. This might be overridden by the model config.",
     )
@@ -54,7 +54,7 @@ def add_model_args(parser):
     parser.add_argument(
         "--positional-embedding-type",
         type=str,
-        choices=["rotary", "head_rotary", "llama_rotary"],
+        choices=["rotary", "head_rotary", "llama_rotary", "none"],
         default="rotary",
         help="Type of positional embedding to use. This might be overridden by the model config.",
     )
@@ -237,7 +237,7 @@ def check_args(args):
             if args.remote_sync_protocol != "s3":
                 raise ValueError("Sync protocol not supported when using resume latest.")
 
-    if args.lr_scheduler != "cosine":
+    if args.lr_scheduler not in {"cosine", "const", "const-cooldown"}:
         raise ValueError(
             f"Unknown scheduler, {args.lr_scheduler}. Available options are: cosine, const, const-cooldown."
         )
@@ -738,11 +738,29 @@ def parse_args(args):
         help="Allow forcing distributed mode even when running on one gpu. Mostly useful for testing.",
     )
     parser.add_argument(
+        "--preset-world-size",
+        type=int,
+        default=None,
+        help="Explicitly set the world size. Useful in cases where a different number of gpus per node need to be used.",
+    )
+    parser.add_argument(
         "--multiple-data-passes",
         action="store_true",
         help="If set, allow model to do multiple data passes over our dataset, in order to reach the desired number of tokens.",
     )
 
+    parser.add_argument(
+        "--averagers",
+        type=str,
+        default=None,
+        help="Optinoally average checkpoints along the trajectory.",
+    )
+    parser.add_argument(
+        "--log-avg-model-training-loss",
+        type=int,
+        default=0,
+        help="Whether to log the average model training loss. if not 0, it will log the average loss over the specified number of steps.",
+    )
     add_model_args(parser)
 
     config = maybe_load_config(parser, args)

@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from typing import Callable
 
 import torch
+import torch.nn.functional as F
 from torch import nn
 from torch.utils.checkpoint import checkpoint
 
@@ -19,7 +20,7 @@ from open_lm.norms import get_norm_class
 from open_lm.positional_embedding.head_rotary import HeadRotaryWithCast
 from open_lm.positional_embedding.rotary import RotaryWithCast
 from open_lm.positional_embedding.llama_rotary import LLaMARotaryWithCast
-
+from open_lm.positional_embedding.none import identity_with_cast
 
 # from open_lm.moe.mixture_of_experts import MoE
 try:
@@ -120,6 +121,8 @@ def get_pos_embed(args: Params):
         return LLaMARotaryWithCast(head_dim, args.n_heads, args.seq_len)
     elif args.positional_embedding_type == "head_rotary":
         return HeadRotaryWithCast(head_dim, args.seq_len)
+    elif args.positional_embedding_type == "none":
+        return identity_with_cast
     else:
         raise RuntimeError(f"Unknown positional embedding type {args.positional_embedding_type}")
 
@@ -165,7 +168,7 @@ class CustomAttn(nn.Module):
         std = std / math.sqrt(2 * (self.layer_id + 1))
         torch.nn.init.trunc_normal_(self.out_proj.weight, std=std, a=-3 * std, b=3 * std)
 
-    def forward(self, x: torch.Tensor, is_causal=True, past_key_value=None, use_cache=False):
+    def forward(self, x: torch.Tensor, is_causal=True, past_key_value=None, use_cache=False, attention_mask=None):
         batchsize, q_len, _ = x.shape
         queries, keys, vals = self.in_proj(x).chunk(3, dim=-1)
 
@@ -191,11 +194,59 @@ class CustomAttn(nn.Module):
             keys,
             vals,
             is_causal=is_causal,
+            attention_mask=attention_mask,
         )
 
         output = output.view(batchsize, q_len, -1)
 
         return self.out_proj(output), past_key_value
+
+
+class GemmaMLP(nn.Module):
+    """Google's Gemma model MLP (aka GeGLU).
+
+    Modified from https://github.com/google/gemma_pytorch/blob/01062c9ef4cf89ac0c985b25a734164ede017d0b/gemma/model.py#L182-L201
+    """
+
+    def __init__(self, dim: int, hidden_dim: int, layer_id: int):
+        super().__init__()
+        self.dim = dim
+        self.hidden_dim = hidden_dim
+        self.gate_proj = nn.Linear(dim, hidden_dim)
+        self.up_proj = nn.Linear(dim, hidden_dim)
+        self.down_proj = nn.Linear(hidden_dim, dim)
+        self._layer_id = layer_id
+
+    def forward(self, x):
+        gate = self.gate_proj(x)
+        gate = F.gelu(gate)
+        up = self.up_proj(x)
+        fuse = gate * up
+        outputs = self.down_proj(fuse)
+        return outputs
+
+    def reset_parameters(self):
+        std = 1.0 / math.sqrt(self.dim)
+        torch.nn.init.trunc_normal_(self.gate_proj.weight, std=std, a=-3 * std, b=3 * std)
+        torch.nn.init.trunc_normal_(self.up_proj.weight, std=std, a=-3 * std, b=3 * std)
+
+        std = 1.0 / math.sqrt(self.hidden_dim)
+        std = std / math.sqrt(2 * (self._layer_id + 1))
+        torch.nn.init.trunc_normal_(self.down_proj.weight, std=std, a=-3 * std, b=3 * std)
+
+
+# Same as pseudocode provided from xformers SwiGLU
+# https://github.com/facebookresearch/xformers
+class SwiGLUTorch(nn.Module):
+    def __init__(self, in_dim, hidden_dim, out_dim, bias=True):
+        super().__init__()
+        self.w12 = nn.Linear(in_dim, 2 * hidden_dim, bias=bias)
+        self.w3 = nn.Linear(hidden_dim, out_dim, bias=bias)
+
+    def forward(self, x):
+        gate, x = self.w12(x).chunk(2, dim=-1)
+        x = F.silu(gate) * x
+        return self.w3(x)
 
 
 class Block(nn.Module):
@@ -211,12 +262,20 @@ class Block(nn.Module):
             # this follows llama / lit llama -- go to multiple of 256
             self.hidden_dim = 256 * ((int(2 * 4 * args.dim / 3) + 256 - 1) // 256)
             self.feed_forward = xops.SwiGLU(args.dim, self.hidden_dim, args.dim, bias=False)
+        elif args.ffn_type == "swiglu_torch":
+            # this follows llama / lit llama -- go to multiple of 256
+            self.hidden_dim = 256 * ((int(2 * 4 * args.dim / 3) + 256 - 1) // 256)
+            self.feed_forward = SwiGLUTorch(args.dim, self.hidden_dim, args.dim, bias=False)
         elif args.ffn_type == "gelu":
             # Follows mosaic mpt7b, but without a bias.
             self.hidden_dim = args.dim * 4
             self._ff_w1 = nn.Linear(args.dim, self.hidden_dim, bias=False)
             self._ff_w2 = nn.Linear(self.hidden_dim, args.dim, bias=False)
             self.feed_forward = nn.Sequential(self._ff_w1, nn.GELU(approximate="none"), self._ff_w2)
+        elif args.ffn_type == "gemma_geglu":
+            # this follows llama / lit llama -- go to multiple of 256
+            self.hidden_dim = 256 * ((int(2 * 4 * args.dim / 3) + 256 - 1) // 256)
+            self.feed_forward = GemmaMLP(args.dim, self.hidden_dim, layer_id)
         elif args.ffn_type == "moe":
             moe_args = MoEArgs(
                 hidden_size=args.dim,
@@ -246,7 +305,7 @@ class Block(nn.Module):
         self.reset_parameters()
 
     def reset_parameters(self):
-        if self._ffn_type == "swiglu":
+        if self._ffn_type == "swiglu" or self._ffn_type == "swiglu_torch":
             # initialize weights trunc_normal(1/sqrt(fan_in))
             std = 1.0 / math.sqrt(self.dim)
             torch.nn.init.trunc_normal_(self.feed_forward.w12.weight, std=std, a=-3 * std, b=3 * std)
@@ -259,15 +318,16 @@ class Block(nn.Module):
             torch.nn.init.trunc_normal_(self._ff_w1.weight, std=std, a=-3 * std, b=3 * std)
 
             std = 1.0 / math.sqrt(self.hidden_dim)
-            std = std / math.sqrt(2 * (self._layer_id + 1))
+            std = std / math.sqrt(2 * (self.layer_id + 1))
             torch.nn.init.trunc_normal_(self._ff_w2.weight, std=std, a=-3 * std, b=3 * std)
 
-    def forward(self, x, past_key_value=None, use_cache=False):
+    def forward(self, x, past_key_value=None, use_cache=False, attention_mask=None):
         h, past_key_value = self.attention(
             self.attention_norm(x),
             is_causal=True,
             past_key_value=past_key_value,
             use_cache=use_cache,
+            attention_mask=attention_mask,
         )
         h = x + h
         if self._ffn_type == "moe":
@@ -332,7 +392,16 @@ class Transformer(nn.Module, PyTorchModelHubMixin):
     def set_grad_checkpointing(self, enable=True):
         self.grad_checkpointing = enable
 
-    def forward(self, input, past_key_values=None, use_cache=False):
+    def forward(self, input, past_key_values=None, use_cache=False, attention_mask=None):
+        """
+        Args:
+            input
+            past_key_values
+            use_cache (bool)
+            attention_mask (torch.Tensor): Shape (batch_size, sequence_len), indicates tokens that should not be
+                attended to. attention_mask[s, i] = False indicates that token i should not be attended to by any other
+                token for sequence s.
+        """
         x = self.tok_embeddings(input)
         x = self.post_embed_norm(x)
 
@@ -342,9 +411,9 @@ class Transformer(nn.Module, PyTorchModelHubMixin):
             past_key_values = list(past_key_values)
         for i, layer in enumerate(self.layers):
             if self.grad_checkpointing:
-                x, past_key_values[i] = checkpoint(layer, x, past_key_values[i], use_cache)
+                x, past_key_values[i] = checkpoint(layer, x, past_key_values[i], use_cache, attention_mask)
             else:
-                x, past_key_values[i] = layer(x, past_key_values[i], use_cache=use_cache)
+                x, past_key_values[i] = layer(x, past_key_values[i], use_cache=use_cache, attention_mask=attention_mask)
         if past_key_values[0] is None:
             past_key_values = None
         x = self.norm(x)
