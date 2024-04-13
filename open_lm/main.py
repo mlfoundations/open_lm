@@ -108,10 +108,6 @@ def assert_fp8(model):
             logging.warning(f"Module {name} is nn.Linear and not converted to TE FP8 equivalent of Linear.")
         if isinstance(module, torch.nn.LayerNorm):
             logging.warning(f"Module {name} is nn.LayerNorm and not converted to TE FP8 equivalent of LayerNorm.")
-        if isinstance(module, torch.nn.functional.scaled_dot_product_attention):
-            logging.warning(
-                f"Module {name} is torch.nn.functional.scaled_dot_product_attention and not converted to TE FP8 equivalent of DotProductAttention."
-            )
 
 
 def load_model(args, model, different_seed=False):
