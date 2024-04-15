@@ -176,7 +176,7 @@ def custom_attn(
 
     attn_bias = torch.zeros(batch, heads, q_seq_len, k_seq_len, device=queries.device, dtype=queries.dtype)
     if is_causal and queries.shape[1] > 1:
-        attn_bias = get_rectangular_mask((batch, heads), q_seq_len, k_seq_len, queries.device, queries.dtype)
+        attn_bias = get_rectangular_causal_mask((batch, heads), q_seq_len, k_seq_len, queries.device, queries.dtype)
 
     inner_scale = embed_dim**-0.5
     attn_weight = torch.einsum("bqhd,bkhd->bhqk", inner_scale * queries, keys)
