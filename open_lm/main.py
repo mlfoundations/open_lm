@@ -123,8 +123,8 @@ def load_model(args, model, different_seed=False):
         global_step = checkpoint.get("step", None)
         if next(iter(sd.items()))[0].startswith("module"):
             sd = {k[len("module.") :]: v for k, v in sd.items()}
-        if next(iter(sd.items()))[0].startswith("_orig_mod"):
-            sd = {k[len("_orig_mod.") :]: v for k, v in sd.items()}
+        if "_orig_mod" in next(iter(sd.items()))[0]:
+            sd = {k.replace("_orig_mod.", ""): v for k, v in sd.items()}
         if args.fsdp:
             model.load_state_dict(sd)
         elif args.distributed:
