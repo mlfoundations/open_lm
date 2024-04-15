@@ -50,5 +50,5 @@ class SimpleComposerOpenLMCausalLM(HuggingFaceModel):
             shift_labels=True,
         )
 
-    def generate(self, input_ids=None, inputs_embeds=None, **kwargs):
+    def generate(self, input_ids=None, **kwargs):
         return super().generate(input_ids=input_ids, **kwargs)
