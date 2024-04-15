@@ -33,8 +33,8 @@ class OpenLMModel(PreTrainedModel):
     def gradient_checkpointing(self, value):
         self.model.grad_checkpointing = value
 
-    def forward(self, tokens):
-        return self.model(tokens)
+    def forward(self, input_ids=None, inputs_embeds=None, **kwargs):
+        return self.model(input_ids=input_ids, inputs_embeds=inputs_embeds, **kwargs)
 
 
 class OpenLMforCausalLM(OpenLMModel):
