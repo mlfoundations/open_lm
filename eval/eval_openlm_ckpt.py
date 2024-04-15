@@ -7,7 +7,14 @@ import torch
 from composer.loggers import InMemoryLogger, LoggerDestination
 from composer.trainer import Trainer
 from composer.utils import dist, get_device, reproducibility
-from llmfoundry.utils.builders import build_icl_evaluators, build_logger
+
+try:
+    from llmfoundry.utils.builders import build_icl_evaluators, build_logger
+except ImportError:
+    import logging
+
+    logging.warning("llmfoundry not installed. Please install llmfoundry `pip install llm-foundry` to run this script.")
+
 from omegaconf import OmegaConf as om
 from transformers import GPTNeoXTokenizerFast, LlamaTokenizerFast
 
