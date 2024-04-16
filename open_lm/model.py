@@ -380,7 +380,7 @@ class Transformer(nn.Module, PyTorchModelHubMixin):
     def set_grad_checkpointing(self, enable=True):
         self.grad_checkpointing = enable
 
-    def forward(self, input, past_key_values=None, use_cache=False, attention_mask=None):
+    def forward(self, input_ids=None, inputs_embeds=None, past_key_values=None, use_cache=False, attention_mask=None):
         """
         Args:
             input
@@ -390,7 +390,13 @@ class Transformer(nn.Module, PyTorchModelHubMixin):
                 attended to. attention_mask[s, i] = False indicates that token i should not be attended to by any other
                 token for sequence s.
         """
-        x = self.tok_embeddings(input)
+        if input_ids is not None:
+            x = self.tok_embeddings(input_ids)
+        elif inputs_embeds is not None:
+            x = inputs_embeds
+        else:
+            raise ValueError("Either input_ids or inputs_embeds must be provided.")
+
         x = self.post_embed_norm(x)
 
         if past_key_values is None:
