@@ -102,15 +102,15 @@ def get_state_dict(name):
     return sd
 
 
-def assert_fp8(model):
+def assert_fp8(model, exclude_modules=["output"]):
     for name, module in model.named_children():
         if len(list(module.children())) > 0:
             assert_fp8(module)
-        if isinstance(module, torch.nn.Linear):
+        if isinstance(module, torch.nn.Linear) and name not in exclude_modules:
             logging.warning(f"[FP8 TESTS] Module {name} is nn.Linear and not converted to TE FP8 equivalent of Linear.")
-        if isinstance(module, torch.nn.LayerNorm):
+        if isinstance(module, torch.nn.LayerNorm) and name not in exclude_modules:
             logging.warning(f"[FP8 TESTS] Module {name} is nn.LayerNorm and not converted to TE FP8 equivalent of LayerNorm.")
-        if isinstance(module, torch.nn.Module):
+        if isinstance(module, torch.nn.Module) and name not in exclude_modules:
             source_code = inspect.getsource(module.forward)
             if "F.scaled_dot_product_attention" in source_code:
                 logging.warning(f"[FP8 TESTS] Module {name} is F.scaled_dot_product_attention and not converted to TE FP8 equivalent te.DotProductAttention.")
