@@ -100,16 +100,6 @@ def get_state_dict(name):
     return sd
 
 
-def assert_fp8(model):
-    for name, module in model.named_children():
-        if len(list(module.children())) > 0:
-            assert_fp8(module)
-        if isinstance(module, torch.nn.Linear):
-            logging.warning(f"Module {name} is nn.Linear and not converted to TE FP8 equivalent of Linear.")
-        if isinstance(module, torch.nn.LayerNorm):
-            logging.warning(f"Module {name} is nn.LayerNorm and not converted to TE FP8 equivalent of LayerNorm.")
-
-
 def load_model(args, model, different_seed=False):
     checkpoint = pt_load(args.resume, map_location="cpu")
     if "epoch" in checkpoint:
@@ -463,7 +453,6 @@ def main(args):
 
     if args.use_fp8:
         logging.info("Using FP8 to run training.")
-        assert_fp8(model)
 
     args.vocab_size = model.vocab_size
     args.seq_len = model.seq_len
