@@ -521,15 +521,15 @@ def nn_linear_to_te_linear(model, include_modules=[], exclude_modules=["output"]
         if isinstance(module, torch.nn.Module) and name not in exclude_modules:
             source_code = inspect.getsource(module.forward)
             if "F.scaled_dot_product_attention" in source_code:
-                print(f"----- F.scaled_dot_product_attention found: {name} -----")
+                print(f"[FP8 TESTS] ----- F.scaled_dot_product_attention found: {name} -----")
             elif "F.layer_norm" in source_code:
-                print(f"----- F.layer_norm found: {name} -----")
+                print(f"[FP8 TESTS] ----- F.layer_norm found: {name} -----")
             elif "te.DotProductAttention" in source_code:
-                print(f"----- te.DotProductAttention found: {name} -----")
+                print(f"[FP8 TESTS] ----- te.DotProductAttention found: {name} -----")
             elif "te.LayerNorm" in source_code:
-                print(f"----- te.LayerNorm found: {name} -----")
+                print(f"[FP8 TESTS] ----- te.LayerNorm found: {name} -----")
             else:
-                print(f"Source Code = {source_code}")
+                print(f"[FP8 TESTS] Source Code = {source_code}")
     return model
 
 
