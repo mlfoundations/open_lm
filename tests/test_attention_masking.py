@@ -36,6 +36,8 @@ def test_attention_masking_xformers():
     # Run with all elements but mask the first 4 elements
     output_mask_initial = xformers_attn(queries, keys, values, is_causal=True, attention_mask=attention_mask)
 
+    # Run with the output of attention again and ensure it looks good (e.g., we don't run into NaNs. This happened in
+    # initial implementations where the output had NaNs for certain types of masks.
     output3 = xformers_attn(
         output_mask_initial, output_mask_initial, output_mask_initial, is_causal=True, attention_mask=attention_mask
     )
@@ -116,6 +118,9 @@ def test_attention_masking_torchattn_vs_xformers():
 
     # Run with all elements but mask the first 4 elements
     output_mask_initial_torch = torch_attn(queries, keys, values, is_causal=True, attention_mask=attention_mask.clone())
+    output_mask_initial_fewq_torch = torch_attn(
+        queries[:, : n - 2], keys, values, is_causal=True, attention_mask=attention_mask.clone()
+    )
 
     output3_torch = torch_attn(
         output_mask_initial_torch,
@@ -153,6 +158,9 @@ def test_attention_masking_torchattn_vs_xformers():
     output_mask_initial_xformers = xformers_attn(
         queries, keys, values, is_causal=True, attention_mask=attention_mask.clone()
     )
+    output_mask_initial_fewq_xformers = xformers_attn(
+        queries[:, : n - 2], keys, values, is_causal=True, attention_mask=attention_mask.clone()
+    )
 
     output3_xformers = xformers_attn(
         output_mask_initial_xformers,
@@ -167,3 +175,4 @@ def test_attention_masking_torchattn_vs_xformers():
     assert torch.allclose(output_dummy_mask_torch, output_dummy_mask_xformers.cpu())
     assert torch.allclose(output_mask_initial_torch, output_mask_initial_xformers.cpu())
     assert torch.allclose(output3_torch, output3_xformers.cpu())
+    assert torch.allclose(output_mask_initial_fewq_torch, output_mask_initial_fewq_xformers.cpu())
