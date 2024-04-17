@@ -96,7 +96,7 @@ def torch_attn(queries, keys, values, is_causal, attention_mask=None):
         # mask = xops.fmha.attn_bias.LowerTriangularFromBottomRightMask().materialize((1, 1, q_seq_len, k_seq_len), queries.dtype, queries.device)
         mask = get_rectangular_mask((1, 1), q_seq_len, k_seq_len, queries.device, queries.dtype)
         if using_te:
-            scaleddotproductattn_module = te.DotProductAttention(num_heads, hidden_size // num_heads, backend='transformer_engine')
+            scaleddotproductattn_module = te.DotProductAttention(num_heads, hidden_size // num_heads)
             return (
                 scaleddotproductattn_module(
                     queries.transpose(1, 2), keys.transpose(1, 2), values.transpose(1, 2), attn_mask=mask
@@ -114,7 +114,7 @@ def torch_attn(queries, keys, values, is_causal, attention_mask=None):
             )
     elif queries.shape[1] == 1:
         if using_te:
-            scaleddotproductattn_module = te.DotProductAttention(num_heads, hidden_size // num_heads, backend='transformer_engine')
+            scaleddotproductattn_module = te.DotProductAttention(num_heads, hidden_size // num_heads)
             return (
                 scaleddotproductattn_module(
                     queries.transpose(1, 2), keys.transpose(1, 2), values.transpose(1, 2)
@@ -130,7 +130,7 @@ def torch_attn(queries, keys, values, is_causal, attention_mask=None):
             )
     else:
         if using_te:
-            scaleddotproductattn_module = te.DotProductAttention(num_heads, hidden_size // num_heads, backend='transformer_engine')
+            scaleddotproductattn_module = te.DotProductAttention(num_heads, hidden_size // num_heads)
             return (
                 scaleddotproductattn_module(
                     queries.transpose(1, 2), keys.transpose(1, 2), values.transpose(1, 2), attn_mask_type='causal'
