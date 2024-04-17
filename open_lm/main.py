@@ -34,6 +34,8 @@ from open_lm.model import Block
 from open_lm.losses import CrossEntropyLossWithZLoss
 from open_lm.utils.averaging_utils import ModelAverager
 
+import inspect
+
 try:
     import wandb
 except ImportError:
@@ -108,6 +110,16 @@ def assert_fp8(model):
             logging.warning(f"Module {name} is nn.Linear and not converted to TE FP8 equivalent of Linear.")
         if isinstance(module, torch.nn.LayerNorm):
             logging.warning(f"Module {name} is nn.LayerNorm and not converted to TE FP8 equivalent of LayerNorm.")
+        if isinstance(module, torch.nn.Module):
+            source_code = inspect.getsource(module.forward)
+            if "F.scaled_dot_product_attention" in source_code:
+                logging.warning(f"Module {name} is F.scaled_dot_product_attention and not converted to TE FP8 equivalent te.DotProductAttention.")
+            if "F.layer_norm" in source_code:
+                logging.warning(f"Module {name} is F.layer_norm and not converted to TE FP8 equivalent te.LayerNorm.")
+            if "te.DotProductAttention" in source_code:
+                logging.warning(f"Module {name} is te.DotProductAttention is converted properly.")
+            if "F.layer_norm" in source_code:
+                logging.warning(f"Module {name} is te.LayerNorm is converted properly.")
 
 
 def load_model(args, model, different_seed=False):

@@ -22,6 +22,8 @@ from open_lm.positional_embedding.rotary import RotaryWithCast
 from open_lm.positional_embedding.llama_rotary import LLaMARotaryWithCast
 from open_lm.positional_embedding.none import identity_with_cast
 
+import inspect 
+
 # from open_lm.moe.mixture_of_experts import MoE
 try:
     from megablocks.layers.moe import MoE
@@ -507,7 +509,7 @@ def nn_linear_to_te_linear(model, include_modules=[], exclude_modules=["output"]
         if len(list(module.children())) > 0:
             nn_linear_to_te_linear(module, include_modules, exclude_modules, copy_weights)
 
-        if isinstance(module, torch.nn.Linear) and name in include_modules and name not in exclude_modules:
+        if isinstance(module, torch.nn.Linear) and name not in exclude_modules:
             old_module = model._modules[name]
             model._modules[name] = te.Linear(
                 module.in_features, module.out_features, module.bias is not None, device="cuda"
@@ -516,6 +518,16 @@ def nn_linear_to_te_linear(model, include_modules=[], exclude_modules=["output"]
                 model._modules[name].weight_tensor.data.copy_(old_module.weight.data)
                 if model._modules[name].bias is not None and old_module.bias is not None:
                     model._modules[name].bias.data.copy_(old_module.bias)
+        if isinstance(module, torch.nn.Module) and name not in exclude_modules:
+            source_code = inspect.getsource(module.forward)
+            if "F.scaled_dot_product_attention" in source_code:
+                print(f"----- F.scaled_dot_product_attention found: {name} -----")
+            elif "F.layer_norm" in source_code:
+                print(f"----- F.layer_norm found: {name} -----")
+            elif "te.DotProductAttention" in source_code:
+                print(f"----- te.DotProductAttention found: {name} -----")
+            elif "te.LayerNorm" in source_code:
+                print(f"----- te.LayerNorm found: {name} -----")
     return model
 
 
