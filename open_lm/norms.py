@@ -146,7 +146,6 @@ class RmsNorm(nn.Module):
 
 
 def get_norm_class(model_norm, use_fp8=False):
-    print(f"[FP8 TESTS] get_norm_class use_fp8={use_fp8}")
     if model_norm == "default_layer_norm":
         return torch.nn.LayerNorm
     elif model_norm == "lp_layer_norm":
