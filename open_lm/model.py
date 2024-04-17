@@ -528,10 +528,10 @@ def nn_linear_to_te_linear(model, include_modules=[], exclude_modules=["output"]
                 layer_norm_module = te.LayerNorm(
                     old_module.normalized_shape, eps=old_module.eps, device="cuda", params_dtype=torch.get_autocast_gpu_dtype()
                 )
-                output_tensor = layer_norm_module(torch.empty(old_module.normalized_shape, dtype=torch.get_autocast_gpu_dtype()))
-                if old_module.weight is not None and old_module.bias is not None:
-                    output_tensor = output_tensor * old_module.weight + old_module.bias
-                model._modules[name] = output_tensor
+                # output_tensor = layer_norm_module(torch.empty(old_module.normalized_shape, dtype=torch.get_autocast_gpu_dtype()))
+                # if old_module.weight is not None and old_module.bias is not None:
+                #     output_tensor = output_tensor * old_module.weight + old_module.bias
+                model._modules[name] = layer_norm_module
             elif "te.DotProductAttention" in source_code:
                 print(f"[FP8 TESTS] ----- te.DotProductAttention found: {name} -----")
             elif "te.LayerNorm" in source_code:
