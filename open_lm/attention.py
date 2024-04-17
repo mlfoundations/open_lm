@@ -190,6 +190,8 @@ def torch_attn_te(queries, keys, values, is_causal, attention_mask=None):
     _, _, num_heads, _ = queries.shape
     _, _, num_kv_heads, _ = keys.shape
     print(f"f ----- queries.shape = {queries.shape} -----")
+    print(f"f ----- keys.shape = {keys.shape} -----")
+    print(f"f ----- values.shape = {values.shape} -----")
     scaleddotproductattn_module = te.DotProductAttention(num_attention_heads=num_heads, kv_channels=num_kv_heads)
     if is_causal and keys.shape[1] > queries.shape[1] > 1:
         q_seq_len = queries.shape[1]
