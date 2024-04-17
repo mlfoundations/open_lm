@@ -202,7 +202,10 @@ def torch_attn_te(queries, keys, values, is_causal, attention_mask=None):
             apply_attention_mask_(mask, attention_mask, queries_dtype=queries.dtype)
         return (
             scaleddotproductattn_module(
-                queries.transpose(1, 2), keys.transpose(1, 2), values.transpose(1, 2), attn_mask=mask
+                queries.transpose(1, 2), 
+                keys.transpose(1, 2), 
+                values.transpose(1, 2), 
+                attention_mask=mask
             )
             .transpose(1, 2)
             .contiguous()
@@ -229,7 +232,7 @@ def torch_attn_te(queries, keys, values, is_causal, attention_mask=None):
                 queries.transpose(1, 2), 
                 keys.transpose(1, 2), 
                 values.transpose(1, 2), 
-                attn_mask=bias, 
+                attention_mask=bias, 
                 attn_mask_type='causal' if is_causal else None
             )
             .transpose(1, 2)
