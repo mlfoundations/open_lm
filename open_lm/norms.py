@@ -46,6 +46,7 @@ class LayerNorm(nn.Module):
         self.elementwise_gain = elementwise_gain
         self.elementwise_bias = elementwise_bias
         self.use_fp8 = use_fp8
+        self.input = None
 
         if self.elementwise_gain:
             self.weight = Parameter(torch.empty(self.normalized_shape, **factory_kwargs))
@@ -69,8 +70,8 @@ class LayerNorm(nn.Module):
                 self.bias.zero_()
 
     def forward(self, input: Tensor) -> Tensor:
+        self.input = input
         if using_te and self.use_fp8:
-            print(f"====== INPUT TYPE = {input.dtype} ======")
             layer_norm_module = te.LayerNorm(
                 self.normalized_shape, eps=self.eps, device="cuda", params_dtype=input.dtype
             )
