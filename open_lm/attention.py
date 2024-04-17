@@ -115,7 +115,7 @@ def torch_attn(queries, keys, values, is_causal, attention_mask=None):
             scaleddotproductattn_module = te.DotProductAttention(queries.size(-1), 1)
             return (
                 scaleddotproductattn_module(
-                    queries.transpose(1, 2), keys.transpose(1, 2), values.transpose(1, 2), attn_mask=mask
+                    queries.transpose(1, 2), keys.transpose(1, 2), values.transpose(1, 2)
                 )
                 .transpose(1, 2)
                 .contiguous()
@@ -131,7 +131,7 @@ def torch_attn(queries, keys, values, is_causal, attention_mask=None):
             scaleddotproductattn_module = te.DotProductAttention(queries.size(-1), 1)
             return (
                 scaleddotproductattn_module(
-                    queries.transpose(1, 2), keys.transpose(1, 2), values.transpose(1, 2), attn_mask=mask
+                    queries.transpose(1, 2), keys.transpose(1, 2), values.transpose(1, 2)
                 )
                 .transpose(1, 2)
                 .contiguous()
