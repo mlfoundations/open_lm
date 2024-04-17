@@ -506,10 +506,10 @@ class Mamba(nn.Module):
         return out, None, None
 
 
-def nn_linear_to_te_linear(model, include_modules=[], exclude_modules=["output"], copy_weights=True):
+def torch_NN_to_TE(model, include_modules=[], exclude_modules=["output"], copy_weights=True):
     for name, module in model.named_children():
         if len(list(module.children())) > 0:
-            nn_linear_to_te_linear(module, include_modules, exclude_modules, copy_weights)
+            torch_NN_to_TE(module, include_modules, exclude_modules, copy_weights)
 
         if isinstance(module, torch.nn.Linear) and name not in exclude_modules:
             old_module = model._modules[name]
@@ -539,10 +539,10 @@ def create_model(args):
     if "mamba" in args.model:
         model = Mamba(create_params(args))
         if args.use_fp8:
-            model = nn_linear_to_te_linear(model)
+            model = torch_NN_to_TE(model)
         return model
     else:
         model = Transformer(create_params(args))
         if args.use_fp8:
-            model = nn_linear_to_te_linear(model)
+            model = torch_NN_to_TE(model)
         return model
