@@ -33,7 +33,6 @@ class LayerNorm(nn.Module):
         elementwise_bias: bool = True,
         device=None,
         dtype=None,
-        use_fp8: bool = False,
     ) -> None:
         factory_kwargs = {"device": device, "dtype": dtype}
         super().__init__()
@@ -147,17 +146,26 @@ class RmsNorm(nn.Module):
 
 
 def get_norm_class(model_norm, use_fp8=False):
+    print(f"[FP8 TESTS] get_norm_class use_fp8={use_fp8}")
     if model_norm == "default_layer_norm":
         return torch.nn.LayerNorm
     elif model_norm == "lp_layer_norm":
+        if use_fp8 and using_te:
+            return LPLayerNormTE
         return LPLayerNorm
     elif model_norm == "gain_only_lp_layer_norm":
-        return partial(LPLayerNorm, elementwise_gain=True, elementwise_bias=False, use_fp8=use_fp8)
+        if use_fp8 and using_te:
+            return partial(LPLayerNormTE, elementwise_gain=True, elementwise_bias=False)
+        return partial(LPLayerNorm, elementwise_gain=True, elementwise_bias=False)
     elif model_norm == "gain_only_layer_norm":
-        return partial(LayerNorm, elementwise_gain=True, elementwise_bias=False, use_fp8=use_fp8)
+        if use_fp8 and using_te:
+            return partial(LayerNormTE, elementwise_gain=True, elementwise_bias=False)
+        return partial(LayerNorm, elementwise_gain=True, elementwise_bias=False)
 
     elif model_norm == "no_wb_layer_norm":
-        return partial(LayerNorm, elementwise_gain=False, elementwise_bias=False, use_fp8=use_fp8)
+        if use_fp8 and using_te:
+            return partial(LayerNormTE, elementwise_gain=False, elementwise_bias=False)
+        return partial(LayerNorm, elementwise_gain=False, elementwise_bias=False)
 
     elif model_norm == "rms_norm":
         return RmsNorm
@@ -165,53 +173,27 @@ def get_norm_class(model_norm, use_fp8=False):
     else:
         raise ValueError(f"Unsupported model-norm: {model_norm}")
 
-class TELayerNorm(nn.Module):
-    def __init__(
-        self,
-        normalized_shape: Union[int, List[int], Size],
-        eps: float = 0.00001,
-        elementwise_gain: bool = True,
-        elementwise_bias: bool = True,
-        device=None,
-        dtype=None,
-    ) -> None:
-        factory_kwargs = {"device": device, "dtype": dtype}
-        super().__init__()
-
-        if isinstance(normalized_shape, numbers.Integral):
-            # mypy error: incompatible types in assignment
-            normalized_shape = (normalized_shape,)  # type: ignore[assignment]
-        self.normalized_shape = tuple(normalized_shape)  # type: ignore[arg-type]
-        self.eps = eps
-        self.elementwise_gain = elementwise_gain
-        self.elementwise_bias = elementwise_bias
-
-        if self.elementwise_gain:
-            self.weight = Parameter(torch.empty(self.normalized_shape, **factory_kwargs))
-        else:
-            self.register_parameter("weight", None)
-
-        if self.elementwise_bias:
-            self.bias = Parameter(torch.empty(self.normalized_shape, **factory_kwargs))
-        else:
-            self.register_parameter("bias", None)
-
-        self.reset_parameters()
-
-    def reset_parameters(self) -> None:
-        if self.elementwise_gain:
-            with torch.no_grad():
-                self.weight.fill_(1.0)
-
-        if self.elementwise_bias:
-            with torch.no_grad():
-                self.bias.zero_()
-
-    def forward(self, input: Tensor) -> Tensor:
+class LayerNormTE(LayerNorm):
+    def forward(self, x):
         layer_norm_module = te.LayerNorm(
-            self.normalized_shape, eps=self.eps, device="cuda", params_dtype=input.dtype
+            self.normalized_shape, eps=self.eps, device="cuda", params_dtype=x.dtype
         )
-        output_tensor = layer_norm_module(input)
+        output_tensor = layer_norm_module(x)
         if self.weight is not None and self.bias is not None:
             output_tensor = output_tensor * self.weight + self.bias
+        return output_tensor
+    
+class LPLayerNormTE(LayerNorm):
+    def forward(self, x):
+        module_device = x.device
+        downcast_x = _cast_if_autocast_enabled(x)
+        downcast_weight = _cast_if_autocast_enabled(self.weight) if self.weight is not None else self.weight
+        downcast_bias = _cast_if_autocast_enabled(self.bias) if self.bias is not None else self.bias
+        with torch.autocast(enabled=False, device_type=module_device.type):
+            layer_norm_module = te.LayerNorm(
+            self.normalized_shape, eps=self.eps, device="cuda", params_dtype=downcast_x.dtype
+        )
+        output_tensor = layer_norm_module(downcast_x)
+        if downcast_weight is not None and downcast_bias is not None:
+            output_tensor = output_tensor * downcast_weight + downcast_bias
         return output_tensor

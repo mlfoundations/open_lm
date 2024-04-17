@@ -21,7 +21,6 @@ from open_lm.positional_embedding.head_rotary import HeadRotaryWithCast
 from open_lm.positional_embedding.rotary import RotaryWithCast
 from open_lm.positional_embedding.llama_rotary import LLaMARotaryWithCast
 from open_lm.positional_embedding.none import identity_with_cast
-from open_lm.norms import TELayerNorm
 
 import inspect 
 
@@ -525,17 +524,6 @@ def nn_linear_to_te_linear(model, include_modules=[], exclude_modules=["output"]
                 print(f"[FP8 TESTS] ----- F.scaled_dot_product_attention found: {name} -----")
             elif "F.layer_norm" in source_code:
                 print(f"[FP8 TESTS] ----- F.layer_norm found: {name} -----")
-                old_module = model._modules[name]
-                layer_norm_module = TELayerNorm(old_module.normalized_shape, eps=old_module.eps)
-                model._modules[name] = layer_norm_module
-                # old_module = model._modules[name]
-                # layer_norm_module = te.LayerNorm(
-                #     old_module.normalized_shape, eps=old_module.eps, device="cuda", params_dtype=torch.get_autocast_gpu_dtype()
-                # )
-                # # output_tensor = layer_norm_module(torch.empty(old_module.normalized_shape, dtype=torch.get_autocast_gpu_dtype()))
-                # # if old_module.weight is not None and old_module.bias is not None:
-                # #     output_tensor = output_tensor * old_module.weight + old_module.bias
-                # model._modules[name] = layer_norm_module
     return model
 
 
