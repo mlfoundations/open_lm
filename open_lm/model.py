@@ -522,8 +522,8 @@ def nn_linear_to_te_linear(model, include_modules=[], exclude_modules=["output"]
             source_code = inspect.getsource(module.forward)
             if "F.scaled_dot_product_attention" in source_code:
                 print(f"[FP8 TESTS] ----- F.scaled_dot_product_attention found: {name} -----")
-            elif "F.layer_norm" in source_code:
-                print(f"[FP8 TESTS] ----- F.layer_norm found: {name} -----")
+            if "te.DotProductAttention" in source_code:
+                print(f"[FP8 TESTS] ----- te.DotProductAttention found: {name} -----")
     return model
 
 

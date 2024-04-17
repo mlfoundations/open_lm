@@ -197,7 +197,7 @@ def check_args(args):
         args.global_val_batch_size = args.global_batch_size // args.accum_freq
 
     # custom_attn checks
-    if args.attn_name == "custom_attn":
+    if args.attn_name == "torch_attn":
         assert (
             args.attn_activation is not None
             and args.attn_seq_scalar is not None
