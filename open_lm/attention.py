@@ -149,6 +149,55 @@ def torch_attn(queries, keys, values, is_causal, attention_mask=None):
         )
 
 
+def torch_attn_te(queries, keys, values, is_causal, attention_mask=None):
+    _, _, num_q_heads, _ = queries.shape
+    _, _, num_k_heads, _ = keys.shape
+    scaleddotproductattn_module = te.DotProductAttention(num_attention_heads=num_q_heads, kv_channels=num_k_heads)
+    if is_causal and keys.shape[1] > queries.shape[1] > 1:
+        q_seq_len = queries.shape[1]
+        k_seq_len = keys.shape[1]
+        # Same as above, we would like to use:
+        # mask = xops.fmha.attn_bias.LowerTriangularFromBottomRightMask().materialize((1, 1, q_seq_len, k_seq_len), queries.dtype, queries.device)
+        mask = get_rectangular_causal_mask((1, 1), q_seq_len, k_seq_len, queries.device, queries.dtype)
+        if attention_mask is not None:
+            apply_attention_mask_(mask, attention_mask, queries_dtype=queries.dtype)
+        return (
+            scaleddotproductattn_module(
+                queries.transpose(1, 2), keys.transpose(1, 2), values.transpose(1, 2), attention_mask=mask
+            )
+            .transpose(1, 2)
+            .contiguous()
+        )
+    else:
+        if attention_mask is None:
+            bias = None
+            # If we only have one query, assume we don't need to be in causal mode (can attend to all keys).
+            if queries.shape == 1:
+                is_causal = False
+        else:
+            if not is_causal:
+                raise NotImplementedError("attention_mask with is_causal=False is not yet implemented.")
+            # Build causal mask that assumes queries are in the end of the sequence.
+            batch, q_seq_len, heads, _ = queries.shape
+            k_seq_len = keys.shape[1]
+            bias = get_rectangular_causal_mask((batch, heads), q_seq_len, k_seq_len, queries.device, queries.dtype)
+            if attention_mask is not None:
+                apply_attention_mask_(bias, attention_mask, queries_dtype=queries.dtype)
+            # We apply causal mask in attention instead of using is_causal=True.
+            is_causal = False
+        return (
+            scaleddotproductattn_module(
+                queries.transpose(1, 2),
+                keys.transpose(1, 2),
+                values.transpose(1, 2),
+                attention_mask=bias,
+                attn_mask_type="causal" if is_causal else None,
+            )
+            .transpose(1, 2)
+            .contiguous()
+        )
+
+
 ATTN_ACTIVATIONS = {
     "relu": F.relu,
     "relu_squared": lambda x: torch.pow(F.relu(x), 2),

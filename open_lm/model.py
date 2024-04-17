@@ -5,6 +5,7 @@ from copy import deepcopy
 from pathlib import Path
 from dataclasses import dataclass
 from typing import Callable
+import inspect
 
 import torch
 import torch.nn.functional as F
@@ -513,7 +514,7 @@ def nn_linear_to_te_linear(model, include_modules=[], exclude_modules=["output"]
         if len(list(module.children())) > 0:
             nn_linear_to_te_linear(module, include_modules, exclude_modules, copy_weights)
 
-        if isinstance(module, torch.nn.Linear) and name in include_modules and name not in exclude_modules:
+        if isinstance(module, torch.nn.Linear) and name not in exclude_modules:
             old_module = model._modules[name]
             model._modules[name] = te.Linear(
                 module.in_features, module.out_features, module.bias is not None, device="cuda"
@@ -522,6 +523,18 @@ def nn_linear_to_te_linear(model, include_modules=[], exclude_modules=["output"]
                 model._modules[name].weight_tensor.data.copy_(old_module.weight.data)
                 if model._modules[name].bias is not None and old_module.bias is not None:
                     model._modules[name].bias.data.copy_(old_module.bias)
+        elif isinstance(module, torch.nn.LayerNorm) and name not in exclude_modules:
+            logging.warning(f"[FP8] Module {name} is nn.LayerNorm and not converted to TE FP8 equivalent of LayerNorm.")
+        elif isinstance(module, torch.nn.Module) and name not in exclude_modules:
+            source_code = inspect.getsource(module.forward)
+            if "F.scaled_dot_product_attention" in source_code:
+                logging.warning(
+                    f"[FP8] F.scaled_dot_product_attention -> te.DotProductAttention is not implemented yet for {name}."
+                )
+            if "F.layer_norm" in source_code:
+                logging.warning(
+                    f"[FP8] Module {name} is F.layer_norm and not converted to TE FP8 equivalent te.LayerNorm."
+                )
     return model
 
 
