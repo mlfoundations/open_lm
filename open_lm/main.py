@@ -132,6 +132,8 @@ def load_model(args, model, different_seed=False):
         global_step = checkpoint.get("step", None)
         if next(iter(sd.items()))[0].startswith("module"):
             sd = {k[len("module.") :]: v for k, v in sd.items()}
+        if "_orig_mod" in next(iter(sd.items()))[0]:
+            sd = {k.replace("_orig_mod.", ""): v for k, v in sd.items()}
         if args.fsdp:
             model.load_state_dict(sd)
         elif args.distributed:
@@ -158,6 +160,8 @@ def load_avg_models(args, averagers):
                 avg_sd = torch.load(args.resume.replace("epoch", k), map_location="cpu")
                 if next(iter(avg_sd.items()))[0].startswith("module"):
                     avg_sd = {k[len("module.") :]: v for k, v in avg_sd.items()}
+                if "_orig_mod" in next(iter(avg_sd.items()))[0]:
+                    avg_sd = {k.replace("_orig_mod.", ""): v for k, v in avg_sd.items()}
                 averagers.avgs_dict[k].load_state_dict_avg(avg_sd)
                 logging.info(
                     f"=> resuming averager for {k} from checkpoint '{args.resume.replace('epoch', k)} (epoch {start_epoch})"
@@ -661,10 +665,6 @@ def main(args):
             assert not args.fsdp, "FSDP not supported with amp, only amp_bfloat16"
             scaler = GradScaler()
 
-    # optionally resume optimizer from a checkpoint
-    if args.resume is not None:
-        load_optimizer(args, model, optimizer, scaler)
-
     # initialize datasets
     # use tokenizer=None because the data is already pre-tokenized.
 
@@ -691,6 +691,11 @@ def main(args):
             logging.info("Compiling averagers...")
             for k in averagers.avgs_dict:
                 averagers.avgs_dict[k].av_model = torch.compile(averagers.avgs_dict[k].av_model)
+
+    # optionally resume optimizer from a checkpoint
+    # this needs to be after torchcompile
+    if args.resume is not None:
+        load_optimizer(args, model, optimizer, scaler)
 
     # create scheduler if train
     scheduler = None
