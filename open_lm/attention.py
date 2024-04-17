@@ -3,6 +3,7 @@ from functools import partial
 import torch
 from torch.nn import functional as F
 import xformers.ops as xops
+import math
 
 # Adding flag if using TE FP8
 using_te = False
@@ -87,6 +88,7 @@ def torch_attn(queries, keys, values, is_causal, attention_mask=None):
     # Need to call contiguous in torch >=2.1, otherwise later calls to .view() fail.
     # Possibly related: https://github.com/pytorch/pytorch/issues/110213 - behavior of scaled_dot_product_attention
     # changed between 2.0 and 2.1
+    batch, q_seq_len, num_heads, hidden_size = queries.shape
     if is_causal and keys.shape[1] > queries.shape[1] > 1:
         q_seq_len = queries.shape[1]
         k_seq_len = keys.shape[1]
@@ -94,7 +96,7 @@ def torch_attn(queries, keys, values, is_causal, attention_mask=None):
         # mask = xops.fmha.attn_bias.LowerTriangularFromBottomRightMask().materialize((1, 1, q_seq_len, k_seq_len), queries.dtype, queries.device)
         mask = get_rectangular_mask((1, 1), q_seq_len, k_seq_len, queries.device, queries.dtype)
         if using_te:
-            scaleddotproductattn_module = te.DotProductAttention(queries.size(-1), 1)
+            scaleddotproductattn_module = te.DotProductAttention(math.sqrt(hidden_size // num_heads))
             return (
                 scaleddotproductattn_module(
                     queries.transpose(1, 2), keys.transpose(1, 2), values.transpose(1, 2), attn_mask=mask
@@ -112,7 +114,7 @@ def torch_attn(queries, keys, values, is_causal, attention_mask=None):
             )
     elif queries.shape[1] == 1:
         if using_te:
-            scaleddotproductattn_module = te.DotProductAttention(queries.size(-1), 1)
+            scaleddotproductattn_module = te.DotProductAttention(math.sqrt(hidden_size // num_heads))
             return (
                 scaleddotproductattn_module(
                     queries.transpose(1, 2), keys.transpose(1, 2), values.transpose(1, 2)
@@ -128,10 +130,10 @@ def torch_attn(queries, keys, values, is_causal, attention_mask=None):
             )
     else:
         if using_te:
-            scaleddotproductattn_module = te.DotProductAttention(queries.size(-1), 1)
+            scaleddotproductattn_module = te.DotProductAttention(math.sqrt(hidden_size // num_heads))
             return (
                 scaleddotproductattn_module(
-                    queries.transpose(1, 2), keys.transpose(1, 2), values.transpose(1, 2)
+                    queries.transpose(1, 2), keys.transpose(1, 2), values.transpose(1, 2), attn_mask_type='causal'
                 )
                 .transpose(1, 2)
                 .contiguous()
