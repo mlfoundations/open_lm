@@ -70,6 +70,7 @@ class LayerNorm(nn.Module):
 
     def forward(self, input: Tensor) -> Tensor:
         if using_te and self.use_fp8:
+            print(f"====== INPUT TYPE = {input.dtype} ======")
             layer_norm_module = te.LayerNorm(
                 self.normalized_shape, eps=self.eps, device="cuda", params_dtype=input.dtype
             )
