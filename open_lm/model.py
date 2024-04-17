@@ -528,6 +528,8 @@ def nn_linear_to_te_linear(model, include_modules=[], exclude_modules=["output"]
                 print(f"----- te.DotProductAttention found: {name} -----")
             elif "te.LayerNorm" in source_code:
                 print(f"----- te.LayerNorm found: {name} -----")
+            else:
+                print(f"Source Code = {source_code}")
     return model
 
 
