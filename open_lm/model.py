@@ -524,7 +524,7 @@ def nn_linear_to_te_linear(model, include_modules=[], exclude_modules=["output"]
                 print(f"[FP8 TESTS] ----- F.scaled_dot_product_attention found: {name} -----")
             elif "F.layer_norm" in source_code:
                 layer_norm_module = te.LayerNorm(
-                    module.normalized_shape, eps=module.eps, device="cuda", params_dtype=module.input.dtype
+                    module.normalized_shape, eps=module.eps, device="cuda", params_dtype= module.weight.dtype
                 )
                 output_tensor = layer_norm_module(input)
                 if module.weight is not None and module.bias is not None:
