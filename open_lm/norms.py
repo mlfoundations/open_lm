@@ -12,10 +12,7 @@ from torch.nn.parameter import Parameter
 using_te = False
 try:
     import transformer_engine.pytorch as te
-    from transformer_engine.common import recipe
 
-    fp8_format = recipe.Format.HYBRID
-    fp8_recipe = recipe.DelayedScaling(fp8_format=fp8_format, amax_history_len=16, amax_compute_algo="max")
     using_te = True
 except ImportError as ie:
     using_te = False
