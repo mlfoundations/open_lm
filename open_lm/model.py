@@ -525,7 +525,7 @@ def nn_linear_to_te_linear(model, include_modules=[], exclude_modules=["output"]
             elif "F.layer_norm" in source_code:
                 print(f"[FP8 TESTS] ----- F.layer_norm found: {name} -----")
                 layer_norm_module = te.LayerNorm(
-                    module.normalized_shape, eps=module.eps, device="cuda", params_dtype=module.input.dtype
+                    module.normalized_shape, eps=module.eps, device="cuda", params_dtype=torch.get_autocast_gpu_dtype()
                 )
                 output_tensor = layer_norm_module(module.input)
                 if module.weight is not None and module.bias is not None:
