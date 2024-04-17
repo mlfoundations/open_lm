@@ -187,12 +187,9 @@ def torch_attn(queries, keys, values, is_causal, attention_mask=None):
         )
 
 def torch_attn_te(queries, keys, values, is_causal, attention_mask=None):
-    _, _, num_heads, _ = queries.shape
-    _, _, num_kv_heads, _ = keys.shape
-    print(f"f ----- queries.shape = {queries.shape} -----")
-    print(f"f ----- keys.shape = {keys.shape} -----")
-    print(f"f ----- values.shape = {values.shape} -----")
-    scaleddotproductattn_module = te.DotProductAttention(num_attention_heads=num_heads, kv_channels=num_kv_heads)
+    _, _, num_q_heads, _ = queries.shape
+    _, _, num_k_heads, _ = keys.shape
+    scaleddotproductattn_module = te.DotProductAttention(num_attention_heads=num_q_heads, kv_channels=num_k_heads)
     if is_causal and keys.shape[1] > queries.shape[1] > 1:
         q_seq_len = queries.shape[1]
         k_seq_len = keys.shape[1]
@@ -310,7 +307,7 @@ def get_attn_func(
         # call .contiguous() on the output tensor. [#188]
         return lambda *args, **kwargs: xformers_attn(*args, **kwargs).contiguous()
     elif attn_name == "torch_attn":
-        return torch_attn_te if using_te else torch_attn
+        return torch_attn
     elif attn_name == "custom_attn":
         assert (
             attn_activation is not None and attn_seq_scalar is not None and alpha is not None
