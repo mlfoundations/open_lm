@@ -187,11 +187,9 @@ def torch_attn(queries, keys, values, is_causal, attention_mask=None):
         )
 
 def torch_attn_te(queries, keys, values, is_causal, attention_mask=None):
-    # Need to call contiguous in torch >=2.1, otherwise later calls to .view() fail.
-    # Possibly related: https://github.com/pytorch/pytorch/issues/110213 - behavior of scaled_dot_product_attention
-    # changed between 2.0 and 2.1
     batch, q_seq_len, num_heads, head_size = queries.shape
-    scaleddotproductattn_module = te.DotProductAttention(num_heads, head_size)
+    print(f"f ----- queries.shape = {queries.shape} -----")
+    scaleddotproductattn_module = te.DotProductAttention(num_attention_heads=num_heads, kv_channels=head_size)
     if is_causal and keys.shape[1] > queries.shape[1] > 1:
         q_seq_len = queries.shape[1]
         k_seq_len = keys.shape[1]
