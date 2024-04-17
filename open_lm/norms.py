@@ -69,16 +69,16 @@ class LayerNorm(nn.Module):
                 self.bias.zero_()
 
     def forward(self, input: Tensor) -> Tensor:
-        if using_te and self.use_fp8:
-            layer_norm_module = te.LayerNorm(
-                self.normalized_shape, eps=self.eps, device="cuda", params_dtype=input.dtype
-            )
-            output_tensor = layer_norm_module(input)
-            if self.weight is not None and self.bias is not None:
-                output_tensor = output_tensor * self.weight + self.bias
-            return output_tensor
-        else:
-            return F.layer_norm(input, self.normalized_shape, self.weight, self.bias, self.eps)
+        # if using_te and self.use_fp8:
+        #     layer_norm_module = te.LayerNorm(
+        #         self.normalized_shape, eps=self.eps, device="cuda", params_dtype=input.dtype
+        #     )
+        #     output_tensor = layer_norm_module(input)
+        #     if self.weight is not None and self.bias is not None:
+        #         output_tensor = output_tensor * self.weight + self.bias
+        #     return output_tensor
+        # else:
+        return F.layer_norm(input, self.normalized_shape, self.weight, self.bias, self.eps)
 
     def extra_repr(self) -> str:
         return (
@@ -100,22 +100,22 @@ class LPLayerNorm(LayerNorm):
         downcast_weight = _cast_if_autocast_enabled(self.weight) if self.weight is not None else self.weight
         downcast_bias = _cast_if_autocast_enabled(self.bias) if self.bias is not None else self.bias
         with torch.autocast(enabled=False, device_type=module_device.type):
-            if using_te and self.use_fp8:
-                layer_norm_module = te.LayerNorm(
-                    self.normalized_shape, eps=self.eps, device="cuda", params_dtype=downcast_x.dtype
-                )
-                output_tensor = layer_norm_module(downcast_x)
-                if downcast_weight is not None and downcast_bias is not None:
-                    output_tensor = output_tensor * downcast_weight + downcast_bias
-                return output_tensor
-            else:
-                return F.layer_norm(
-                    downcast_x,
-                    self.normalized_shape,
-                    downcast_weight,
-                    downcast_bias,
-                    self.eps,
-                )
+            # if using_te and self.use_fp8:
+            #     layer_norm_module = te.LayerNorm(
+            #         self.normalized_shape, eps=self.eps, device="cuda", params_dtype=downcast_x.dtype
+            #     )
+            #     output_tensor = layer_norm_module(downcast_x)
+            #     if downcast_weight is not None and downcast_bias is not None:
+            #         output_tensor = output_tensor * downcast_weight + downcast_bias
+            #     return output_tensor
+            # else:
+            return F.layer_norm(
+                downcast_x,
+                self.normalized_shape,
+                downcast_weight,
+                downcast_bias,
+                self.eps,
+            )
 
 
 def _cast_if_autocast_enabled(tensor):
