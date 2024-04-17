@@ -312,14 +312,28 @@ def process_keys(data, tokenizer, seqlen, seed, content_key, do_sample, sources=
     path = data["path"]
 
     if path.startswith("s3"):
-        s3_client = boto3.client("s3")
-        bucket, key = parse_s3_path(path)
-        response = s3_client.get_object(Bucket=bucket, Key=key)
-        fh = response["Body"]
-    else:
-        key = path
-        fh = open(path, "rb")
+        s3_client = None
+        attempt = 0
+        max_attempts = 5
+        base_delay = 1  # Base delay in seconds (1 second)
 
+        while attempt < max_attempts:
+            try:
+                s3_client = boto3.client("s3")
+                # Immediately try to use the client to ensure it works
+                bucket, key = parse_s3_path(path)
+                response = s3_client.get_object(Bucket=bucket, Key=key)
+                fh = response["Body"]
+                break  # Exit loop if success
+            except Exception as e:
+                print(f"Attempt {attempt + 1} failed: {str(e)}")
+                attempt += 1
+                if attempt < max_attempts:
+                    sleep_time = base_delay * (2 ** attempt) + random.uniform(0, base_delay)
+                    print(f"Retrying in {sleep_time:.2f} seconds...")
+                    time.sleep(sleep_time)
+                else:
+                    raise Exception("Maximum retry attempts reached, unable to connect to S3")
     try:
         # select a counter
         if sources is not None and source_counters is not None:
