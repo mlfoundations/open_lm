@@ -107,19 +107,15 @@ def assert_fp8(model, exclude_modules=["output"]):
         if len(list(module.children())) > 0:
             assert_fp8(module)
         if isinstance(module, torch.nn.Linear) and name not in exclude_modules:
-            logging.warning(f"[FP8 TESTS] Module {name} is nn.Linear and not converted to TE FP8 equivalent of Linear.")
+            logging.warning(f"[FP8] Module {name} is nn.Linear and not converted to TE FP8 equivalent of Linear.")
         if isinstance(module, torch.nn.LayerNorm) and name not in exclude_modules:
-            logging.warning(f"[FP8 TESTS] Module {name} is nn.LayerNorm and not converted to TE FP8 equivalent of LayerNorm.")
+            logging.warning(f"[FP8] Module {name} is nn.LayerNorm and not converted to TE FP8 equivalent of LayerNorm.")
         if isinstance(module, torch.nn.Module) and name not in exclude_modules:
             source_code = inspect.getsource(module.forward)
             if "F.scaled_dot_product_attention" in source_code:
-                logging.warning(f"[FP8 TESTS] Module {name} is F.scaled_dot_product_attention and not converted to TE FP8 equivalent te.DotProductAttention.")
+                logging.warning(f"[FP8] F.scaled_dot_product_attention -> te.DotProductAttention is not implemented yet for {name}.")
             if "F.layer_norm" in source_code:
-                logging.warning(f"[FP8 TESTS] Module {name} is F.layer_norm and not converted to TE FP8 equivalent te.LayerNorm.")
-            if "te.DotProductAttention" in source_code:
-                logging.warning(f"[FP8 TESTS] Module {name} is te.DotProductAttention is converted properly.")
-            if "F.layer_norm" in source_code:
-                logging.warning(f"[FP8 TESTS] Module {name} is te.LayerNorm is converted properly.")
+                logging.warning(f"[FP8] Module {name} is F.layer_norm and not converted to TE FP8 equivalent te.LayerNorm.")
 
 
 def load_model(args, model, different_seed=False):
