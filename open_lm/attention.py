@@ -88,64 +88,72 @@ def torch_attn(queries, keys, values, is_causal, attention_mask=None):
     # Need to call contiguous in torch >=2.1, otherwise later calls to .view() fail.
     # Possibly related: https://github.com/pytorch/pytorch/issues/110213 - behavior of scaled_dot_product_attention
     # changed between 2.0 and 2.1
-    batch, q_seq_len, num_heads, hidden_size = queries.shape
     if is_causal and keys.shape[1] > queries.shape[1] > 1:
         q_seq_len = queries.shape[1]
         k_seq_len = keys.shape[1]
         # Same as above, we would like to use:
         # mask = xops.fmha.attn_bias.LowerTriangularFromBottomRightMask().materialize((1, 1, q_seq_len, k_seq_len), queries.dtype, queries.device)
         mask = get_rectangular_mask((1, 1), q_seq_len, k_seq_len, queries.device, queries.dtype)
-        if using_te:
-            scaleddotproductattn_module = te.DotProductAttention(num_heads, hidden_size // num_heads)
-            return (
-                scaleddotproductattn_module(
-                    queries.transpose(1, 2), keys.transpose(1, 2), values.transpose(1, 2), attn_mask=mask
-                )
-                .transpose(1, 2)
-                .contiguous()
+        return (
+            F.scaled_dot_product_attention(
+                queries.transpose(1, 2), keys.transpose(1, 2), values.transpose(1, 2), attn_mask=mask
             )
-        else:
-            return (
-                F.scaled_dot_product_attention(
-                    queries.transpose(1, 2), keys.transpose(1, 2), values.transpose(1, 2), attn_mask=mask
-                )
-                .transpose(1, 2)
-                .contiguous()
-            )
+            .transpose(1, 2)
+            .contiguous()
+        )
     elif queries.shape[1] == 1:
-        if using_te:
-            scaleddotproductattn_module = te.DotProductAttention(num_heads, hidden_size // num_heads)
-            return (
-                scaleddotproductattn_module(
-                    queries.transpose(1, 2), keys.transpose(1, 2), values.transpose(1, 2)
-                )
-                .transpose(1, 2)
-                .contiguous()
-            )
-        else:
-            return (
-                F.scaled_dot_product_attention(queries.transpose(1, 2), keys.transpose(1, 2), values.transpose(1, 2))
-                .transpose(1, 2)
-                .contiguous()
-            )
+        return (
+            F.scaled_dot_product_attention(queries.transpose(1, 2), keys.transpose(1, 2), values.transpose(1, 2))
+            .transpose(1, 2)
+            .contiguous()
+        )
     else:
-        if using_te:
-            scaleddotproductattn_module = te.DotProductAttention(num_heads, hidden_size // num_heads)
-            return (
-                scaleddotproductattn_module(
-                    queries.transpose(1, 2), keys.transpose(1, 2), values.transpose(1, 2), attn_mask_type='causal'
-                )
-                .transpose(1, 2)
-                .contiguous()
+        return (
+            F.scaled_dot_product_attention(
+                queries.transpose(1, 2), keys.transpose(1, 2), values.transpose(1, 2), is_causal=is_causal
             )
-        else:
-            return (
-                F.scaled_dot_product_attention(
-                    queries.transpose(1, 2), keys.transpose(1, 2), values.transpose(1, 2), is_causal=is_causal
-                )
-                .transpose(1, 2)
-                .contiguous()
+            .transpose(1, 2)
+            .contiguous()
+        )
+
+def torch_attn_te(queries, keys, values, is_causal, attention_mask=None):
+    if attention_mask is not None and not attention_mask.all():
+        raise NotImplementedError("attention_mask not yet implemented for torch_attn.")
+    # Need to call contiguous in torch >=2.1, otherwise later calls to .view() fail.
+    # Possibly related: https://github.com/pytorch/pytorch/issues/110213 - behavior of scaled_dot_product_attention
+    # changed between 2.0 and 2.1
+    batch, q_seq_len, num_heads, hidden_size = queries.shape
+    scaleddotproductattn_module = te.DotProductAttention(num_heads, hidden_size // num_heads)
+
+    if is_causal and keys.shape[1] > queries.shape[1] > 1:
+        q_seq_len = queries.shape[1]
+        k_seq_len = keys.shape[1]
+        # Same as above, we would like to use:
+        # mask = xops.fmha.attn_bias.LowerTriangularFromBottomRightMask().materialize((1, 1, q_seq_len, k_seq_len), queries.dtype, queries.device)
+        mask = get_rectangular_mask((1, 1), q_seq_len, k_seq_len, queries.device, queries.dtype)
+        return (
+            scaleddotproductattn_module(
+                queries.transpose(1, 2), keys.transpose(1, 2), values.transpose(1, 2), attn_mask=mask
             )
+            .transpose(1, 2)
+            .contiguous()
+        )
+    elif queries.shape[1] == 1:
+        return (
+            scaleddotproductattn_module(
+                queries.transpose(1, 2), keys.transpose(1, 2), values.transpose(1, 2)
+            )
+            .transpose(1, 2)
+            .contiguous()
+        )
+    else:
+        return (
+            scaleddotproductattn_module(
+                queries.transpose(1, 2), keys.transpose(1, 2), values.transpose(1, 2), attn_mask_type='causal'
+            )
+            .transpose(1, 2)
+            .contiguous()
+        )
 
 
 ATTN_ACTIVATIONS = {
@@ -217,7 +225,7 @@ def get_attn_func(
         # call .contiguous() on the output tensor. [#188]
         return lambda *args, **kwargs: xformers_attn(*args, **kwargs).contiguous()
     elif attn_name == "torch_attn":
-        return torch_attn
+        return torch_attn_te if using_te else torch_attn
     elif attn_name == "custom_attn":
         assert (
             attn_activation is not None and attn_seq_scalar is not None and alpha is not None
