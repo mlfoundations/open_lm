@@ -3,7 +3,7 @@ import json
 import re
 from copy import deepcopy
 from pathlib import Path
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Callable
 
 import torch
@@ -101,17 +101,17 @@ class Params:
 
 @dataclass
 class MambaParams:
-    d_model: int = None
-    n_layer: int = None
-    vocab_size: int = None
-    seq_len: int = None
-    ssm_cfg: dict = None
-    rms_norm: bool = None
-    residual_in_fp32: bool = None
-    fused_add_norm: bool = None
-    pad_vocab_size_multiple: int = None
-    tie_embeddings: bool = None
-    weight_tying: bool = None
+    d_model: int = 2560
+    n_layer: int = 64
+    vocab_size: int = 50277
+    seq_len: int = 2048
+    ssm_cfg: dict = field(default_factory=dict)
+    rms_norm: bool = True
+    residual_in_fp32: bool = True
+    fused_add_norm: bool = True
+    pad_vocab_size_multiple: int = 8
+    tie_embeddings: bool = True
+    weight_tying: bool = False
 
 def get_pos_embed(args: Params):
     head_dim = args.dim // args.n_heads
