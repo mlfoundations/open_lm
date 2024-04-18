@@ -3,7 +3,7 @@ from torch.utils.checkpoint import checkpoint
 from transformers import PreTrainedModel
 from transformers.modeling_outputs import CausalLMOutputWithPast
 from open_lm.utils.transformers.hf_config import OpenLMConfig
-from open_lm.model import Transformer, create_params
+from open_lm.model import Transformer, create_params, Params, MambaParams, Mamba
 import torch
 import torch.nn as nn
 from typing import Union, Tuple, Optional, List
@@ -23,7 +23,10 @@ class OpenLMModel(PreTrainedModel):
         super().__init__(config)
 
         self.supports_gradient_checkpointing = True
-        self.model = Transformer(params)
+        if isinstance(params, Params):
+            self.model = Transformer(params)
+        elif isinstance(params, MambaParams):
+            self.model = Mamba(params)
 
     @property
     def gradient_checkpointing(self):
