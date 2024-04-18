@@ -665,7 +665,8 @@ def main(args):
             do_sample=args.do_sample,
             sources=Sources,
             source_counters=source_counters,
-        )
+        ), 
+        num_cpus=16
     )
     ds = ds.map(add_hash)
     tokenize_context_end = time.time()
