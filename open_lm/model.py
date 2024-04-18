@@ -99,6 +99,7 @@ class Params:
     positional_embedding_type: str = "rotary"
     ffn_type: str = "swiglu"
 
+
 @dataclass
 class MambaParams:
     d_model: int = 2560
@@ -112,6 +113,7 @@ class MambaParams:
     pad_vocab_size_multiple: int = 8
     tie_embeddings: bool = True
     weight_tying: bool = False
+
 
 def get_pos_embed(args: Params):
     head_dim = args.dim // args.n_heads
