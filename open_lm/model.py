@@ -99,6 +99,19 @@ class Params:
     positional_embedding_type: str = "rotary"
     ffn_type: str = "swiglu"
 
+@dataclass
+class MambaParams:
+    d_model: int = None
+    n_layer: int = None
+    vocab_size: int = None
+    seq_len: int = None
+    ssm_cfg: dict = None
+    rms_norm: bool = None
+    residual_in_fp32: bool = None
+    fused_add_norm: bool = None
+    pad_vocab_size_multiple: int = None
+    tie_embeddings: bool = None
+    weight_tying: bool = None
 
 def get_pos_embed(args: Params):
     head_dim = args.dim // args.n_heads
@@ -439,12 +452,19 @@ def create_params(args):
     # If a parameter is not in the model config, we use the args parameter
 
     if "mamba" in args.model:
-        return {
-            "d_model": cfg["d_model"],
-            "n_layer": cfg["n_layer"],
-            "vocab_size": cfg["vocab_size"],
-            "seq_len": cfg["seq_len"],
-        }
+        return MambaParams(
+            d_model=cfg["d_model"],
+            n_layer=cfg["n_layer"],
+            vocab_size=cfg["vocab_size"],
+            seq_len=cfg["seq_len"],
+            ssm_cfg={},
+            rms_norm=cfg["rms_norm"],
+            residual_in_fp32=cfg["residual_in_fp32"],
+            fused_add_norm=cfg["fused_add_norm"],
+            pad_vocab_size_multiple=cfg["pad_vocab_size_multiple"],
+            tie_embeddings=cfg.get("weight_tying", False),
+            weight_tying=cfg.get("weight_tying", False),
+        )
     else:
         return Params(
             dim=cfg["hidden_dim"],
@@ -481,10 +501,10 @@ class Mamba(nn.Module):
             )
 
         super().__init__()
-        self.seq_len = params.pop("seq_len")
-        self.vocab_size = params["vocab_size"]
+        self.vocab_size = params.vocab_size
+        self.seq_len = params.seq_len
 
-        self.model = MambaLMHeadModel(**params)
+        self.model = MambaLMHeadModel(params)
 
     def reset_parameters(self):
         return
