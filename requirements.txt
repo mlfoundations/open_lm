@@ -24,4 +24,4 @@ transformers
 s3fs
 wikipedia
 ipython
-llm-foundry>=0.4.0
+mosaicml
