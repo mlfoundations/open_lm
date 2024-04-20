@@ -102,22 +102,6 @@ def get_state_dict(name):
     return sd
 
 
-def assert_fp8(model, exclude_modules=["output"]):
-    for name, module in model.named_children():
-        if len(list(module.children())) > 0:
-            assert_fp8(module)
-        if isinstance(module, torch.nn.Linear) and name not in exclude_modules:
-            logging.warning(f"[FP8] Module {name} is nn.Linear and not converted to TE FP8 equivalent of Linear.")
-        if isinstance(module, torch.nn.LayerNorm) and name not in exclude_modules:
-            logging.warning(f"[FP8] Module {name} is nn.LayerNorm and not converted to TE FP8 equivalent of LayerNorm.")
-        if isinstance(module, torch.nn.Module) and name not in exclude_modules:
-            source_code = inspect.getsource(module.forward)
-            if "F.scaled_dot_product_attention" in source_code:
-                logging.warning(f"[FP8] F.scaled_dot_product_attention -> te.DotProductAttention is not implemented yet for {name}.")
-            if "F.layer_norm" in source_code:
-                logging.warning(f"[FP8] Module {name} is F.layer_norm and not converted to TE FP8 equivalent te.LayerNorm.")
-
-
 def load_model(args, model, different_seed=False):
     checkpoint = pt_load(args.resume, map_location="cpu")
     if "epoch" in checkpoint:
@@ -140,6 +124,8 @@ def load_model(args, model, different_seed=False):
         global_step = checkpoint.get("step", None)
         if next(iter(sd.items()))[0].startswith("module"):
             sd = {k[len("module.") :]: v for k, v in sd.items()}
+        if "_orig_mod" in next(iter(sd.items()))[0]:
+            sd = {k.replace("_orig_mod.", ""): v for k, v in sd.items()}
         if args.fsdp:
             model.load_state_dict(sd)
         elif args.distributed:
@@ -166,6 +152,8 @@ def load_avg_models(args, averagers):
                 avg_sd = torch.load(args.resume.replace("epoch", k), map_location="cpu")
                 if next(iter(avg_sd.items()))[0].startswith("module"):
                     avg_sd = {k[len("module.") :]: v for k, v in avg_sd.items()}
+                if "_orig_mod" in next(iter(avg_sd.items()))[0]:
+                    avg_sd = {k.replace("_orig_mod.", ""): v for k, v in avg_sd.items()}
                 averagers.avgs_dict[k].load_state_dict_avg(avg_sd)
                 logging.info(
                     f"=> resuming averager for {k} from checkpoint '{args.resume.replace('epoch', k)} (epoch {start_epoch})"
@@ -467,7 +455,6 @@ def main(args):
 
     if args.use_fp8:
         logging.info("Using FP8 to run training.")
-        assert_fp8(model)
 
     args.vocab_size = model.vocab_size
     args.seq_len = model.seq_len
@@ -669,10 +656,6 @@ def main(args):
             assert not args.fsdp, "FSDP not supported with amp, only amp_bfloat16"
             scaler = GradScaler()
 
-    # optionally resume optimizer from a checkpoint
-    if args.resume is not None:
-        load_optimizer(args, model, optimizer, scaler)
-
     # initialize datasets
     # use tokenizer=None because the data is already pre-tokenized.
 
@@ -699,6 +682,11 @@ def main(args):
             logging.info("Compiling averagers...")
             for k in averagers.avgs_dict:
                 averagers.avgs_dict[k].av_model = torch.compile(averagers.avgs_dict[k].av_model)
+
+    # optionally resume optimizer from a checkpoint
+    # this needs to be after torchcompile
+    if args.resume is not None:
+        load_optimizer(args, model, optimizer, scaler)
 
     # create scheduler if train
     scheduler = None

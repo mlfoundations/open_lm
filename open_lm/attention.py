@@ -9,10 +9,7 @@ import math
 using_te = False
 try:
     import transformer_engine.pytorch as te
-    from transformer_engine.common import recipe
 
-    fp8_format = recipe.Format.HYBRID
-    fp8_recipe = recipe.DelayedScaling(fp8_format=fp8_format, amax_history_len=16, amax_compute_algo="max")
     using_te = True
 except ImportError as ie:
     using_te = False
@@ -48,6 +45,7 @@ def get_rectangular_causal_mask(shape, q_seq_len, k_seq_len, device, dtype):
     output_mask[:, :, :, :k_seq_len].masked_fill_(~mask, torch.finfo(dtype).min)
     return output_mask[:, :, :, :k_seq_len]
 
+
 def apply_attention_mask_(bias, attention_mask, queries_dtype):
     """Applies attention mask (e.g., from HuggingFace generate) to an attention bias mask in-place.
 
@@ -74,33 +72,6 @@ def apply_attention_mask_(bias, attention_mask, queries_dtype):
     # for details.
     bias.mul_(~torch.all(bias == min_dtype, dim=-1, keepdim=True))
 
-def get_rectangular_mask(shape, q_seq_len, k_seq_len, device, dtype):
-    """
-    >>> get_rectangular_mask((1, 1), 2, 2, "cpu", torch.float32)
-    tensor([[[[0., -inf],
-              [0., 0.]]]])
-    >>> get_rectangular_mask((1, 1), 3, 5, "cpu", torch.float32)
-    tensor([[[[0., 0., 0., -inf, -inf],
-              [0., 0., 0., 0., -inf],
-              [0., 0., 0., 0., 0.]]]])
-    >>> get_rectangular_mask((1, 1), 5, 5, "cpu", torch.float32)
-    tensor([[[[0., -inf, -inf, -inf, -inf],
-              [0., 0., -inf, -inf, -inf],
-              [0., 0., 0., -inf, -inf],
-              [0., 0., 0., 0., -inf],
-              [0., 0., 0., 0., 0.]]]])
-    """
-    # xformers requires the mask to be built with a shape that is a multiple of 8
-    # probably because of the way it is implemented in CUDA
-    next_multiple_8 = (k_seq_len + 7) // 8 * 8  #
-
-    mask = torch.ones((q_seq_len, k_seq_len), device=device, dtype=bool)
-    mask[:, -q_seq_len:] = torch.tril(mask[:, -q_seq_len:], diagonal=0)
-
-    output_mask = torch.zeros((*shape, q_seq_len, next_multiple_8), device=device, dtype=dtype)
-    output_mask[:, :, :, :k_seq_len].masked_fill_(~mask, torch.finfo(dtype).min)
-    return output_mask[:, :, :, :k_seq_len]
-
 
 def xformers_attn(queries, keys, values, is_causal, attention_mask=None):
     # xformers assumes q, k, v are [batch, seq_len, heads, embed_dim]
@@ -119,22 +90,11 @@ def xformers_attn(queries, keys, values, is_causal, attention_mask=None):
         # Build causal mask that assumes queries are in the end of the sequence.
         batch, q_seq_len, heads, _ = queries.shape
         k_seq_len = keys.shape[1]
-        bias = get_rectangular_mask((batch, heads), q_seq_len, k_seq_len, queries.device, queries.dtype)
+        bias = get_rectangular_causal_mask((batch, heads), q_seq_len, k_seq_len, queries.device, queries.dtype)
         if attention_mask is not None:
-            # Update mask to remove attention based on attention_mask that's passed in.
-            assert attention_mask.dim() == 2
-            # From https://github.com/huggingface/transformers/blob/f738ab3b5d30e30c43a4c3d00ca8939f8a4d4427/src/transformers/models/llama/modeling_llama.py#L1089C1-L1091C117
-            mask_length = attention_mask.shape[-1]
-            # Set parts of bias that are zero (i.e., where attention is allowed) _and_ attention_mask is False (i.e.,
-            # where we should not attend) with min_dtype.
-            padding_mask = bias[..., :mask_length].eq(0.0) * attention_mask[:, None, None, :].eq(0.0)
-            min_dtype = torch.finfo(queries.dtype).min
-            bias[..., :mask_length] = bias[..., :mask_length].masked_fill(padding_mask, min_dtype)
-            # Disable masking for sequence indices where all attention weights are -inf
-            # We won't use these anyway, and keeping them as -inf leads to nans.
-            # See https://github.com/huggingface/transformers/blob/f738ab3b5d30e30c43a4c3d00ca8939f8a4d4427/src/transformers/modeling_attn_mask_utils.py#L189
-            # for details.
-            bias.mul_(~torch.all(bias == min_dtype, dim=-1, keepdim=True))
+            apply_attention_mask_(bias, attention_mask, queries_dtype=queries.dtype)
+    elif not is_causal and attention_mask is not None:
+        raise NotImplementedError("attention_mask with is_causal=False is not yet implemented.")
     return xops.memory_efficient_attention(queries, keys, values, attn_bias=bias)
 
 
@@ -186,6 +146,7 @@ def torch_attn(queries, keys, values, is_causal, attention_mask=None):
             .contiguous()
         )
 
+
 def torch_attn_te(queries, keys, values, is_causal, attention_mask=None):
     _, _, num_q_heads, _ = queries.shape
     _, _, num_k_heads, _ = keys.shape
@@ -200,10 +161,7 @@ def torch_attn_te(queries, keys, values, is_causal, attention_mask=None):
             apply_attention_mask_(mask, attention_mask, queries_dtype=queries.dtype)
         return (
             scaleddotproductattn_module(
-                queries.transpose(1, 2), 
-                keys.transpose(1, 2), 
-                values.transpose(1, 2), 
-                attention_mask=mask
+                queries.transpose(1, 2), keys.transpose(1, 2), values.transpose(1, 2), attention_mask=mask
             )
             .transpose(1, 2)
             .contiguous()
@@ -227,11 +185,11 @@ def torch_attn_te(queries, keys, values, is_causal, attention_mask=None):
             is_causal = False
         return (
             scaleddotproductattn_module(
-                queries.transpose(1, 2), 
-                keys.transpose(1, 2), 
-                values.transpose(1, 2), 
-                attention_mask=bias, 
-                attn_mask_type='causal' if is_causal else None
+                queries.transpose(1, 2),
+                keys.transpose(1, 2),
+                values.transpose(1, 2),
+                attention_mask=bias,
+                attn_mask_type="causal" if is_causal else None,
             )
             .transpose(1, 2)
             .contiguous()
@@ -270,14 +228,14 @@ def custom_attn(
     # naive reference implementation for relu-attention following: https://arxiv.org/pdf/2309.08586.pdf
     # code modifies: https://pytorch.org/docs/stable/generated/torch.nn.functional.scaled_dot_product_attention.html
     if attention_mask is not None:
-        raise NotImplementedError("attention_mask not yet implemented for torch_attn.")
+        raise NotImplementedError("attention_mask not yet implemented for custom_attn.")
 
     batch, q_seq_len, heads, embed_dim = queries.shape
     _, k_seq_len, _, _ = keys.shape
 
     attn_bias = torch.zeros(batch, heads, q_seq_len, k_seq_len, device=queries.device, dtype=queries.dtype)
     if is_causal and queries.shape[1] > 1:
-        attn_bias = get_rectangular_mask((batch, heads), q_seq_len, k_seq_len, queries.device, queries.dtype)
+        attn_bias = get_rectangular_causal_mask((batch, heads), q_seq_len, k_seq_len, queries.device, queries.dtype)
 
     inner_scale = embed_dim**-0.5
     attn_weight = torch.einsum("bqhd,bkhd->bhqk", inner_scale * queries, keys)

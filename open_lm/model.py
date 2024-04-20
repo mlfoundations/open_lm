@@ -5,6 +5,7 @@ from copy import deepcopy
 from pathlib import Path
 from dataclasses import dataclass
 from typing import Callable
+import inspect
 
 import torch
 import torch.nn.functional as F
@@ -42,10 +43,7 @@ except ImportError:
 using_te = False
 try:
     import transformer_engine.pytorch as te
-    from transformer_engine.common import recipe
 
-    fp8_format = recipe.Format.HYBRID
-    fp8_recipe = recipe.DelayedScaling(fp8_format=fp8_format, amax_history_len=16, amax_compute_algo="max")
     using_te = True
 except ImportError as ie:
     using_te = False
@@ -394,7 +392,7 @@ class Transformer(nn.Module, PyTorchModelHubMixin):
     def set_grad_checkpointing(self, enable=True):
         self.grad_checkpointing = enable
 
-    def forward(self, input, past_key_values=None, use_cache=False, attention_mask=None):
+    def forward(self, input_ids=None, inputs_embeds=None, past_key_values=None, use_cache=False, attention_mask=None):
         """
         Args:
             input
@@ -404,7 +402,13 @@ class Transformer(nn.Module, PyTorchModelHubMixin):
                 attended to. attention_mask[s, i] = False indicates that token i should not be attended to by any other
                 token for sequence s.
         """
-        x = self.tok_embeddings(input)
+        if input_ids is not None:
+            x = self.tok_embeddings(input_ids)
+        elif inputs_embeds is not None:
+            x = inputs_embeds
+        else:
+            raise ValueError("Either input_ids or inputs_embeds must be provided.")
+
         x = self.post_embed_norm(x)
 
         if past_key_values is None:
@@ -504,10 +508,10 @@ class Mamba(nn.Module):
         return out, None, None
 
 
-def nn_linear_to_te_linear(model, include_modules=[], exclude_modules=["output"], copy_weights=True):
+def torch_NN_to_TE(model, include_modules=[], exclude_modules=["output"], copy_weights=True):
     for name, module in model.named_children():
         if len(list(module.children())) > 0:
-            nn_linear_to_te_linear(module, include_modules, exclude_modules, copy_weights)
+            torch_NN_to_TE(module, include_modules, exclude_modules, copy_weights)
 
         if isinstance(module, torch.nn.Linear) and name not in exclude_modules:
             old_module = model._modules[name]
@@ -518,6 +522,18 @@ def nn_linear_to_te_linear(model, include_modules=[], exclude_modules=["output"]
                 model._modules[name].weight_tensor.data.copy_(old_module.weight.data)
                 if model._modules[name].bias is not None and old_module.bias is not None:
                     model._modules[name].bias.data.copy_(old_module.bias)
+        elif isinstance(module, torch.nn.LayerNorm) and name not in exclude_modules:
+            logging.warning(f"[FP8] Module {name} is nn.LayerNorm and not converted to TE FP8 equivalent of LayerNorm.")
+        elif isinstance(module, torch.nn.Module) and name not in exclude_modules:
+            source_code = inspect.getsource(module.forward)
+            if "F.scaled_dot_product_attention" in source_code:
+                logging.warning(
+                    f"[FP8] F.scaled_dot_product_attention -> te.DotProductAttention is not implemented yet for {name}."
+                )
+            if "F.layer_norm" in source_code:
+                logging.warning(
+                    f"[FP8] Module {name} is F.layer_norm and not converted to TE FP8 equivalent te.LayerNorm."
+                )
     return model
 
 
@@ -525,10 +541,10 @@ def create_model(args):
     if "mamba" in args.model:
         model = Mamba(create_params(args))
         if args.use_fp8:
-            model = nn_linear_to_te_linear(model)
+            model = torch_NN_to_TE(model)
         return model
     else:
         model = Transformer(create_params(args))
         if args.use_fp8:
-            model = nn_linear_to_te_linear(model)
+            model = torch_NN_to_TE(model)
         return model
