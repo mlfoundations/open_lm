@@ -136,8 +136,8 @@ class CustomAttn(nn.Module):
         super().__init__()
         self.n_heads = args.n_heads
         self.head_dim = args.dim // args.n_heads
-        self.in_proj = LinearLayerType(args.dim, 3 * args.n_heads * self.head_dim, bias=False, device="cuda")
-        self.out_proj = LinearLayerType(args.n_heads * self.head_dim, args.dim, bias=False, device="cuda")
+        self.in_proj = nn.Linear(args.dim, 3 * args.n_heads * self.head_dim, bias=False, device="cuda")
+        self.out_proj = nn.Linear(args.n_heads * self.head_dim, args.dim, bias=False, device="cuda")
         self.pos_embed = get_pos_embed(args)
         self.attn_fn = args.attn_func
         self.apply_qk_norm = args.apply_qk_norm
@@ -378,7 +378,7 @@ class Transformer(nn.Module, PyTorchModelHubMixin):
             params.dim,
             eps=params.norm_eps,
         )
-        self.output = LinearLayerType(params.dim, params.vocab_size, bias=False, device="cuda")
+        self.output = nn.Linear(params.dim, params.vocab_size, bias=False, device="cuda")
         if self.weight_tying:
             self.tok_embeddings.weight = self.output.weight
         self.grad_checkpointing = False
@@ -524,13 +524,13 @@ def torch_NN_to_TE(model, include_modules=[], exclude_modules=["output"], copy_w
 
         if isinstance(module, torch.nn.Linear) and name in include_modules and name not in exclude_modules:
             old_module = model._modules[name]
-            model._modules[name] = te.Linear(
-                module.in_features, module.out_features, module.bias is not None, device="cuda"
-            )
-            if copy_weights:
-                model._modules[name].weight_tensor.data.copy_(old_module.weight.data)
-                if model._modules[name].bias is not None and old_module.bias is not None:
-                    model._modules[name].bias.data.copy_(old_module.bias)
+            # model._modules[name] = te.Linear(
+            #     module.in_features, module.out_features, module.bias is not None, device="cuda"
+            # )
+            # if copy_weights:
+            #     model._modules[name].weight_tensor.data.copy_(old_module.weight.data)
+            #     if model._modules[name].bias is not None and old_module.bias is not None:
+            #         model._modules[name].bias.data.copy_(old_module.bias)
         elif isinstance(module, torch.nn.LayerNorm) and name not in exclude_modules:
             logging.warning(f"[FP8] Module {name} is nn.LayerNorm and not converted to TE FP8 equivalent of LayerNorm.")
         elif isinstance(module, torch.nn.Module) and name not in exclude_modules:
