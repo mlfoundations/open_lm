@@ -136,8 +136,8 @@ class CustomAttn(nn.Module):
         super().__init__()
         self.n_heads = args.n_heads
         self.head_dim = args.dim // args.n_heads
-        self.in_proj = nn.Linear(args.dim, 3 * args.n_heads * self.head_dim, bias=False, device="cuda")
-        self.out_proj = nn.Linear(args.n_heads * self.head_dim, args.dim, bias=False, device="cuda")
+        self.in_proj = LinearLayerType(args.dim, 3 * args.n_heads * self.head_dim, bias=False, device="cuda")
+        self.out_proj = LinearLayerType(args.n_heads * self.head_dim, args.dim, bias=False, device="cuda")
         self.pos_embed = get_pos_embed(args)
         self.attn_fn = args.attn_func
         self.apply_qk_norm = args.apply_qk_norm
@@ -244,8 +244,8 @@ class GemmaMLP(nn.Module):
 class SwiGLUTorch(nn.Module):
     def __init__(self, in_dim, hidden_dim, out_dim, bias=True):
         super().__init__()
-        self.w12 = LinearLayerType(in_dim, 2 * hidden_dim, bias=bias, device="cuda")
-        self.w3 = LinearLayerType(hidden_dim, out_dim, bias=bias, device="cuda")
+        self.w12 = nn.Linear(in_dim, 2 * hidden_dim, bias=bias, device="cuda")
+        self.w3 = nn.Linear(hidden_dim, out_dim, bias=bias, device="cuda")
 
     def forward(self, x):
         gate, x = self.w12(x).chunk(2, dim=-1)
@@ -273,8 +273,8 @@ class Block(nn.Module):
         elif args.ffn_type == "gelu":
             # Follows mosaic mpt7b, but without a bias.
             self.hidden_dim = args.dim * 4
-            self._ff_w1 = LinearLayerType(args.dim, self.hidden_dim, bias=False, device="cuda")
-            self._ff_w2 = LinearLayerType(self.hidden_dim, args.dim, bias=False, device="cuda")
+            self._ff_w1 = nn.Linear(args.dim, self.hidden_dim, bias=False, device="cuda")
+            self._ff_w2 = nn.Linear(self.hidden_dim, args.dim, bias=False, device="cuda")
             self.feed_forward = nn.Sequential(self._ff_w1, nn.GELU(approximate="none"), self._ff_w2)
         elif args.ffn_type == "gemma_geglu":
             # this follows llama / lit llama -- go to multiple of 256
