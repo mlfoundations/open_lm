@@ -513,7 +513,7 @@ def torch_NN_to_TE(model, include_modules=[], exclude_modules=["output"], copy_w
         if len(list(module.children())) > 0:
             torch_NN_to_TE(module, include_modules, exclude_modules, copy_weights)
 
-        if isinstance(module, torch.nn.Linear) and name not in exclude_modules:
+        if isinstance(module, torch.nn.Linear) and name in include_modules and name not in exclude_modules:
             old_module = model._modules[name]
             model._modules[name] = te.Linear(
                 module.in_features, module.out_features, module.bias is not None, device="cuda"
