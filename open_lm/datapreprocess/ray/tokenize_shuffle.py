@@ -643,7 +643,7 @@ def main(args):
         source_counters = None
 
     if args.presort:
-        ds = ds.sort('path')
+        ds = ds.sort("path")
 
     ds = ds.flat_map(
         lambda x: process_keys(
