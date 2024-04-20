@@ -216,9 +216,9 @@ class GemmaMLP(nn.Module):
         super().__init__()
         self.dim = dim
         self.hidden_dim = hidden_dim
-        self.gate_proj = LinearLayerType(dim, hidden_dim, device="cuda")
-        self.up_proj = LinearLayerType(dim, hidden_dim, device="cuda")
-        self.down_proj = LinearLayerType(hidden_dim, dim, device="cuda")
+        self.gate_proj = nn.Linear(dim, hidden_dim, device="cuda")
+        self.up_proj = nn.Linear(dim, hidden_dim, device="cuda")
+        self.down_proj = nn.Linear(hidden_dim, dim, device="cuda")
         self._layer_id = layer_id
 
     def forward(self, x):
