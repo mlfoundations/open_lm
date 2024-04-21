@@ -94,6 +94,9 @@ def train_one_epoch(
             bf16=False,
         )
 
+    # Loss tracking for batch skipping.
+    previous_loss = None
+
     for i in itertools.count():
         if not args.skip_scheduler:
             scheduler(step)
@@ -217,6 +220,12 @@ def train_one_epoch(
             total_loss = total_lm_loss
             if args.moe_freq > 0:
                 total_loss += total_load_balancing_loss
+
+        if args.batch_skipping_factor is not None:
+            if previous_loss is not None and total_loss > args.batch_skipping_factor * previous_loss:
+                continue
+            else:
+                previous_loss = total_loss
 
         if scaler is not None:
             if args.grad_clip_norm is not None:

@@ -129,6 +129,12 @@ def add_model_args(parser):
         default=None,
         help="power alpha to raise L to, where L^alpha divides attention logits post activation",
     )
+    parser.add_argument(
+        "--batch-skipping-factor",
+        type=float,
+        default=None,
+        help="Batch skipping factor. If not None, it should be a float value x > 1, and at each step if current_loss > x * previous_loss, then the current step is skipped during the gradient update.",
+    )
 
 
 def check_replacement_type(replacement, original):
@@ -241,6 +247,9 @@ def check_args(args):
         raise ValueError(
             f"Unknown scheduler, {args.lr_scheduler}. Available options are: cosine, const, const-cooldown."
         )
+
+    if args.batch_skipping_factor is not None:
+        assert args.batch_skipping_factor > 1.0, "Batch skipping factor should be a float > 1."
 
     if args.experimental_meta_device:
         print("WARNING: Meta device initialization requested, but this is not currently fully tested.")
