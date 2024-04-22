@@ -1,9 +1,11 @@
 from argparse import Namespace
+from torch.utils.checkpoint import checkpoint
 from transformers import PreTrainedModel
 from transformers.modeling_outputs import CausalLMOutputWithPast
 from open_lm.utils.transformers.hf_config import OpenLMConfig
 from open_lm.model import Transformer, create_params
 import torch
+import torch.nn as nn
 from typing import Union, Tuple, Optional, List
 import os
 
@@ -18,13 +20,21 @@ class OpenLMModel(PreTrainedModel):
         else:
             params = create_params(Namespace(**config.params_args_dict))
         config.set_params(params)
-
         super().__init__(config)
 
+        self.supports_gradient_checkpointing = True
         self.model = Transformer(params)
 
-    def forward(self, tokens):
-        return self.model(tokens)
+    @property
+    def gradient_checkpointing(self):
+        return self.model.grad_checkpointing
+
+    @gradient_checkpointing.setter
+    def gradient_checkpointing(self, value):
+        self.model.grad_checkpointing = value
+
+    def forward(self, input_ids=None, inputs_embeds=None, **kwargs):
+        return self.model(input_ids=input_ids, inputs_embeds=inputs_embeds, **kwargs)
 
 
 class OpenLMforCausalLM(OpenLMModel):
@@ -56,11 +66,12 @@ class OpenLMforCausalLM(OpenLMModel):
 
     def forward(
         self,
-        input_ids: torch.LongTensor,
+        input_ids: Optional[torch.Tensor] = None,
         attention_mask: Optional[torch.Tensor] = None,
         position_ids: Optional[torch.LongTensor] = None,
         past_key_values: Optional[List[torch.FloatTensor]] = None,
         inputs_embeds: Optional[torch.FloatTensor] = None,
+        labels: Optional[torch.LongTensor] = None,
         use_cache: Optional[bool] = False,
         output_attentions: Optional[bool] = None,
         output_hidden_states: Optional[bool] = None,
@@ -88,12 +99,22 @@ class OpenLMforCausalLM(OpenLMModel):
         assert position_ids is None, "Position IDs are not supported"
         # decoder outputs consists of (dec_features, layer_state, dec_hidden, dec_attn)
         logits, _, past_key_values = self.model(
-            input_ids, past_key_values=past_key_values, use_cache=use_cache, attention_mask=attention_mask
-        )
-        output = CausalLMOutputWithPast(
-            logits=logits,
+            input_ids=input_ids,
+            inputs_embeds=inputs_embeds,
             past_key_values=past_key_values,
+            use_cache=use_cache,
+            attention_mask=attention_mask,
         )
+        loss = None
+        if labels is not None:
+            shift_logits = logits[..., :-1, :].contiguous()
+            shift_labels = labels[..., 1:].contiguous()
+            loss_fct = nn.CrossEntropyLoss()
+            shift_logits = shift_logits.view(-1, shift_logits.size(-1))
+            shift_labels = shift_labels.view(-1).to(shift_logits.device)
+            loss = loss_fct(shift_logits, shift_labels)
+
+        output = CausalLMOutputWithPast(logits=logits, past_key_values=past_key_values, loss=loss)
         return output
 
     def prepare_inputs_for_generation(

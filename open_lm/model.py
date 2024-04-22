@@ -223,6 +223,20 @@ class GemmaMLP(nn.Module):
         torch.nn.init.trunc_normal_(self.down_proj.weight, std=std, a=-3 * std, b=3 * std)
 
 
+# Same as pseudocode provided from xformers SwiGLU
+# https://github.com/facebookresearch/xformers
+class SwiGLUTorch(nn.Module):
+    def __init__(self, in_dim, hidden_dim, out_dim, bias=True):
+        super().__init__()
+        self.w12 = nn.Linear(in_dim, 2 * hidden_dim, bias=bias)
+        self.w3 = nn.Linear(hidden_dim, out_dim, bias=bias)
+
+    def forward(self, x):
+        gate, x = self.w12(x).chunk(2, dim=-1)
+        x = F.silu(gate) * x
+        return self.w3(x)
+
+
 class Block(nn.Module):
     def __init__(self, layer_id, args: Params):
         super().__init__()
@@ -236,6 +250,10 @@ class Block(nn.Module):
             # this follows llama / lit llama -- go to multiple of 256
             self.hidden_dim = 256 * ((int(2 * 4 * args.dim / 3) + 256 - 1) // 256)
             self.feed_forward = xops.SwiGLU(args.dim, self.hidden_dim, args.dim, bias=False)
+        elif args.ffn_type == "swiglu_torch":
+            # this follows llama / lit llama -- go to multiple of 256
+            self.hidden_dim = 256 * ((int(2 * 4 * args.dim / 3) + 256 - 1) // 256)
+            self.feed_forward = SwiGLUTorch(args.dim, self.hidden_dim, args.dim, bias=False)
         elif args.ffn_type == "gelu":
             # Follows mosaic mpt7b, but without a bias.
             self.hidden_dim = args.dim * 4
@@ -275,7 +293,7 @@ class Block(nn.Module):
         self.reset_parameters()
 
     def reset_parameters(self):
-        if self._ffn_type == "swiglu":
+        if self._ffn_type == "swiglu" or self._ffn_type == "swiglu_torch":
             # initialize weights trunc_normal(1/sqrt(fan_in))
             std = 1.0 / math.sqrt(self.dim)
             torch.nn.init.trunc_normal_(self.feed_forward.w12.weight, std=std, a=-3 * std, b=3 * std)
@@ -362,7 +380,7 @@ class Transformer(nn.Module, PyTorchModelHubMixin):
     def set_grad_checkpointing(self, enable=True):
         self.grad_checkpointing = enable
 
-    def forward(self, input, past_key_values=None, use_cache=False, attention_mask=None):
+    def forward(self, input_ids=None, inputs_embeds=None, past_key_values=None, use_cache=False, attention_mask=None):
         """
         Args:
             input
@@ -372,7 +390,13 @@ class Transformer(nn.Module, PyTorchModelHubMixin):
                 attended to. attention_mask[s, i] = False indicates that token i should not be attended to by any other
                 token for sequence s.
         """
-        x = self.tok_embeddings(input)
+        if input_ids is not None:
+            x = self.tok_embeddings(input_ids)
+        elif inputs_embeds is not None:
+            x = inputs_embeds
+        else:
+            raise ValueError("Either input_ids or inputs_embeds must be provided.")
+
         x = self.post_embed_norm(x)
 
         if past_key_values is None:
