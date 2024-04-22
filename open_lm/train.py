@@ -259,7 +259,7 @@ def train_one_epoch(
             if args.moe_freq > 0:
                 losses_m.update(global_loss_tensor.item() - total_load_balancing_loss.item(), batch_size)
                 load_balancing_losses_m.update(total_load_balancing_loss.item(), batch_size)
-            else:   
+            else:
                 losses_m.update(global_loss_tensor.item(), batch_size)
             if averagers is not None and args.log_avg_model_training_loss and i % args.log_avg_model_training_loss == 0:
                 for key, value in total_loss_avg.items():
