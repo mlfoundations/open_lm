@@ -31,7 +31,7 @@ except ImportError:
     MoEArgs = None
 
 try:  # optional import
-    from mamba_ssm import MambaLMHeadModel
+    from mamba_ssm.models.mixer_seq_simple import MambaLMHeadModel, MixerModel
 except ImportError:
     MambaLMHeadModel = None
 
@@ -492,6 +492,65 @@ def create_params(args):
             moe_top_k=cfg.get("moe_top_k", args.moe_top_k),
         )
 
+# This is a copy-paste of the Mamba SSM code with the addition of inputs_embeds
+class MixerModelOpenLM(MixerModel):
+    def forward(self, input_ids, inputs_embeds, inference_params=None):
+        hidden_states = self.embedding(input_ids) if inputs_embeds is None else inputs_embeds
+        residual = None
+        for layer in self.layers:
+            hidden_states, residual = layer(
+                hidden_states, residual, inference_params=inference_params
+            )
+        if not self.fused_add_norm:
+            residual = (hidden_states + residual) if residual is not None else hidden_states
+            hidden_states = self.norm_f(residual.to(dtype=self.norm_f.weight.dtype))
+        else:
+            # Set prenorm=False here since we don't need the residual
+            fused_add_norm_fn = rms_norm_fn if isinstance(self.norm_f, RMSNorm) else layer_norm_fn
+            hidden_states = fused_add_norm_fn(
+                hidden_states,
+                self.norm_f.weight,
+                self.norm_f.bias,
+                eps=self.norm_f.eps,
+                residual=residual,
+                prenorm=False,
+                residual_in_fp32=self.residual_in_fp32,
+            )
+        return hidden_states
+
+
+# This is a copy-paste of the Mamba SSM code with the usage of MixerModelOpenLM instead of MixerModel
+
+class MambaLMHeadModelOpenLM(MambaLMHeadModel):
+    def __init__(
+        self,
+        config,
+        initializer_cfg=None,
+        device=None,
+        dtype=None,
+    ) -> None:
+        super().__init__(config, initializer_cfg, device, dtype)
+        d_model = config.d_model
+        n_layer = config.n_layer
+        vocab_size = config.vocab_size
+        ssm_cfg = config.ssm_cfg
+        rms_norm = config.rms_norm
+        residual_in_fp32 = config.residual_in_fp32
+        fused_add_norm = config.fused_add_norm
+        factory_kwargs = {"device": device, "dtype": dtype}
+        self.backbone = MixerModelOpenLM(
+            d_model=d_model,
+            n_layer=n_layer,
+            vocab_size=vocab_size,
+            ssm_cfg=ssm_cfg,
+            rms_norm=rms_norm,
+            initializer_cfg=initializer_cfg,
+            fused_add_norm=fused_add_norm,
+            residual_in_fp32=residual_in_fp32,
+            **factory_kwargs,
+        )
+
+
 
 class Mamba(nn.Module):
     # Experimental architecture, please "pip install mamba-ssm"
@@ -505,8 +564,9 @@ class Mamba(nn.Module):
         super().__init__()
         self.vocab_size = params.vocab_size
         self.seq_len = params.seq_len
+        self.dim = params.d_model
 
-        self.model = MambaLMHeadModel(params)
+        self.model = MambaLMHeadModelOpenLM(params)
 
     def reset_parameters(self):
         return
