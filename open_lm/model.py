@@ -492,9 +492,11 @@ def create_params(args):
             moe_top_k=cfg.get("moe_top_k", args.moe_top_k),
         )
 
+
 # This is a copy-paste of the Mamba SSM code with the addition of inputs_embeds
 class MixerModelOpenLM(MixerModel):
-    def forward(self, input_ids, inputs_embeds, inference_params=None):
+    def forward(self, input_ids=None, inputs_embeds=None, inference_params=None):
+        assert input_ids is not None or inputs_embeds is not None
         hidden_states = self.embedding(input_ids) if inputs_embeds is None else inputs_embeds
         residual = None
         for layer in self.layers:
