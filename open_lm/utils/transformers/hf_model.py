@@ -50,10 +50,16 @@ class OpenLMforCausalLM(OpenLMModel):
         self.post_init()
 
     def get_input_embeddings(self):
-        return self.model.tok_embeddings
+        if isinstance(self.model, Mamba):
+            return self.model.backbone.embedding
+        else:
+            return self.model.tok_embeddings
 
     def set_input_embeddings(self, value):
-        self.model.tok_embeddings = value
+        if isinstance(self.model, Mamba):
+            self.model.backbone.embedding = value
+        else:
+            self.model.tok_embeddings = value
 
     def get_output_embeddings(self):
         return self.model.get_output_embeddings()
