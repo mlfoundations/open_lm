@@ -552,7 +552,9 @@ class MambaLMHeadModelOpenLM(MambaLMHeadModel):
             **factory_kwargs,
         )
     def forward(self, input_ids=None, inputs_embeds=None, inference_params=None, **kwargs):
-        return self.backbone(input_ids, inputs_embeds, inference_params)
+        hidden_state = self.backbone(input_ids, inputs_embeds, inference_params)
+        lm_logits = self.lm_head(hidden_state)
+        return lm_logits, hidden_state, inference_params
 
 
 class Mamba(nn.Module):
@@ -575,8 +577,8 @@ class Mamba(nn.Module):
         return
 
     def forward(self, input_ids, inputs_embeds=None, inference_params=None, **kwargs):
-        out = self.model(input_ids, inputs_embeds, inference_params, **kwargs)
-        return out.logits, None, None
+        logits, hidden_state, inference_params = self.model(input_ids, inputs_embeds, inference_params, **kwargs)
+        return logits, hidden_state, inference_params
 
 
 def create_model(args):
