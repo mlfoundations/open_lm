@@ -32,6 +32,7 @@ except ImportError:
 
 try:  # optional import
     from mamba_ssm.models.mixer_seq_simple import MambaLMHeadModel, MixerModel
+    from mamba_ssm.ops.triton.layernorm import RMSNorm, layer_norm_fn, rms_norm_fn
 except ImportError:
     MambaLMHeadModel = None
 
@@ -495,7 +496,7 @@ def create_params(args):
 
 # This is a copy-paste of the Mamba SSM code with the addition of inputs_embeds
 class MixerModelOpenLM(MixerModel):
-    def forward(self, input_ids=None, inputs_embeds=None, inference_params=None):
+    def forward(self, input_ids=None, inputs_embeds=None, inference_params=None, **kwargs):
         assert input_ids is not None or inputs_embeds is not None
         hidden_states = self.embedding(input_ids) if inputs_embeds is None else inputs_embeds
         residual = None
@@ -522,7 +523,6 @@ class MixerModelOpenLM(MixerModel):
 
 
 # This is a copy-paste of the Mamba SSM code with the usage of MixerModelOpenLM instead of MixerModel
-
 class MambaLMHeadModelOpenLM(MambaLMHeadModel):
     def __init__(
         self,
@@ -551,7 +551,8 @@ class MambaLMHeadModelOpenLM(MambaLMHeadModel):
             residual_in_fp32=residual_in_fp32,
             **factory_kwargs,
         )
-
+    def forward(self, input_ids=None, inputs_embeds=None, inference_params=None, **kwargs):
+        return self.backbone(input_ids, inputs_embeds, inference_params)
 
 
 class Mamba(nn.Module):
@@ -574,7 +575,7 @@ class Mamba(nn.Module):
         return
 
     def forward(self, input_ids, inputs_embeds=None, inference_params=None, **kwargs):
-        out = self.model(input_ids, inputs_embeds, inference_params)
+        out = self.model(input_ids, inputs_embeds, inference_params, **kwargs)
         return out.logits, None, None
 
 
