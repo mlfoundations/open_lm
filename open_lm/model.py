@@ -571,7 +571,7 @@ class Mamba(nn.Module):
     def reset_parameters(self):
         return
 
-    def forward(self, input_ids, inputs_embeds=None, inference_params=None):
+    def forward(self, input_ids, inputs_embeds=None, inference_params=None, **kwargs):
         out = self.model(input_ids, inputs_embeds, inference_params)
         return out.logits, None, None
 
