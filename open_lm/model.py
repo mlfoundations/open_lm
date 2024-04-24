@@ -98,6 +98,8 @@ class Params:
     post_embed_norm: bool = False
     weight_tying: bool = False
     norm_type: nn.Module = te.LayerNorm if using_te else nn.LayerNorm
+    linear_type: nn.Linear = te.Linear if using_te else nn.Linear
+    linear_device: str = 'cuda' if using_te else None
     attn_func: Callable = xformers_attn if torch.cuda.is_available() else torch_attn
     apply_qk_norm: bool = False
     moe_loss_weight: float = 0.1
@@ -130,8 +132,8 @@ class CustomAttn(nn.Module):
         super().__init__()
         self.n_heads = args.n_heads
         self.head_dim = args.dim // args.n_heads
-        self.in_proj = nn.Linear(args.dim, 3 * args.n_heads * self.head_dim, bias=False)
-        self.out_proj = nn.Linear(args.n_heads * self.head_dim, args.dim, bias=False)
+        self.in_proj = args.linear_type(args.dim, 3 * args.n_heads * self.head_dim, bias=False, device=args.linear_device)
+        self.out_proj = args.linear_type(args.n_heads * self.head_dim, args.dim, bias=False, device=args.linear_device)
         self.pos_embed = get_pos_embed(args)
         self.attn_fn = args.attn_func
         self.apply_qk_norm = args.apply_qk_norm
@@ -206,13 +208,13 @@ class GemmaMLP(nn.Module):
     Modified from https://github.com/google/gemma_pytorch/blob/01062c9ef4cf89ac0c985b25a734164ede017d0b/gemma/model.py#L182-L201
     """
 
-    def __init__(self, dim: int, hidden_dim: int, layer_id: int):
+    def __init__(self, dim: int, hidden_dim: int, layer_id: int, args: Params):
         super().__init__()
         self.dim = dim
         self.hidden_dim = hidden_dim
-        self.gate_proj = nn.Linear(dim, hidden_dim)
-        self.up_proj = nn.Linear(dim, hidden_dim)
-        self.down_proj = nn.Linear(hidden_dim, dim)
+        self.gate_proj = args.linear_type(dim, hidden_dim, device=args.linear_device)
+        self.up_proj = args.linear_type(dim, hidden_dim, device=args.linear_device)
+        self.down_proj = args.linear_type(hidden_dim, dim, device=args.linear_device)
         self._layer_id = layer_id
 
     def forward(self, x):
@@ -236,10 +238,10 @@ class GemmaMLP(nn.Module):
 # Same as pseudocode provided from xformers SwiGLU
 # https://github.com/facebookresearch/xformers
 class SwiGLUTorch(nn.Module):
-    def __init__(self, in_dim, hidden_dim, out_dim, bias=True):
+    def __init__(self, in_dim, hidden_dim, out_dim, args: Params, bias=True):
         super().__init__()
-        self.w12 = nn.Linear(in_dim, 2 * hidden_dim, bias=bias)
-        self.w3 = nn.Linear(hidden_dim, out_dim, bias=bias)
+        self.w12 = args.linear_type(in_dim, 2 * hidden_dim, bias=bias, device=args.linear_device)
+        self.w3 = args.linear_type(hidden_dim, out_dim, bias=bias, device=args.linear_device)
 
     def forward(self, x):
         gate, x = self.w12(x).chunk(2, dim=-1)
@@ -263,17 +265,17 @@ class Block(nn.Module):
         elif args.ffn_type == "swiglu_torch":
             # this follows llama / lit llama -- go to multiple of 256
             self.hidden_dim = 256 * ((int(2 * 4 * args.dim / 3) + 256 - 1) // 256)
-            self.feed_forward = SwiGLUTorch(args.dim, self.hidden_dim, args.dim, bias=False)
+            self.feed_forward = SwiGLUTorch(args.dim, self.hidden_dim, args.dim, args, bias=False)
         elif args.ffn_type == "gelu":
             # Follows mosaic mpt7b, but without a bias.
             self.hidden_dim = args.dim * 4
-            self._ff_w1 = nn.Linear(args.dim, self.hidden_dim, bias=False)
-            self._ff_w2 = nn.Linear(self.hidden_dim, args.dim, bias=False)
+            self._ff_w1 = args.linear_type(args.dim, self.hidden_dim, bias=False, device=args.linear_device)
+            self._ff_w2 = args.linear_type(self.hidden_dim, args.dim, bias=False, device=args.linear_device)
             self.feed_forward = nn.Sequential(self._ff_w1, nn.GELU(approximate="none"), self._ff_w2)
         elif args.ffn_type == "gemma_geglu":
             # this follows llama / lit llama -- go to multiple of 256
             self.hidden_dim = 256 * ((int(2 * 4 * args.dim / 3) + 256 - 1) // 256)
-            self.feed_forward = GemmaMLP(args.dim, self.hidden_dim, layer_id)
+            self.feed_forward = GemmaMLP(args.dim, self.hidden_dim, layer_id, args)
         elif args.ffn_type == "moe":
             moe_args = MoEArgs(
                 hidden_size=args.dim,
@@ -467,6 +469,8 @@ def create_params(args):
             post_embed_norm=cfg["post_embed_norm"],
             weight_tying=cfg["weight_tying"],
             norm_type=get_norm_class(cfg.get("model_norm", args.model_norm), args.use_fp8),
+            linear_type=te.Linear if (using_te and args.use_fp8) else nn.Linear,
+            linear_device='cuda' if (using_te and args.use_fp8) else None,
             attn_func=get_attn_func(
                 args.attn_name, args.attn_activation, args.attn_seq_scalar, args.attn_seq_scalar_alpha
             ),
