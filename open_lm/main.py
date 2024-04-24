@@ -102,7 +102,7 @@ def get_state_dict(name):
     return sd
 
 
-def load_model(args, model, different_seed=False):
+def load_model(args, model, different_seed=False, filter_keys=None):
     checkpoint = pt_load(args.resume, map_location="cpu")
     if "epoch" in checkpoint:
         if not different_seed and "shard_shuffle_seed" in checkpoint:
@@ -126,6 +126,8 @@ def load_model(args, model, different_seed=False):
             sd = {k[len("module.") :]: v for k, v in sd.items()}
         if "_orig_mod" in next(iter(sd.items()))[0]:
             sd = {k.replace("_orig_mod.", ""): v for k, v in sd.items()}
+        if filter_keys is not None:
+            sd = {k: v for k, v in sd.items() if not any([x in k for x in filter_keys])}
         if args.fsdp:
             model.load_state_dict(sd)
         elif args.distributed:
