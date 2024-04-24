@@ -41,14 +41,10 @@ except ImportError:
 
 # Adding flag if using TE FP8
 using_te = False
-linearLayerType = nn.Linear
-device = None
 try:
     import transformer_engine.pytorch as te
 
     using_te = True
-    linearLayerType = te.Linear
-    device = 'cuda'
 except ImportError as ie:
     using_te = False
 
@@ -104,6 +100,8 @@ class Params:
     post_embed_norm: bool = False
     weight_tying: bool = False
     norm_type: nn.Module = te.LayerNorm if using_te else nn.LayerNorm
+    linear_type: nn.Linear = te.Linear if using_te else nn.Linear
+    linear_device: str = 'cuda' if using_te else None
     attn_func: Callable = xformers_attn if torch.cuda.is_available() else torch_attn
     apply_qk_norm: bool = False
     moe_loss_weight: float = 0.1
@@ -136,8 +134,8 @@ class CustomAttn(nn.Module):
         super().__init__()
         self.n_heads = args.n_heads
         self.head_dim = args.dim // args.n_heads
-        self.in_proj = linearLayerType(args.dim, 3 * args.n_heads * self.head_dim, bias=False, device=device)
-        self.out_proj = linearLayerType(args.n_heads * self.head_dim, args.dim, bias=False, device=device)
+        self.in_proj = args.linear_type(args.dim, 3 * args.n_heads * self.head_dim, bias=False, device=args.linear_device)
+        self.out_proj = args.linear_type(args.n_heads * self.head_dim, args.dim, bias=False, device=args.linear_device)
         self.pos_embed = get_pos_embed(args)
         self.attn_fn = args.attn_func
         self.apply_qk_norm = args.apply_qk_norm
@@ -165,15 +163,6 @@ class CustomAttn(nn.Module):
         self.reset_parameters()
 
     def reset_parameters(self):
-        # if using_te:
-        #     # initialize weights by trunc_normal(1/sqrt(fan_in))
-        #     std = 1.0 / math.sqrt(self.dim)
-        #     torch.nn.init.trunc_normal_(self.in_proj.weight_tensor, std=std, a=-3 * std, b=3 * std)
-        #     # scale init by depth as in https://arxiv.org/abs/1908.11365 -- worked slightly better.
-        #     std = std / math.sqrt(2 * (self.layer_id + 1))
-        #     torch.nn.init.trunc_normal_(self.out_proj.weight_tensor, std=std, a=-3 * std, b=3 * std)
-        # else:
-        # initialize weights by trunc_normal(1/sqrt(fan_in))
         std = 1.0 / math.sqrt(self.dim)
         torch.nn.init.trunc_normal_(self.in_proj.weight, std=std, a=-3 * std, b=3 * std)
         # scale init by depth as in https://arxiv.org/abs/1908.11365 -- worked slightly better.
@@ -220,13 +209,13 @@ class GemmaMLP(nn.Module):
     Modified from https://github.com/google/gemma_pytorch/blob/01062c9ef4cf89ac0c985b25a734164ede017d0b/gemma/model.py#L182-L201
     """
 
-    def __init__(self, dim: int, hidden_dim: int, layer_id: int):
+    def __init__(self, dim: int, hidden_dim: int, layer_id: int, args: Params):
         super().__init__()
         self.dim = dim
         self.hidden_dim = hidden_dim
-        self.gate_proj = linearLayerType(dim, hidden_dim, device=device)
-        self.up_proj = linearLayerType(dim, hidden_dim, device=device)
-        self.down_proj = linearLayerType(hidden_dim, dim, device=device)
+        self.gate_proj = args.linear_type(dim, hidden_dim, device=args.linear_device)
+        self.up_proj = args.linear_type(dim, hidden_dim, device=args.linear_device)
+        self.down_proj = args.linear_type(hidden_dim, dim, device=args.linear_device)
         self._layer_id = layer_id
 
     def forward(self, x):
@@ -238,15 +227,6 @@ class GemmaMLP(nn.Module):
         return outputs
 
     def reset_parameters(self):
-        # if using_te:
-        #     std = 1.0 / math.sqrt(self.dim)
-        #     torch.nn.init.trunc_normal_(self.gate_proj.weight_tensor, std=std, a=-3 * std, b=3 * std)
-        #     torch.nn.init.trunc_normal_(self.up_proj.weight_tensor, std=std, a=-3 * std, b=3 * std)
-
-        #     std = 1.0 / math.sqrt(self.hidden_dim)
-        #     std = std / math.sqrt(2 * (self._layer_id + 1))
-        #     torch.nn.init.trunc_normal_(self.down_proj.weight_tensor, std=std, a=-3 * std, b=3 * std)
-        # else:
         std = 1.0 / math.sqrt(self.dim)
         torch.nn.init.trunc_normal_(self.gate_proj.weight, std=std, a=-3 * std, b=3 * std)
         torch.nn.init.trunc_normal_(self.up_proj.weight, std=std, a=-3 * std, b=3 * std)
@@ -259,10 +239,10 @@ class GemmaMLP(nn.Module):
 # Same as pseudocode provided from xformers SwiGLU
 # https://github.com/facebookresearch/xformers
 class SwiGLUTorch(nn.Module):
-    def __init__(self, in_dim, hidden_dim, out_dim, bias=True):
+    def __init__(self, in_dim, hidden_dim, out_dim, args: Params, bias=True):
         super().__init__()
-        self.w12 = linearLayerType(in_dim, 2 * hidden_dim, bias=bias, device=device)
-        self.w3 = linearLayerType(hidden_dim, out_dim, bias=bias, device=device)
+        self.w12 = args.linear_type(in_dim, 2 * hidden_dim, bias=bias, device=args.linear_device)
+        self.w3 = args.linear_type(hidden_dim, out_dim, bias=bias, device=args.linear_device)
 
     def forward(self, x):
         gate, x = self.w12(x).chunk(2, dim=-1)
@@ -286,17 +266,17 @@ class Block(nn.Module):
         elif args.ffn_type == "swiglu_torch":
             # this follows llama / lit llama -- go to multiple of 256
             self.hidden_dim = 256 * ((int(2 * 4 * args.dim / 3) + 256 - 1) // 256)
-            self.feed_forward = SwiGLUTorch(args.dim, self.hidden_dim, args.dim, bias=False)
+            self.feed_forward = SwiGLUTorch(args.dim, self.hidden_dim, args.dim, args, bias=False)
         elif args.ffn_type == "gelu":
             # Follows mosaic mpt7b, but without a bias.
             self.hidden_dim = args.dim * 4
-            self._ff_w1 = linearLayerType(args.dim, self.hidden_dim, bias=False, device=device)
-            self._ff_w2 = linearLayerType(self.hidden_dim, args.dim, bias=False, device=device)
+            self._ff_w1 = args.linear_type(args.dim, self.hidden_dim, bias=False, device=args.linear_device)
+            self._ff_w2 = args.linear_type(self.hidden_dim, args.dim, bias=False, device=args.linear_device)
             self.feed_forward = nn.Sequential(self._ff_w1, nn.GELU(approximate="none"), self._ff_w2)
         elif args.ffn_type == "gemma_geglu":
             # this follows llama / lit llama -- go to multiple of 256
             self.hidden_dim = 256 * ((int(2 * 4 * args.dim / 3) + 256 - 1) // 256)
-            self.feed_forward = GemmaMLP(args.dim, self.hidden_dim, layer_id)
+            self.feed_forward = GemmaMLP(args.dim, self.hidden_dim, layer_id, args)
         elif args.ffn_type == "moe":
             moe_args = MoEArgs(
                 hidden_size=args.dim,
@@ -327,16 +307,6 @@ class Block(nn.Module):
 
     def reset_parameters(self):
         if self._ffn_type == "swiglu" or self._ffn_type == "swiglu_torch":
-            # if using_te:
-            #     # initialize weights trunc_normal(1/sqrt(fan_in))
-            #     std = 1.0 / math.sqrt(self.dim)
-            #     torch.nn.init.trunc_normal_(self.feed_forward.w12.weight_tensor, std=std, a=-3 * std, b=3 * std)
-            #     # scale init by depth as in https://arxiv.org/abs/1908.11365 -- worked slightly better.
-            #     std = 1.0 / math.sqrt(self.hidden_dim)
-            #     std = std / math.sqrt(2 * (self.layer_id + 1))
-            #     torch.nn.init.trunc_normal_(self.feed_forward.w3.weight_tensor, std=std, a=-3 * std, b=3 * std)
-            # else:
-            # initialize weights trunc_normal(1/sqrt(fan_in))
             std = 1.0 / math.sqrt(self.dim)
             torch.nn.init.trunc_normal_(self.feed_forward.w12.weight, std=std, a=-3 * std, b=3 * std)
             # scale init by depth as in https://arxiv.org/abs/1908.11365 -- worked slightly better.
@@ -344,14 +314,6 @@ class Block(nn.Module):
             std = std / math.sqrt(2 * (self.layer_id + 1))
             torch.nn.init.trunc_normal_(self.feed_forward.w3.weight, std=std, a=-3 * std, b=3 * std)
         elif self._ffn_type == "gelu":
-            # if using_te:
-            #     std = 1.0 / math.sqrt(self.dim)
-            #     torch.nn.init.trunc_normal_(self._ff_w1.weight_tensor, std=std, a=-3 * std, b=3 * std)
-
-            #     std = 1.0 / math.sqrt(self.hidden_dim)
-            #     std = std / math.sqrt(2 * (self.layer_id + 1))
-            #     torch.nn.init.trunc_normal_(self._ff_w2.weight_tensor, std=std, a=-3 * std, b=3 * std)
-            # else:
             std = 1.0 / math.sqrt(self.dim)
             torch.nn.init.trunc_normal_(self._ff_w1.weight, std=std, a=-3 * std, b=3 * std)
 
@@ -507,6 +469,8 @@ def create_params(args):
             post_embed_norm=cfg["post_embed_norm"],
             weight_tying=cfg["weight_tying"],
             norm_type=get_norm_class(cfg.get("model_norm", args.model_norm), args.use_fp8),
+            linear_type=te.Linear if (using_te and args.use_fp8) else nn.Linear,
+            linear_device='cuda' if (using_te and args.use_fp8) else None,
             attn_func=get_attn_func(
                 args.attn_name, args.attn_activation, args.attn_seq_scalar, args.attn_seq_scalar_alpha
             ),
@@ -546,51 +510,10 @@ class Mamba(nn.Module):
         return out, None, None
 
 
-def torch_NN_to_TE(model, include_modules=[], exclude_modules=["output"], copy_weights=False):
-    for name, module in model.named_children():
-        if len(list(module.children())) > 0:
-            torch_NN_to_TE(module, include_modules, exclude_modules, copy_weights)
-
-        if isinstance(module, torch.nn.Linear) and name not in exclude_modules:
-            logging.info(f"[FP8] Module {name} is nn.Linear and not converted to TE FP8 equivalent of te.Linear. Converting now.")
-            # old_module = model._modules[name]
-            # model._modules[name] = te.Linear(
-            #     in_features = module.in_features,
-            #     out_features = module.out_features,
-            #     bias = module.bias is not None,
-            #     device = 'cuda'
-            # )
-            # if copy_weights:
-            #     model._modules[name].weight_tensor.data.copy_(old_module.weight.data)
-            #     if model._modules[name].bias is not None and old_module.bias is not None:
-            #         model._modules[name].bias.data.copy_(old_module.bias)
-        elif isinstance(module, torch.nn.LayerNorm) and name not in exclude_modules:
-            logging.info(f"[FP8] Module {name} is nn.LayerNorm and not converted to TE FP8 equivalent of LayerNorm.")
-        elif isinstance(module, torch.nn.Module) and name not in exclude_modules:
-            source_code = inspect.getsource(module.forward)
-            if "F.scaled_dot_product_attention" in source_code:
-                logging.info(
-                    f"[FP8] F.scaled_dot_product_attention -> te.DotProductAttention is not implemented yet for {name}."
-                )
-            if "F.layer_norm" in source_code:
-                logging.info(
-                    f"[FP8] Module {name} is F.layer_norm and not converted to TE FP8 equivalent te.LayerNorm."
-                )
-        elif isinstance(module, te.Linear) and name not in exclude_modules:
-            logging.warning(
-                    f"[FP8] Module {name} is te.Linear already!"
-                )
-    return model
-
-
 def create_model(args):
     if "mamba" in args.model:
         model = Mamba(create_params(args))
-        if args.use_fp8:
-            model = torch_NN_to_TE(model)
         return model
     else:
         model = Transformer(create_params(args))
-        if args.use_fp8:
-            model = torch_NN_to_TE(model)
         return model
