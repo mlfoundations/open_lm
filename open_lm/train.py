@@ -108,7 +108,7 @@ def train_one_epoch(
             hidden_size=model.dim,
             ffn_hidden_size=model.dim * 4,
             moe_num_experts=args.moe_num_experts,
-            num_layers=model.n_layers // 2,
+            num_layers=model.n_layers // args.moe_freq,
             moe_expert_model_parallelism=True,
             moe_top_k=args.moe_top_k,
             device=torch.cuda.current_device(),
@@ -294,6 +294,8 @@ def train_one_epoch(
             if averagers is not None and args.log_avg_model_training_loss and i % args.log_avg_model_training_loss == 0:
                 for key, value in total_loss_avg.items():
                     dist.all_reduce(value, op=ReduceOp.AVG)
+            if args.moe_freq > 0:
+                dist.all_reduce(total_load_balancing_loss, op=ReduceOp.AVG)
 
         batch_count = i + 1
         step += 1
@@ -301,7 +303,11 @@ def train_one_epoch(
             batch_size = len(inputs)
             # update the loss meter with the global loss tensor every iteration, so that the logging is of the avg of loss of the last
             # args.log_every_n_steps iterations
-            losses_m.update(global_loss_tensor.item(), batch_size)
+            if args.moe_freq > 0:
+                losses_m.update(global_loss_tensor.item() - total_load_balancing_loss.item(), batch_size)
+                load_balancing_losses_m.update(total_load_balancing_loss.item(), batch_size)
+            else:
+                losses_m.update(global_loss_tensor.item(), batch_size)
             if averagers is not None and args.log_avg_model_training_loss and i % args.log_avg_model_training_loss == 0:
                 for key, value in total_loss_avg.items():
                     losses_avg_m[key].update(value.item(), batch_size)

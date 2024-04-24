@@ -569,6 +569,7 @@ def main(args):
         "--ray_dashboard_host", type=str, default="127.0.0.1"
     )  # default is localhost; for slurm jobs do 0.0.0.0
     parser.add_argument("--suffixes", nargs="+", default=[".json", ".jsonl", ".zst", ".zstd", ".tar", ".gz"])
+    parser.add_argument("--presort", action="store_true")
 
     args = parser.parse_args(args)
     if args.do_sample:
@@ -640,6 +641,9 @@ def main(args):
         source_counters = {source: GlobalCounter.remote() for source in Sources}
     else:
         source_counters = None
+
+    if args.presort:
+        ds = ds.sort("path")
 
     ds = ds.flat_map(
         lambda x: process_keys(
