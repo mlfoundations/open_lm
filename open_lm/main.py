@@ -545,7 +545,6 @@ def main(args):
                     cpu_offload=CPUOffload(offload_params=args.fsdp_cpu_offload),
                     use_orig_params=args.fsdp_use_orig_params,
                     limit_all_gathers=args.fsdp_limit_all_gathers,
-                    sync_module_states=True,
                     **fsdp_kwargs,
                 )
             else:

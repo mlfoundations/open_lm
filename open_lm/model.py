@@ -574,6 +574,9 @@ class Mamba(nn.Module):
 
 
 def torch_NN_to_TE(model, include_modules=[], exclude_modules=["output"], copy_weights=False):
+    logging.warning(
+        f"[FP8] Checking for torch.nn.Linear, torch.nn.LayerNorm, torch.nn.Module:"
+    )
     for name, module in model.named_children():
         if len(list(module.children())) > 0:
             torch_NN_to_TE(module, include_modules, exclude_modules, copy_weights)
