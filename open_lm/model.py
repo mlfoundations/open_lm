@@ -239,7 +239,7 @@ class GemmaMLP(nn.Module):
 # Same as pseudocode provided from xformers SwiGLU
 # https://github.com/facebookresearch/xformers
 class SwiGLUTorch(nn.Module):
-    def __init__(self, in_dim, hidden_dim, out_dim, args: Params=Params, bias=True):
+    def __init__(self, in_dim, hidden_dim, out_dim, args: Params = Params, bias=True):
         super().__init__()
         self.w12 = args.linear_type(in_dim, 2 * hidden_dim, bias=bias, device=args.linear_device)
         self.w3 = args.linear_type(hidden_dim, out_dim, bias=bias, device=args.linear_device)
