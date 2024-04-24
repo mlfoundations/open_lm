@@ -47,8 +47,8 @@ try:
     import transformer_engine.pytorch as te
 
     class TELinear(te.Linear):
-        def __init__(self):
-            self.weight = self.weight_tensor
+        def weight(self):
+            return self.weight_tensor
 
     using_te = True
     linearLayerType = TELinear
