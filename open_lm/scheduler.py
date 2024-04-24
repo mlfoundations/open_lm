@@ -76,8 +76,11 @@ def cosine_lr(optimizer, base_lr, warmup_length, steps, min_lr, force_min_lr):
     return _lr_adjuster
 
 
-def cosine_rewarmed_lr(optimizer, base_lr, warmup_length, steps, min_lr, force_min_lr, target_steps, original_warmup):
+def cosine_rewarmed_lr(
+    optimizer, base_lr, warmup_length, steps, min_lr, force_min_lr, target_steps, original_warmup, resumed_step
+):
     def _lr_adjuster(step):
+        step -= resumed_step
         new_base_lr = _cosine_lr(
             target_steps - steps + warmup_length, base_lr, original_warmup, target_steps, min_lr, force_min_lr
         )

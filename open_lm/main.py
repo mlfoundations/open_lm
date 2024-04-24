@@ -692,6 +692,7 @@ def main(args):
                 # args.force_min_lr,
             )
         elif args.lr_scheduler == "cosine-rewarmed":
+            resumed_step = (args.train_num_samples * start_epoch) // args.global_batch_size
             scheduler = cosine_rewarmed_lr(
                 optimizer,
                 args.lr,
@@ -701,6 +702,7 @@ def main(args):
                 args.force_min_lr,
                 args.cosine_rewarmed_target_steps,
                 args.cosine_rewarmed_original_warmup,
+                resumed_step,
             )
         else:
             raise ValueError(
