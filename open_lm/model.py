@@ -578,7 +578,7 @@ def torch_NN_to_TE(model, include_modules=[], exclude_modules=["output"], copy_w
         if len(list(module.children())) > 0:
             torch_NN_to_TE(module, include_modules, exclude_modules, copy_weights)
 
-        if isinstance(module, torch.nn.Linear) and name not in exclude_modules:
+        if isinstance(module, nn.Linear) and name not in exclude_modules:
             logging.warning(f"[FP8] Module {name} is nn.Linear and not converted to TE FP8 equivalent of te.Linear. Converting now.")
             # old_module = model._modules[name]
             # model._modules[name] = te.Linear(
@@ -591,9 +591,9 @@ def torch_NN_to_TE(model, include_modules=[], exclude_modules=["output"], copy_w
             #     model._modules[name].weight_tensor.data.copy_(old_module.weight.data)
             #     if model._modules[name].bias is not None and old_module.bias is not None:
             #         model._modules[name].bias.data.copy_(old_module.bias)
-        elif isinstance(module, torch.nn.LayerNorm) and name not in exclude_modules:
+        elif isinstance(module, nn.LayerNorm) and name not in exclude_modules:
             logging.warning(f"[FP8] Module {name} is nn.LayerNorm and not converted to TE FP8 equivalent of LayerNorm.")
-        elif isinstance(module, torch.nn.Module) and name not in exclude_modules:
+        elif isinstance(module, nn.Module) and name not in exclude_modules:
             source_code = inspect.getsource(module.forward)
             if "F.scaled_dot_product_attention" in source_code:
                 logging.warning(
