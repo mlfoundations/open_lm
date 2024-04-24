@@ -46,12 +46,8 @@ device = None
 try:
     import transformer_engine.pytorch as te
 
-    class TELinear(te.Linear):
-        def weight(self):
-            return self.weight_tensor
-
     using_te = True
-    linearLayerType = TELinear
+    linearLayerType = te.Linear
     device = 'cuda'
 except ImportError as ie:
     using_te = False
