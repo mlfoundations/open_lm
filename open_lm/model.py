@@ -97,7 +97,7 @@ class Params:
     post_embed_norm: bool = False
     weight_tying: bool = False
     norm_type: nn.Module = te.LayerNorm if using_te else nn.LayerNorm
-    linear_type: nn.Linear = te.Linear if using_te else nn.Linear
+    linear_type: nn.Module = te.Linear if using_te else nn.Linear
     linear_device: str = "cuda" if using_te else None
     attn_func: Callable = xformers_attn if torch.cuda.is_available() else torch_attn
     apply_qk_norm: bool = False
