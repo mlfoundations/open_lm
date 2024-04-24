@@ -453,7 +453,9 @@ def main(args):
         with torch.device("meta" if args.experimental_meta_device and args.fsdp else args.device):
             model = create_model(args)
 
+    all_gpus = None
     if args.use_fp8:
+        all_gpus = dist.new_group(backend="nccl")
         logging.info("Using FP8 to run training.")
 
     args.vocab_size = model.vocab_size
@@ -472,10 +474,6 @@ def main(args):
 
     if args.grad_checkpointing:
         model.set_grad_checkpointing()
-
-    all_gpus = None
-    if args.use_fp8:
-        all_gpus = dist.new_group(backend="nccl")
 
     if args.distributed:
         if args.fsdp:
@@ -535,29 +533,17 @@ def main(args):
             # Initialize FSDP. Use the same seed across workers to ensure reset_parameters is the same across workers.
             random_seed(args.seed, rank=0)
 
-            if args.use_fp8:
-                model = FSDP(
-                    model,
-                    process_group=all_gpus,
-                    auto_wrap_policy=transformer_auto_wrapper_policy,
-                    device_id=device,
-                    mixed_precision=mp_policy,
-                    cpu_offload=CPUOffload(offload_params=args.fsdp_cpu_offload),
-                    use_orig_params=args.fsdp_use_orig_params,
-                    limit_all_gathers=args.fsdp_limit_all_gathers,
-                    **fsdp_kwargs,
-                )
-            else:
-                model = FSDP(
-                    model,
-                    auto_wrap_policy=transformer_auto_wrapper_policy,
-                    device_id=device,
-                    mixed_precision=mp_policy,
-                    cpu_offload=CPUOffload(offload_params=args.fsdp_cpu_offload),
-                    use_orig_params=args.fsdp_use_orig_params,
-                    limit_all_gathers=args.fsdp_limit_all_gathers,
-                    **fsdp_kwargs,
-                )
+            model = FSDP(
+                model,
+                process_group=all_gpus,
+                auto_wrap_policy=transformer_auto_wrapper_policy,
+                device_id=device,
+                mixed_precision=mp_policy,
+                cpu_offload=CPUOffload(offload_params=args.fsdp_cpu_offload),
+                use_orig_params=args.fsdp_use_orig_params,
+                limit_all_gathers=args.fsdp_limit_all_gathers,
+                **fsdp_kwargs,
+            )
 
             print(f"After FSDP parameter num: {sum(p.numel() for p in model.parameters()):,} on rank {args.rank}")
             print(f"After FSDP {torch.cuda.memory_allocated()/1024**3:.3} GB on rank {args.rank}")

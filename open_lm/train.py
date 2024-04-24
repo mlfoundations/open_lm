@@ -108,7 +108,7 @@ def train_one_epoch(
             hidden_size=model.dim,
             ffn_hidden_size=model.dim * 4,
             moe_num_experts=args.moe_num_experts,
-            num_layers=model.n_layers // 2,
+            num_layers=model.n_layers // args.moe_freq,
             moe_expert_model_parallelism=True,
             moe_top_k=args.moe_top_k,
             device=torch.cuda.current_device(),
@@ -142,41 +142,30 @@ def train_one_epoch(
         data_time_m.update(time.time() - end)
         optimizer.zero_grad()
 
+        if using_te and args.use_fp8:
+            autocast_func = te.fp8_autocast(enabled=True, fp8_recipe=fp8_recipe, fp8_group=all_gpus)
+        else:
+            autocast_func = autocast()
+
         if args.accum_freq == 1:
-            if using_te and args.use_fp8:
-                with te.fp8_autocast(enabled=True, fp8_recipe=fp8_recipe, fp8_group=all_gpus):
-                    inputs, targets = sample_chunk(texts, args)
+            with autocast_func:
+                inputs, targets = sample_chunk(texts, args)
 
-                    out, _, _ = model(inputs)
+                out, _, _ = model(inputs)
 
-                    if args.log_logit_mean:
-                        logit_m.update(torch.mean(out).item())
+                if args.log_logit_mean:
+                    logit_m.update(torch.mean(out).item())
 
-                    total_lm_loss = loss(out.reshape(-1, args.vocab_size), targets.reshape(-1))
-                    total_loss = total_lm_loss
-                    if args.moe_freq > 0:
-                        total_load_balancing_loss = batched_load_balancing_loss(moe_args)
-                        clear_load_balancing_loss()
-                        total_loss += total_load_balancing_loss
-            else:
-                with autocast():
-                    inputs, targets = sample_chunk(texts, args)
-
-                    out, _, _ = model(inputs)
-
-                    if args.log_logit_mean:
-                        logit_m.update(torch.mean(out).item())
-
-                    total_lm_loss = loss(out.reshape(-1, args.vocab_size), targets.reshape(-1))
-                    total_loss = total_lm_loss
-                    if args.moe_freq > 0:
-                        total_load_balancing_loss = batched_load_balancing_loss(moe_args)
-                        clear_load_balancing_loss()
-                        total_loss += total_load_balancing_loss
+                total_lm_loss = loss(out.reshape(-1, args.vocab_size), targets.reshape(-1))
+                total_loss = total_lm_loss
+                if args.moe_freq > 0:
+                    total_load_balancing_loss = batched_load_balancing_loss(moe_args)
+                    clear_load_balancing_loss()
+                    total_loss += total_load_balancing_loss
 
             backward(total_loss, scaler)
             if averagers is not None and args.log_avg_model_training_loss and i % args.log_avg_model_training_loss == 0:
-                with autocast():
+                with autocast_func:
                     for key, averager in averagers.avgs_dict.items():
                         with torch.no_grad():
                             out_avg, _, _ = averager.av_model(inputs)
@@ -196,18 +185,13 @@ def train_one_epoch(
                 if isinstance(model, FSDP) and ii != args.accum_freq - 1:
                     maybe_no_sync = model.no_sync
                 with maybe_no_sync():
-                    with autocast():
+                    with autocast_func:
                         inputs_ii = inputs[ii * per_batch : (ii + 1) * per_batch]
                         if inputs_ii.shape[0] == 0:
                             break
                         targets_ii = targets[ii * per_batch : (ii + 1) * per_batch]
 
-                        if using_te and args.use_fp8:
-                            ## TODO
-                            with te.fp8_autocast(enabled=True, fp8_recipe=fp8_recipe, fp8_group=all_gpus):
-                                out, _, _ = model(inputs_ii)
-                        else:
-                            out, _, _ = model(inputs_ii)
+                        out, _, _ = model(inputs_ii)
 
                         if args.log_logit_mean:
                             logit_m.update(torch.mean(out).item())
@@ -224,7 +208,7 @@ def train_one_epoch(
                         local_loss += local_load_balancing_loss
 
                     backward(local_loss, scaler)
-                    with autocast():
+                    with autocast_func:
                         if (
                             averagers is not None
                             and args.log_avg_model_training_loss
@@ -294,6 +278,8 @@ def train_one_epoch(
             if averagers is not None and args.log_avg_model_training_loss and i % args.log_avg_model_training_loss == 0:
                 for key, value in total_loss_avg.items():
                     dist.all_reduce(value, op=ReduceOp.AVG)
+            if args.moe_freq > 0:
+                dist.all_reduce(total_load_balancing_loss, op=ReduceOp.AVG)
 
         batch_count = i + 1
         step += 1
@@ -301,7 +287,11 @@ def train_one_epoch(
             batch_size = len(inputs)
             # update the loss meter with the global loss tensor every iteration, so that the logging is of the avg of loss of the last
             # args.log_every_n_steps iterations
-            losses_m.update(global_loss_tensor.item(), batch_size)
+            if args.moe_freq > 0:
+                losses_m.update(global_loss_tensor.item() - total_load_balancing_loss.item(), batch_size)
+                load_balancing_losses_m.update(total_load_balancing_loss.item(), batch_size)
+            else:
+                losses_m.update(global_loss_tensor.item(), batch_size)
             if averagers is not None and args.log_avg_model_training_loss and i % args.log_avg_model_training_loss == 0:
                 for key, value in total_loss_avg.items():
                     losses_avg_m[key].update(value.item(), batch_size)
