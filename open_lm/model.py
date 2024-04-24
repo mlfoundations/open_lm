@@ -41,13 +41,14 @@ except ImportError:
 
 # Adding flag if using TE FP8
 using_te = False
+linearLayerType = nn.Linear
 try:
     import transformer_engine.pytorch as te
 
     using_te = True
+    linearLayerType = te.Linear
 except ImportError as ie:
     using_te = False
-using_te = False
 
 # from openclip
 _MODEL_CONFIG_PATHS = [Path(__file__).parent / f"model_configs/"]
@@ -134,50 +135,32 @@ class CustomAttn(nn.Module):
         self.n_heads = args.n_heads
         self.head_dim = args.dim // args.n_heads
         if using_te:
-            self.in_proj = te.Linear(args.dim, 3 * args.n_heads * self.head_dim, bias=False, device='cuda')
-            self.out_proj = te.Linear(args.n_heads * self.head_dim, args.dim, bias=False, device='cuda')
+            self.in_proj = linearLayerType(args.dim, 3 * args.n_heads * self.head_dim, bias=False, device='cuda')
+            self.out_proj = linearLayerType(args.n_heads * self.head_dim, args.dim, bias=False, device='cuda')
         else:
-            self.in_proj = nn.Linear(args.dim, 3 * args.n_heads * self.head_dim, bias=False)
-            self.out_proj = nn.Linear(args.n_heads * self.head_dim, args.dim, bias=False)
+            self.in_proj = linearLayerType(args.dim, 3 * args.n_heads * self.head_dim, bias=False)
+            self.out_proj = linearLayerType(args.n_heads * self.head_dim, args.dim, bias=False)
         self.pos_embed = get_pos_embed(args)
         self.attn_fn = args.attn_func
         self.apply_qk_norm = args.apply_qk_norm
 
         # initialize norm layers for queries and keys if needed
-        if using_te:
-            self.q_norm = (
-                te.LayerNorm(
-                    args.n_heads * self.head_dim,
-                    eps=args.norm_eps,
-                )
-                if self.apply_qk_norm
-                else nn.Identity()
+        self.q_norm = (
+            args.norm_type(
+                args.n_heads * self.head_dim,
+                eps=args.norm_eps,
             )
-            self.k_norm = (
-                te.LayerNorm(
-                    args.n_heads * self.head_dim,
-                    eps=args.norm_eps,
-                )
-                if self.apply_qk_norm
-                else nn.Identity()
+            if self.apply_qk_norm
+            else nn.Identity()
+        )
+        self.k_norm = (
+            args.norm_type(
+                args.n_heads * self.head_dim,
+                eps=args.norm_eps,
             )
-        else:
-            self.q_norm = (
-                args.norm_type(
-                    args.n_heads * self.head_dim,
-                    eps=args.norm_eps,
-                )
-                if self.apply_qk_norm
-                else nn.Identity()
-            )
-            self.k_norm = (
-                args.norm_type(
-                    args.n_heads * self.head_dim,
-                    eps=args.norm_eps,
-                )
-                if self.apply_qk_norm
-                else nn.Identity()
-            )
+            if self.apply_qk_norm
+            else nn.Identity()
+        )
 
         self.layer_id = layer_id
         self.dim = args.dim
@@ -244,13 +227,13 @@ class GemmaMLP(nn.Module):
         self.dim = dim
         self.hidden_dim = hidden_dim
         if using_te:
-            self.gate_proj = te.Linear(dim, hidden_dim, device='cuda')
-            self.up_proj = te.Linear(dim, hidden_dim, device='cuda')
-            self.down_proj = te.Linear(hidden_dim, dim, device='cuda')
+            self.gate_proj = linearLayerType(dim, hidden_dim, device='cuda')
+            self.up_proj = linearLayerType(dim, hidden_dim, device='cuda')
+            self.down_proj = linearLayerType(hidden_dim, dim, device='cuda')
         else:
-            self.gate_proj = nn.Linear(dim, hidden_dim)
-            self.up_proj = nn.Linear(dim, hidden_dim)
-            self.down_proj = nn.Linear(hidden_dim, dim)
+            self.gate_proj = linearLayerType(dim, hidden_dim)
+            self.up_proj = linearLayerType(dim, hidden_dim)
+            self.down_proj = linearLayerType(hidden_dim, dim)
         self._layer_id = layer_id
 
     def forward(self, x):
@@ -286,11 +269,11 @@ class SwiGLUTorch(nn.Module):
     def __init__(self, in_dim, hidden_dim, out_dim, bias=True):
         super().__init__()
         if using_te:
-            self.w12 = te.Linear(in_dim, 2 * hidden_dim, bias=bias, device='cuda')
-            self.w3 = te.Linear(hidden_dim, out_dim, bias=bias, device='cuda')
+            self.w12 = linearLayerType(in_dim, 2 * hidden_dim, bias=bias, device='cuda')
+            self.w3 = linearLayerType(hidden_dim, out_dim, bias=bias, device='cuda')
         else:
-            self.w12 = nn.Linear(in_dim, 2 * hidden_dim, bias=bias)
-            self.w3 = nn.Linear(hidden_dim, out_dim, bias=bias)
+            self.w12 = linearLayerType(in_dim, 2 * hidden_dim, bias=bias)
+            self.w3 = linearLayerType(hidden_dim, out_dim, bias=bias)
 
     def forward(self, x):
         gate, x = self.w12(x).chunk(2, dim=-1)
@@ -318,8 +301,8 @@ class Block(nn.Module):
         elif args.ffn_type == "gelu":
             # Follows mosaic mpt7b, but without a bias.
             self.hidden_dim = args.dim * 4
-            self._ff_w1 = nn.Linear(args.dim, self.hidden_dim, bias=False)
-            self._ff_w2 = nn.Linear(self.hidden_dim, args.dim, bias=False)
+            self._ff_w1 = linearLayerType(args.dim, self.hidden_dim, bias=False)
+            self._ff_w2 = linearLayerType(self.hidden_dim, args.dim, bias=False)
             self.feed_forward = nn.Sequential(self._ff_w1, nn.GELU(approximate="none"), self._ff_w2)
         elif args.ffn_type == "gemma_geglu":
             # this follows llama / lit llama -- go to multiple of 256
@@ -576,9 +559,6 @@ class Mamba(nn.Module):
 
 def torch_NN_to_TE(model, include_modules=[], exclude_modules=["output"], copy_weights=False):
     for name, module in model.named_children():
-        logging.info(
-            f"[FP8] MODULE = {module}"
-        )
         if len(list(module.children())) > 0:
             torch_NN_to_TE(module, include_modules, exclude_modules, copy_weights)
 
@@ -617,11 +597,11 @@ def torch_NN_to_TE(model, include_modules=[], exclude_modules=["output"], copy_w
 def create_model(args):
     if "mamba" in args.model:
         model = Mamba(create_params(args))
-        # if args.use_fp8:
-        #     model = torch_NN_to_TE(model)
+        if args.use_fp8:
+            model = torch_NN_to_TE(model)
         return model
     else:
         model = Transformer(create_params(args))
-        # if args.use_fp8:
-        #     model = torch_NN_to_TE(model)
+        if args.use_fp8:
+            model = torch_NN_to_TE(model)
         return model
