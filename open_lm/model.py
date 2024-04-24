@@ -47,6 +47,7 @@ try:
     using_te = True
 except ImportError as ie:
     using_te = False
+using_te = False
 
 # from openclip
 _MODEL_CONFIG_PATHS = [Path(__file__).parent / f"model_configs/"]
