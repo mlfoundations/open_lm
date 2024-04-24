@@ -46,8 +46,12 @@ device = None
 try:
     import transformer_engine.pytorch as te
 
+    class TELinear(te.Linear):
+        def __init__(self):
+            self.weight = self.weight_tensor
+
     using_te = True
-    linearLayerType = te.Linear
+    linearLayerType = TELinear
     device = 'cuda'
 except ImportError as ie:
     using_te = False
@@ -165,20 +169,20 @@ class CustomAttn(nn.Module):
         self.reset_parameters()
 
     def reset_parameters(self):
-        if using_te:
-            # initialize weights by trunc_normal(1/sqrt(fan_in))
-            std = 1.0 / math.sqrt(self.dim)
-            torch.nn.init.trunc_normal_(self.in_proj.weight_tensor, std=std, a=-3 * std, b=3 * std)
-            # scale init by depth as in https://arxiv.org/abs/1908.11365 -- worked slightly better.
-            std = std / math.sqrt(2 * (self.layer_id + 1))
-            torch.nn.init.trunc_normal_(self.out_proj.weight_tensor, std=std, a=-3 * std, b=3 * std)
-        else:
-            # initialize weights by trunc_normal(1/sqrt(fan_in))
-            std = 1.0 / math.sqrt(self.dim)
-            torch.nn.init.trunc_normal_(self.in_proj.weight, std=std, a=-3 * std, b=3 * std)
-            # scale init by depth as in https://arxiv.org/abs/1908.11365 -- worked slightly better.
-            std = std / math.sqrt(2 * (self.layer_id + 1))
-            torch.nn.init.trunc_normal_(self.out_proj.weight, std=std, a=-3 * std, b=3 * std)
+        # if using_te:
+        #     # initialize weights by trunc_normal(1/sqrt(fan_in))
+        #     std = 1.0 / math.sqrt(self.dim)
+        #     torch.nn.init.trunc_normal_(self.in_proj.weight_tensor, std=std, a=-3 * std, b=3 * std)
+        #     # scale init by depth as in https://arxiv.org/abs/1908.11365 -- worked slightly better.
+        #     std = std / math.sqrt(2 * (self.layer_id + 1))
+        #     torch.nn.init.trunc_normal_(self.out_proj.weight_tensor, std=std, a=-3 * std, b=3 * std)
+        # else:
+        # initialize weights by trunc_normal(1/sqrt(fan_in))
+        std = 1.0 / math.sqrt(self.dim)
+        torch.nn.init.trunc_normal_(self.in_proj.weight, std=std, a=-3 * std, b=3 * std)
+        # scale init by depth as in https://arxiv.org/abs/1908.11365 -- worked slightly better.
+        std = std / math.sqrt(2 * (self.layer_id + 1))
+        torch.nn.init.trunc_normal_(self.out_proj.weight, std=std, a=-3 * std, b=3 * std)
 
     def forward(self, x: torch.Tensor, is_causal=True, past_key_value=None, use_cache=False, attention_mask=None):
         batchsize, q_len, _ = x.shape
@@ -238,22 +242,22 @@ class GemmaMLP(nn.Module):
         return outputs
 
     def reset_parameters(self):
-        if using_te:
-            std = 1.0 / math.sqrt(self.dim)
-            torch.nn.init.trunc_normal_(self.gate_proj.weight_tensor, std=std, a=-3 * std, b=3 * std)
-            torch.nn.init.trunc_normal_(self.up_proj.weight_tensor, std=std, a=-3 * std, b=3 * std)
+        # if using_te:
+        #     std = 1.0 / math.sqrt(self.dim)
+        #     torch.nn.init.trunc_normal_(self.gate_proj.weight_tensor, std=std, a=-3 * std, b=3 * std)
+        #     torch.nn.init.trunc_normal_(self.up_proj.weight_tensor, std=std, a=-3 * std, b=3 * std)
 
-            std = 1.0 / math.sqrt(self.hidden_dim)
-            std = std / math.sqrt(2 * (self._layer_id + 1))
-            torch.nn.init.trunc_normal_(self.down_proj.weight_tensor, std=std, a=-3 * std, b=3 * std)
-        else:
-            std = 1.0 / math.sqrt(self.dim)
-            torch.nn.init.trunc_normal_(self.gate_proj.weight, std=std, a=-3 * std, b=3 * std)
-            torch.nn.init.trunc_normal_(self.up_proj.weight, std=std, a=-3 * std, b=3 * std)
+        #     std = 1.0 / math.sqrt(self.hidden_dim)
+        #     std = std / math.sqrt(2 * (self._layer_id + 1))
+        #     torch.nn.init.trunc_normal_(self.down_proj.weight_tensor, std=std, a=-3 * std, b=3 * std)
+        # else:
+        std = 1.0 / math.sqrt(self.dim)
+        torch.nn.init.trunc_normal_(self.gate_proj.weight, std=std, a=-3 * std, b=3 * std)
+        torch.nn.init.trunc_normal_(self.up_proj.weight, std=std, a=-3 * std, b=3 * std)
 
-            std = 1.0 / math.sqrt(self.hidden_dim)
-            std = std / math.sqrt(2 * (self._layer_id + 1))
-            torch.nn.init.trunc_normal_(self.down_proj.weight, std=std, a=-3 * std, b=3 * std)
+        std = 1.0 / math.sqrt(self.hidden_dim)
+        std = std / math.sqrt(2 * (self._layer_id + 1))
+        torch.nn.init.trunc_normal_(self.down_proj.weight, std=std, a=-3 * std, b=3 * std)
 
 
 # Same as pseudocode provided from xformers SwiGLU
@@ -327,37 +331,37 @@ class Block(nn.Module):
 
     def reset_parameters(self):
         if self._ffn_type == "swiglu" or self._ffn_type == "swiglu_torch":
-            if using_te:
-                # initialize weights trunc_normal(1/sqrt(fan_in))
-                std = 1.0 / math.sqrt(self.dim)
-                torch.nn.init.trunc_normal_(self.feed_forward.w12.weight_tensor, std=std, a=-3 * std, b=3 * std)
-                # scale init by depth as in https://arxiv.org/abs/1908.11365 -- worked slightly better.
-                std = 1.0 / math.sqrt(self.hidden_dim)
-                std = std / math.sqrt(2 * (self.layer_id + 1))
-                torch.nn.init.trunc_normal_(self.feed_forward.w3.weight_tensor, std=std, a=-3 * std, b=3 * std)
-            else:
-                # initialize weights trunc_normal(1/sqrt(fan_in))
-                std = 1.0 / math.sqrt(self.dim)
-                torch.nn.init.trunc_normal_(self.feed_forward.w12.weight, std=std, a=-3 * std, b=3 * std)
-                # scale init by depth as in https://arxiv.org/abs/1908.11365 -- worked slightly better.
-                std = 1.0 / math.sqrt(self.hidden_dim)
-                std = std / math.sqrt(2 * (self.layer_id + 1))
-                torch.nn.init.trunc_normal_(self.feed_forward.w3.weight, std=std, a=-3 * std, b=3 * std)
+            # if using_te:
+            #     # initialize weights trunc_normal(1/sqrt(fan_in))
+            #     std = 1.0 / math.sqrt(self.dim)
+            #     torch.nn.init.trunc_normal_(self.feed_forward.w12.weight_tensor, std=std, a=-3 * std, b=3 * std)
+            #     # scale init by depth as in https://arxiv.org/abs/1908.11365 -- worked slightly better.
+            #     std = 1.0 / math.sqrt(self.hidden_dim)
+            #     std = std / math.sqrt(2 * (self.layer_id + 1))
+            #     torch.nn.init.trunc_normal_(self.feed_forward.w3.weight_tensor, std=std, a=-3 * std, b=3 * std)
+            # else:
+            # initialize weights trunc_normal(1/sqrt(fan_in))
+            std = 1.0 / math.sqrt(self.dim)
+            torch.nn.init.trunc_normal_(self.feed_forward.w12.weight, std=std, a=-3 * std, b=3 * std)
+            # scale init by depth as in https://arxiv.org/abs/1908.11365 -- worked slightly better.
+            std = 1.0 / math.sqrt(self.hidden_dim)
+            std = std / math.sqrt(2 * (self.layer_id + 1))
+            torch.nn.init.trunc_normal_(self.feed_forward.w3.weight, std=std, a=-3 * std, b=3 * std)
         elif self._ffn_type == "gelu":
-            if using_te:
-                std = 1.0 / math.sqrt(self.dim)
-                torch.nn.init.trunc_normal_(self._ff_w1.weight_tensor, std=std, a=-3 * std, b=3 * std)
+            # if using_te:
+            #     std = 1.0 / math.sqrt(self.dim)
+            #     torch.nn.init.trunc_normal_(self._ff_w1.weight_tensor, std=std, a=-3 * std, b=3 * std)
 
-                std = 1.0 / math.sqrt(self.hidden_dim)
-                std = std / math.sqrt(2 * (self.layer_id + 1))
-                torch.nn.init.trunc_normal_(self._ff_w2.weight_tensor, std=std, a=-3 * std, b=3 * std)
-            else:
-                std = 1.0 / math.sqrt(self.dim)
-                torch.nn.init.trunc_normal_(self._ff_w1.weight, std=std, a=-3 * std, b=3 * std)
+            #     std = 1.0 / math.sqrt(self.hidden_dim)
+            #     std = std / math.sqrt(2 * (self.layer_id + 1))
+            #     torch.nn.init.trunc_normal_(self._ff_w2.weight_tensor, std=std, a=-3 * std, b=3 * std)
+            # else:
+            std = 1.0 / math.sqrt(self.dim)
+            torch.nn.init.trunc_normal_(self._ff_w1.weight, std=std, a=-3 * std, b=3 * std)
 
-                std = 1.0 / math.sqrt(self.hidden_dim)
-                std = std / math.sqrt(2 * (self.layer_id + 1))
-                torch.nn.init.trunc_normal_(self._ff_w2.weight, std=std, a=-3 * std, b=3 * std)
+            std = 1.0 / math.sqrt(self.hidden_dim)
+            std = std / math.sqrt(2 * (self.layer_id + 1))
+            torch.nn.init.trunc_normal_(self._ff_w2.weight, std=std, a=-3 * std, b=3 * std)
 
     def forward(self, x, past_key_value=None, use_cache=False, attention_mask=None):
         h, past_key_value = self.attention(
