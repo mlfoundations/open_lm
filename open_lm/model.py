@@ -99,7 +99,7 @@ class Params:
     weight_tying: bool = False
     norm_type: nn.Module = te.LayerNorm if using_te else nn.LayerNorm
     linear_type: nn.Linear = te.Linear if using_te else nn.Linear
-    linear_device: str = 'cuda' if using_te else None
+    linear_device: str = "cuda" if using_te else None
     attn_func: Callable = xformers_attn if torch.cuda.is_available() else torch_attn
     apply_qk_norm: bool = False
     moe_loss_weight: float = 0.1
@@ -132,7 +132,9 @@ class CustomAttn(nn.Module):
         super().__init__()
         self.n_heads = args.n_heads
         self.head_dim = args.dim // args.n_heads
-        self.in_proj = args.linear_type(args.dim, 3 * args.n_heads * self.head_dim, bias=False, device=args.linear_device)
+        self.in_proj = args.linear_type(
+            args.dim, 3 * args.n_heads * self.head_dim, bias=False, device=args.linear_device
+        )
         self.out_proj = args.linear_type(args.n_heads * self.head_dim, args.dim, bias=False, device=args.linear_device)
         self.pos_embed = get_pos_embed(args)
         self.attn_fn = args.attn_func
@@ -470,7 +472,7 @@ def create_params(args):
             weight_tying=cfg["weight_tying"],
             norm_type=get_norm_class(cfg.get("model_norm", args.model_norm), args.use_fp8),
             linear_type=te.Linear if (using_te and args.use_fp8) else nn.Linear,
-            linear_device='cuda' if (using_te and args.use_fp8) else None,
+            linear_device="cuda" if (using_te and args.use_fp8) else None,
             attn_func=get_attn_func(
                 args.attn_name, args.attn_activation, args.attn_seq_scalar, args.attn_seq_scalar_alpha
             ),
