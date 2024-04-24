@@ -42,11 +42,13 @@ except ImportError:
 # Adding flag if using TE FP8
 using_te = False
 linearLayerType = nn.Linear
+device = None
 try:
     import transformer_engine.pytorch as te
 
     using_te = True
     linearLayerType = te.Linear
+    device = 'cuda'
 except ImportError as ie:
     using_te = False
 
@@ -134,12 +136,8 @@ class CustomAttn(nn.Module):
         super().__init__()
         self.n_heads = args.n_heads
         self.head_dim = args.dim // args.n_heads
-        if using_te:
-            self.in_proj = linearLayerType(args.dim, 3 * args.n_heads * self.head_dim, bias=False, device='cuda')
-            self.out_proj = linearLayerType(args.n_heads * self.head_dim, args.dim, bias=False, device='cuda')
-        else:
-            self.in_proj = linearLayerType(args.dim, 3 * args.n_heads * self.head_dim, bias=False)
-            self.out_proj = linearLayerType(args.n_heads * self.head_dim, args.dim, bias=False)
+        self.in_proj = linearLayerType(args.dim, 3 * args.n_heads * self.head_dim, bias=False, device=device)
+        self.out_proj = linearLayerType(args.n_heads * self.head_dim, args.dim, bias=False, device=device)
         self.pos_embed = get_pos_embed(args)
         self.attn_fn = args.attn_func
         self.apply_qk_norm = args.apply_qk_norm
@@ -226,14 +224,9 @@ class GemmaMLP(nn.Module):
         super().__init__()
         self.dim = dim
         self.hidden_dim = hidden_dim
-        if using_te:
-            self.gate_proj = linearLayerType(dim, hidden_dim, device='cuda')
-            self.up_proj = linearLayerType(dim, hidden_dim, device='cuda')
-            self.down_proj = linearLayerType(hidden_dim, dim, device='cuda')
-        else:
-            self.gate_proj = linearLayerType(dim, hidden_dim)
-            self.up_proj = linearLayerType(dim, hidden_dim)
-            self.down_proj = linearLayerType(hidden_dim, dim)
+        self.gate_proj = linearLayerType(dim, hidden_dim, device=device)
+        self.up_proj = linearLayerType(dim, hidden_dim, device=device)
+        self.down_proj = linearLayerType(hidden_dim, dim, device=device)
         self._layer_id = layer_id
 
     def forward(self, x):
@@ -268,12 +261,8 @@ class GemmaMLP(nn.Module):
 class SwiGLUTorch(nn.Module):
     def __init__(self, in_dim, hidden_dim, out_dim, bias=True):
         super().__init__()
-        if using_te:
-            self.w12 = linearLayerType(in_dim, 2 * hidden_dim, bias=bias, device='cuda')
-            self.w3 = linearLayerType(hidden_dim, out_dim, bias=bias, device='cuda')
-        else:
-            self.w12 = linearLayerType(in_dim, 2 * hidden_dim, bias=bias)
-            self.w3 = linearLayerType(hidden_dim, out_dim, bias=bias)
+        self.w12 = linearLayerType(in_dim, 2 * hidden_dim, bias=bias, device=device)
+        self.w3 = linearLayerType(hidden_dim, out_dim, bias=bias, device=device)
 
     def forward(self, x):
         gate, x = self.w12(x).chunk(2, dim=-1)
@@ -301,8 +290,8 @@ class Block(nn.Module):
         elif args.ffn_type == "gelu":
             # Follows mosaic mpt7b, but without a bias.
             self.hidden_dim = args.dim * 4
-            self._ff_w1 = linearLayerType(args.dim, self.hidden_dim, bias=False)
-            self._ff_w2 = linearLayerType(self.hidden_dim, args.dim, bias=False)
+            self._ff_w1 = linearLayerType(args.dim, self.hidden_dim, bias=False, device=device)
+            self._ff_w2 = linearLayerType(self.hidden_dim, args.dim, bias=False, device=device)
             self.feed_forward = nn.Sequential(self._ff_w1, nn.GELU(approximate="none"), self._ff_w2)
         elif args.ffn_type == "gemma_geglu":
             # this follows llama / lit llama -- go to multiple of 256
