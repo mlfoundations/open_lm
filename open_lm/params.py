@@ -245,6 +245,11 @@ def check_args(args):
     if args.experimental_meta_device:
         print("WARNING: Meta device initialization requested, but this is not currently fully tested.")
 
+    if args.rho1_k is not None:
+        assert args.rho1_k >= 0 and args.rho1_k <= 1, "--rho1-k should be a float in [0,1]"
+        assert args.rho1_switch >= 0 and args.rho1_switch <= 1, "--rho1-k should be a float in [0,1]"
+        assert args.reference_model is not None, "a reference model is needed for Rho-1 loss"
+
 
 def parse_args(args):
     parser = argparse.ArgumentParser()
@@ -760,6 +765,14 @@ def parse_args(args):
         type=int,
         default=0,
         help="Whether to log the average model training loss. if not 0, it will log the average loss over the specified number of steps.",
+    )
+    parser.add_argument("--rho1-k", type=float, default=None, help="Percentage of tokens to keep if using Rho-1 loss")
+    parser.add_argument("--rho1-switch", type=float, default=None, help="Percentage of training at which to switch to Rho-1 loss.")
+    parser.add_argument(
+        "--reference-model",
+        type=str,
+        default=None,
+        help="Reference model to use when using Rho-1 loss."
     )
     add_model_args(parser)
 
