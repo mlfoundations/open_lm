@@ -3,7 +3,7 @@ xformers>=0.0.22
 tiktoken
 wandb
 webdataset
-pandas==2.1.4
+pandas
 fsspec
 tqdm
 jsonlines
