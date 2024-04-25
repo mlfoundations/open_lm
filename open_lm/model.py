@@ -98,7 +98,7 @@ class Params:
     moe_num_experts: int = 8
     moe_top_k: int = 2
     moe_freq: int = 0
-    moe_dropless: bool = True
+    moe_dropless: bool = False
     positional_embedding_type: str = "rotary"
     ffn_type: str = "swiglu"
 
