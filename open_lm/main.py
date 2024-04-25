@@ -121,6 +121,8 @@ def load_model(args, model, different_seed=False, filter_keys=None):
         # resuming a train checkpoint w/ epoch and optimizer state
         start_epoch = checkpoint["epoch"]
         sd = checkpoint["state_dict"]
+        # remove inv_freq from the state dict if it exists
+        sd = {k: v for k, v in sd.items() if "inv_freq" not in k}
         global_step = checkpoint.get("step", None)
         if next(iter(sd.items()))[0].startswith("module"):
             sd = {k[len("module.") :]: v for k, v in sd.items()}
@@ -141,6 +143,7 @@ def load_model(args, model, different_seed=False, filter_keys=None):
         pretrained_seed = None
         if "state_dict" in checkpoint:
             checkpoint = checkpoint["state_dict"]
+        checkpoint = {k: v for k, v in checkpoint.items() if "inv_freq" not in k}
         model.load_state_dict(checkpoint)
         logging.info(f"=> loaded checkpoint '{args.resume}' (epoch {start_epoch})")
     return start_epoch, global_step, pretrained_seed
