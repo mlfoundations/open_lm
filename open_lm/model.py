@@ -24,6 +24,7 @@ from open_lm.positional_embedding.none import identity_with_cast
 
 # from open_lm.moe.mixture_of_experts import MoE
 try:
+    from megablocks.layers.dmoe import dMoE
     from megablocks.layers.moe import MoE
     from megablocks.layers.arguments import Arguments as MoEArgs
 except ImportError:
@@ -97,6 +98,7 @@ class Params:
     moe_num_experts: int = 8
     moe_top_k: int = 2
     moe_freq: int = 0
+    moe_dropless: bool = True
     positional_embedding_type: str = "rotary"
     ffn_type: str = "swiglu"
 
@@ -278,7 +280,10 @@ class Block(nn.Module):
                 bf16=False,
                 fp16=False,
             )
-            self.feed_forward = MoE(moe_args)
+            if args.moe_dropless:
+                self.feed_forward = dMoE(moe_args)
+            else:
+                self.feed_forward = MoE(moe_args)
 
         self.layer_id = layer_id
         self.attention_norm = args.norm_type(
