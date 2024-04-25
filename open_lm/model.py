@@ -579,6 +579,22 @@ if MambaLMHeadModel is not None:
         def forward(self, input_ids, inputs_embeds=None, inference_params=None, **kwargs):
             logits, hidden_state, inference_params = self.model(input_ids, inputs_embeds, inference_params, **kwargs)
             return logits, hidden_state, inference_params
+else:
+    class Mamba(nn.Module):
+        # Experimental architecture, please "pip install mamba-ssm"
+        # https://arxiv.org/abs/2312.00752
+        def __init__(self, params):
+            raise ImportError(
+                "MambaLMHeadModel is not available. Please install the 'mamba_ssm' package by running 'pip install mamba-ssm'."
+            )
+
+        def reset_parameters(self):
+            return
+
+        def forward(self, input_ids, inputs_embeds=None, inference_params=None, **kwargs):
+            raise ImportError(
+                "MambaLMHeadModel is not available. Please install the 'mamba_ssm' package by running 'pip install mamba-ssm'."
+            )
 
 
 def create_model(args):
