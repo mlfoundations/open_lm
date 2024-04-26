@@ -9,6 +9,7 @@ import torch
 import torch.distributed as dist
 from torch.distributed.distributed_c10d import ReduceOp
 from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
+import torch.nn.functional as F
 
 try:
     from megablocks.layers.moe import batched_load_balancing_loss, clear_load_balancing_loss
@@ -42,7 +43,7 @@ def backward(total_loss, scaler):
 
 
 def train_one_epoch(
-    model, data, loss, epoch, step, optimizer, scaler, scheduler, total_steps, args, tb_writer=None, averagers=None
+    model, data, loss, epoch, step, optimizer, scaler, scheduler, total_steps, args, tb_writer=None, averagers=None, ref_model=None
 ):
     """Trains model for one epoch on the provided data.
 
@@ -122,11 +123,22 @@ def train_one_epoch(
             with autocast():
                 inputs, targets = sample_chunk(texts, args)
                 out, _, _ = model(inputs)
-
                 if args.log_logit_mean:
                     logit_m.update(torch.mean(out).item())
 
-                total_lm_loss = loss(out.reshape(-1, args.vocab_size), targets.reshape(-1))
+                if ref_model is not None and step >= args.rho1_switch * total_steps:
+                    ref_out, _, _ = ref_model(inputs)
+                    with torch.no_grad():
+                        loss_cur = F.cross_entropy(out.reshape(-1, args.vocab_size), targets.reshape(-1))
+                        loss_ref = F.cross_entropy(ref_out.reshape(-1, args.vocab_size), targets.reshape(-1))
+                        loss_diff = loss_cur - loss_ref
+                        ref_mask = (loss_diff >= torch.topk(loss_diff, int(round(args.rho1_k * loss_diff.shape[0]))))
+                        loss_targets = targets.reshape(-1).detach().clone()
+                        loss_targets[ref_mask] = -100  # This value is ignored by the loss
+                else:
+                    loss_targets = targets.reshape(-1)
+
+                total_lm_loss = loss(out.reshape(-1, args.vocab_size), loss_targets)
                 total_loss = total_lm_loss
                 if args.moe_freq > 0:
                     total_load_balancing_loss = batched_load_balancing_loss(moe_args)
@@ -161,12 +173,23 @@ def train_one_epoch(
                             break
                         targets_ii = targets[ii * per_batch : (ii + 1) * per_batch]
                         out, _, _ = model(inputs_ii)
-
                         if args.log_logit_mean:
                             logit_m.update(torch.mean(out).item())
 
+                        if ref_model is not None and step >= args.rho1_switch * total_steps:
+                            ref_out_ii, _, _ = ref_model(inputs_ii)
+                            with torch.no_grad():
+                                loss_cur = F.cross_entropy(out.reshape(-1, args.vocab_size), targets.reshape(-1))
+                                loss_ref = F.cross_entropy(ref_out_ii.reshape(-1, args.vocab_size), targets.reshape(-1))
+                                loss_diff = loss_cur - loss_ref
+                                ref_mask = (loss_diff >= torch.topk(loss_diff, int(round(args.rho1_k * loss_diff.shape[0])))).detach().clone()
+                                loss_targets = targets_ii.reshape(-1).detach().clone()
+                                loss_targets[ref_mask] = -100 # This index is ignored from the loss
+                        else:
+                            loss_targets = targets_ii.reshape(-1)
+                        
                         local_lm_loss = (
-                            loss(out.reshape(-1, args.vocab_size), targets_ii.reshape(-1))
+                            loss(out.reshape(-1, args.vocab_size), loss_targets)
                             * inputs_ii.shape[0]
                             / inputs.shape[0]
                         )
