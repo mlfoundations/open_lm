@@ -326,11 +326,6 @@ def train_one_epoch(
                 # resetting batch / data time meters per log window
                 batch_time_m.reset()
                 data_time_m.reset()
-                # reset all average meters
-                losses_m.reset()
-                if averagers is not None and args.log_avg_model_training_loss:
-                    for k in averagers.avgs_dict.keys():
-                        losses_avg_m[k].reset()
 
                 if math.isnan(losses_m.val):
                     # case where loss goes to nan, we see this sometimes with bad nodes.
@@ -338,6 +333,12 @@ def train_one_epoch(
                     # e.g., saving checkpoints and optmization states that may lead to skipped
                     # training on restarts.
                     return False, step
+                
+                # reset all average meters
+                losses_m.reset()
+                if averagers is not None and args.log_avg_model_training_loss:
+                    for k in averagers.avgs_dict.keys():
+                        losses_avg_m[k].reset()
 
     # end for
     if tb_writer is not None:
