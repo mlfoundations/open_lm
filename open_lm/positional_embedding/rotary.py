@@ -12,7 +12,6 @@ def rotate_half(x):
     return torch.cat((-x2, x1), dim=-1)
 
 
-@torch.jit.script
 def apply_rotary_pos_emb(x, cos, sin, offset: int = 0):
     # NOTE: This could probably be moved to Triton
     assert (

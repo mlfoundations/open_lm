@@ -27,7 +27,6 @@ class OpenLMConfig(PretrainedConfig):
             params_args_dict (Optional[Dict]): The dictionary containing the parameters arguments.
             **kwargs: Additional keyword arguments.
         """
-
         # Used by huggingface transformers
         super().__init__(**kwargs)
 

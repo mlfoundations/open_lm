@@ -189,6 +189,7 @@ def main_after_setup_move(args):
         max_wait=5 * 24 * 60 * 60 if args.spot_instance else None,
         input_mode="FastFile",
         # environment={"TORCH_DISTRIBUTED_DEBUG": "DETAIL", "TORCH_CPP_LOG_LEVEL": "INFO"},
+        environment={"SM_USE_RESERVED_CAPACITY": "1"},
         keep_alive_period_in_seconds=30 * 60 if not args.spot_instance else None,  # 30 minutes
     )
 

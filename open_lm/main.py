@@ -32,6 +32,7 @@ from torch.distributed.fsdp.wrap import transformer_auto_wrap_policy
 from open_lm.data import proc_token
 from open_lm.model import Block
 from open_lm.losses import CrossEntropyLossWithZLoss
+from open_lm.utils.averaging_utils import ModelAverager
 
 try:
     import wandb
@@ -50,7 +51,7 @@ from open_lm.data import get_data, get_wds_dataset
 from open_lm.distributed import is_master, init_distributed_device, broadcast_object
 from open_lm.logger import setup_logging
 from open_lm.params import parse_args
-from open_lm.scheduler import cosine_lr
+from open_lm.scheduler import cosine_lr, const_lr
 from open_lm.train import train_one_epoch
 from open_lm.evaluate import evaluate_loop
 from open_lm.file_utils import (
@@ -122,6 +123,8 @@ def load_model(args, model, different_seed=False):
         global_step = checkpoint.get("step", None)
         if next(iter(sd.items()))[0].startswith("module"):
             sd = {k[len("module.") :]: v for k, v in sd.items()}
+        if "_orig_mod" in next(iter(sd.items()))[0]:
+            sd = {k.replace("_orig_mod.", ""): v for k, v in sd.items()}
         if args.fsdp:
             model.load_state_dict(sd)
         elif args.distributed:
@@ -136,6 +139,25 @@ def load_model(args, model, different_seed=False):
         model.load_state_dict(checkpoint)
         logging.info(f"=> loaded checkpoint '{args.resume}' (epoch {start_epoch})")
     return start_epoch, global_step, pretrained_seed
+
+
+def load_avg_models(args, averagers):
+    checkpoint = pt_load(args.resume, map_location="cpu")
+    if "epoch" in checkpoint:
+        # resuming a train checkpoint w/ epoch and optimizer state
+        start_epoch = checkpoint["epoch"]
+        if averagers is not None:
+            for k in averagers.avgs_dict:
+                avg_sd = torch.load(args.resume.replace("epoch", k), map_location="cpu")
+                if next(iter(avg_sd.items()))[0].startswith("module"):
+                    avg_sd = {k[len("module.") :]: v for k, v in avg_sd.items()}
+                if "_orig_mod" in next(iter(avg_sd.items()))[0]:
+                    avg_sd = {k.replace("_orig_mod.", ""): v for k, v in avg_sd.items()}
+                averagers.avgs_dict[k].load_state_dict_avg(avg_sd)
+                logging.info(
+                    f"=> resuming averager for {k} from checkpoint '{args.resume.replace('epoch', k)} (epoch {start_epoch})"
+                )
+    return
 
 
 def load_optimizer(args, model, optimizer, scaler):
@@ -181,6 +203,7 @@ def save_checkpoint(
     next_shard_per_source=None,
     samples_seen=None,
     shard_shuffle_seed=None,
+    averagers=None,
 ):
     cpu_state, optim_state = None, None
     if args.logs and args.logs.lower() != "none" and args.fsdp:
@@ -230,6 +253,9 @@ def save_checkpoint(
             "stats_": checkpoint_dict_stats,
         }
 
+        if averagers is not None:
+            for k in averagers.avgs_dict:
+                prefixes[f"{k}_"] = averagers.avgs_dict[k].get_state_dict_avg()
         if (
             completed_epoch == args.epochs
             or is_final_checkpoint
@@ -437,7 +463,11 @@ def main(args):
             )
         args.val_num_samples //= args.seq_len
 
+    averagers = None
     random_seed(args.seed, args.rank)
+
+    if args.grad_checkpointing:
+        model.set_grad_checkpointing()
 
     if args.distributed:
         if args.fsdp:
@@ -515,9 +545,10 @@ def main(args):
                 # this doesn't exist in older PyTorch, arg only added if enabled
                 ddp_args["static_graph"] = True
             model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[device], **ddp_args)
-
-    if args.grad_checkpointing:
-        model.set_grad_checkpointing()
+    if args.averagers is not None:
+        averagers = ModelAverager(model, args.averagers)
+    if args.resume is not None and averagers is not None:
+        load_avg_models(args, averagers)
 
     if is_master(args):
         logging.info(f"Model (has {sum(p.numel() for p in model.parameters() if p.requires_grad)} parameters):")
@@ -535,6 +566,7 @@ def main(args):
     shard_shuffle_seed = args.seed
     if args.resume is not None:
         start_epoch, global_step, shard_shuffle_seed = load_model(args, model)
+
     elif args.pretrained is not None:
         print("=> loading from a pre-trained model.")
         args.resume = args.pretrained
@@ -601,10 +633,6 @@ def main(args):
             assert not args.fsdp, "FSDP not supported with amp, only amp_bfloat16"
             scaler = GradScaler()
 
-    # optionally resume optimizer from a checkpoint
-    if args.resume is not None:
-        load_optimizer(args, model, optimizer, scaler)
-
     # initialize datasets
     # use tokenizer=None because the data is already pre-tokenized.
 
@@ -627,6 +655,15 @@ def main(args):
     if args.torchcompile:
         logging.info("Compiling model...")
         model = torch.compile(model)
+        if averagers is not None:
+            logging.info("Compiling averagers...")
+            for k in averagers.avgs_dict:
+                averagers.avgs_dict[k].av_model = torch.compile(averagers.avgs_dict[k].av_model)
+
+    # optionally resume optimizer from a checkpoint
+    # this needs to be after torchcompile
+    if args.resume is not None:
+        load_optimizer(args, model, optimizer, scaler)
 
     # create scheduler if train
     scheduler = None
@@ -636,14 +673,26 @@ def main(args):
         else:
             total_steps = (data["train"].dataloader.num_batches) * args.epochs
 
-        scheduler = cosine_lr(
-            optimizer,
-            args.lr,
-            args.warmup,
-            total_steps,
-            args.lr_cooldown_end,
-            args.force_min_lr,
-        )
+        if args.lr_scheduler == "cosine":
+            scheduler = cosine_lr(
+                optimizer,
+                args.lr,
+                args.warmup,
+                total_steps,
+                args.lr_cooldown_end,
+                args.force_min_lr,
+            )
+        elif args.lr_scheduler == "const":
+            scheduler = const_lr(
+                optimizer,
+                args.lr,
+                args.warmup,
+                # total_steps,
+                # args.lr_cooldown_end,
+                # args.force_min_lr,
+            )
+        else:
+            raise ValueError(f"Unknown scheduler, {args.lr_scheduler}. Available options are: cosine, const.")
 
     # determine if this worker should save logs and checkpoints. only do so if it is rank == 0
     args.save_logs = args.logs and args.logs.lower() != "none" and is_master(args)
@@ -676,7 +725,12 @@ def main(args):
         logging.info("No training required, evaluating instead.")
         checkpoint_root = os.path.dirname(args.resume)
 
+        if averagers is not None:
+            k = next(iter(averagers.avgs_dict.keys()))
+            logging.info(f"=> evaluation avg {k}")
+            model = averagers.avgs_dict[k].av_model
         metrics = evaluate_loop(model, data["val_list"], start_epoch, args, writer)
+        metrics["average"] = k if averagers is not None else "none"
 
         if is_master(args):
             with fsspec.open(os.path.join(checkpoint_root, "results.jsonl"), "a") as f:
@@ -746,6 +800,7 @@ def main(args):
             model,
             data,
             loss,
+            averagers=averagers,
             epoch=epoch,
             step=global_step,
             optimizer=optimizer,
@@ -797,6 +852,7 @@ def main(args):
             next_shard_per_source=next_shard_per_source if args.dataset_manifest is not None else None,
             samples_seen=samples_seen if args.dataset_manifest is not None else None,
             shard_shuffle_seed=args.shard_shuffle_seed,
+            averagers=averagers,
         )
 
         if done_training:

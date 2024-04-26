@@ -218,7 +218,7 @@ def run_model(open_lm, tokenizer, args, wiki_page=None, start_index=None):
         generate_args["top_p"] = args.top_p
 
     output = composer_model.generate(
-        input["input_ids"],
+        input_ids=input["input_ids"],
         **generate_args,
     )
     output = tokenizer.decode(output[0].cpu().numpy())
