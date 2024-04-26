@@ -333,7 +333,7 @@ def train_one_epoch(
                     # e.g., saving checkpoints and optmization states that may lead to skipped
                     # training on restarts.
                     return False, step
-                
+
                 # reset all average meters
                 losses_m.reset()
                 if averagers is not None and args.log_avg_model_training_loss:
