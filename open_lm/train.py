@@ -132,10 +132,9 @@ def train_one_epoch(
                         loss_cur = F.cross_entropy(out.reshape(-1, args.vocab_size), targets.reshape(-1), reduction="none")
                         loss_ref = F.cross_entropy(ref_out.reshape(-1, args.vocab_size), targets.reshape(-1), reduction="none")
                         loss_diff = loss_cur - loss_ref
-                        ref_mask = (loss_diff < torch.topk(loss_diff, int(round(args.rho1_k * loss_diff.shape[0])))[0][-1])
-                        loss_diff = loss_diff.reshape(inputs_ii.shape[0], inputs_ii.shape[1])
-                        ref_mask = (loss_diff < torch.topk(loss_diff, int(np.ceil(args.rho1_k * loss_diff.shape[0])), dim = -1)[0][-1].reshape(loss_diff.shape[0], 1))
-                        loss_targets = targets_ii.detach().clone()
+                        loss_diff = loss_diff.reshape(inputs.shape[0], inputs.shape[1])
+                        ref_mask = (loss_diff < torch.topk(loss_diff, int(np.ceil(args.rho1_k * loss_diff.shape[1])), dim = -1)[0][..., -1].reshape(loss_diff.shape[0], -1))
+                        loss_targets = targets.detach().clone()
                         loss_targets[ref_mask] = -100 # This index is ignored from the loss
                 else:
                     loss_targets = targets
@@ -185,7 +184,7 @@ def train_one_epoch(
                                 loss_ref = F.cross_entropy(ref_out_ii.reshape(-1, args.vocab_size), targets_ii.reshape(-1), reduction="none")
                                 loss_diff = loss_cur - loss_ref
                                 loss_diff = loss_diff.reshape(inputs_ii.shape[0], inputs_ii.shape[1])
-                                ref_mask = (loss_diff < torch.topk(loss_diff, int(np.ceil(args.rho1_k * loss_diff.shape[0])), dim = -1)[0][-1].reshape(loss_diff.shape[0], 1))
+                                ref_mask = (loss_diff < torch.topk(loss_diff, int(np.ceil(args.rho1_k * loss_diff.shape[1])), dim = -1)[0][..., -1].reshape(loss_diff.shape[0], -1))
                                 loss_targets = targets_ii.detach().clone()
                                 loss_targets[ref_mask] = -100 # This index is ignored from the loss
                         else:

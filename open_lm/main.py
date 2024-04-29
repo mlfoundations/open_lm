@@ -636,6 +636,8 @@ def main(args):
         temp_args = copy.deepcopy(args)
         temp_args.resume = args.reference_model
         _ = load_model(temp_args, ref_model, different_seed=True)
+        for p in ref_model.parameters():
+            p.requires_grad = False
 
 
     if requires_training and global_step is None:
