@@ -9,6 +9,7 @@ import torch
 import torch.distributed as dist
 from torch.distributed.distributed_c10d import ReduceOp
 from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
+import torch.nn.functional as F
 
 try:
     from megablocks.layers.moe import batched_load_balancing_loss, clear_load_balancing_loss
@@ -42,7 +43,7 @@ def backward(total_loss, scaler):
 
 
 def train_one_epoch(
-    model, data, loss, epoch, step, optimizer, scaler, scheduler, total_steps, args, tb_writer=None, averagers=None
+    model, data, loss, epoch, step, optimizer, scaler, scheduler, total_steps, args, tb_writer=None, averagers=None, ref_model=None
 ):
     """Trains model for one epoch on the provided data.
 
@@ -122,11 +123,23 @@ def train_one_epoch(
             with autocast():
                 inputs, targets = sample_chunk(texts, args)
                 out, _, _ = model(inputs)
-
                 if args.log_logit_mean:
                     logit_m.update(torch.mean(out).item())
 
-                total_lm_loss = loss(out.reshape(-1, args.vocab_size), targets.reshape(-1))
+                if ref_model is not None and step >= args.rho1_switch * total_steps:
+                    ref_out, _, _ = ref_model(inputs)
+                    with torch.no_grad():
+                        loss_cur = F.cross_entropy(out.reshape(-1, args.vocab_size), targets.reshape(-1), reduction="none")
+                        loss_ref = F.cross_entropy(ref_out.reshape(-1, args.vocab_size), targets.reshape(-1), reduction="none")
+                        loss_diff = loss_cur - loss_ref
+                        loss_diff = loss_diff.reshape(inputs.shape[0], inputs.shape[1])
+                        ref_mask = (loss_diff < torch.topk(loss_diff, int(np.ceil(args.rho1_k * loss_diff.shape[1])), dim = -1)[0][..., -1].reshape(loss_diff.shape[0], -1))
+                        loss_targets = targets.detach().clone()
+                        loss_targets[ref_mask] = -100 # This index is ignored from the loss
+                else:
+                    loss_targets = targets
+
+                total_lm_loss = loss(out.reshape(-1, args.vocab_size), loss_targets.reshape(-1))
                 total_loss = total_lm_loss
                 if args.moe_freq > 0:
                     total_load_balancing_loss = batched_load_balancing_loss(moe_args)
@@ -161,12 +174,24 @@ def train_one_epoch(
                             break
                         targets_ii = targets[ii * per_batch : (ii + 1) * per_batch]
                         out, _, _ = model(inputs_ii)
-
                         if args.log_logit_mean:
                             logit_m.update(torch.mean(out).item())
 
+                        if ref_model is not None and step >= args.rho1_switch * total_steps:
+                            ref_out_ii, _, _ = ref_model(inputs_ii)
+                            with torch.no_grad():
+                                loss_cur = F.cross_entropy(out.reshape(-1, args.vocab_size), targets_ii.reshape(-1), reduction="none")
+                                loss_ref = F.cross_entropy(ref_out_ii.reshape(-1, args.vocab_size), targets_ii.reshape(-1), reduction="none")
+                                loss_diff = loss_cur - loss_ref
+                                loss_diff = loss_diff.reshape(inputs_ii.shape[0], inputs_ii.shape[1])
+                                ref_mask = (loss_diff < torch.topk(loss_diff, int(np.ceil(args.rho1_k * loss_diff.shape[1])), dim = -1)[0][..., -1].reshape(loss_diff.shape[0], -1))
+                                loss_targets = targets_ii.detach().clone()
+                                loss_targets[ref_mask] = -100 # This index is ignored from the loss
+                        else:
+                            loss_targets = targets_ii
+                        
                         local_lm_loss = (
-                            loss(out.reshape(-1, args.vocab_size), targets_ii.reshape(-1))
+                            loss(out.reshape(-1, args.vocab_size), loss_targets.reshape(-1))
                             * inputs_ii.shape[0]
                             / inputs.shape[0]
                         )

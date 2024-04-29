@@ -1,4 +1,5 @@
 import atexit
+import copy
 import logging
 import os
 import re
@@ -599,6 +600,46 @@ def main(args):
     # Put the shard shuffle seed back into args (this is done for compatibility with older, non shuffling versions)
     args.shard_shuffle_seed = shard_shuffle_seed
 
+    ref_model = None
+    if args.reference_model is not None:
+        # TODO: currently assumes that the reference model is the same architecture as the training model.
+        with torch.device("meta" if args.experimental_meta_device and args.fsdp else args.device):
+            ref_model = create_model(args)
+
+        if args.distributed:
+            if args.fsdp:
+                if args.rank == 0:
+                    print(f"Before FSDP parameter num: {sum(p.numel() for p in ref_model.parameters()):,}")
+                    print(f"Before FSDP {torch.cuda.memory_allocated()/1024**3:.3} GB")
+
+                # Reuse FSDP parameters from above.
+                ref_model = FSDP(
+                    ref_model,
+                    auto_wrap_policy=transformer_auto_wrapper_policy,
+                    device_id=device,
+                    mixed_precision=mp_policy,
+                    cpu_offload=CPUOffload(offload_params=args.fsdp_cpu_offload),
+                    use_orig_params=args.fsdp_use_orig_params,
+                    limit_all_gathers=args.fsdp_limit_all_gathers,
+                    **fsdp_kwargs,
+                )
+
+                print(f"After FSDP parameter num: {sum(p.numel() for p in ref_model.parameters()):,} on rank {args.rank}")
+                print(f"After FSDP {torch.cuda.memory_allocated()/1024**3:.3} GB on rank {args.rank}")
+            else:
+                ddp_args = {}
+                if args.ddp_static_graph:
+                    # this doesn't exist in older PyTorch, arg only added if enabled
+                    ddp_args["static_graph"] = True
+                ref_model = torch.nn.parallel.DistributedDataParallel(ref_model, device_ids=[device], **ddp_args)
+        
+        temp_args = copy.deepcopy(args)
+        temp_args.resume = args.reference_model
+        _ = load_model(temp_args, ref_model, different_seed=True)
+        for p in ref_model.parameters():
+            p.requires_grad = False
+
+
     if requires_training and global_step is None:
         raise ValueError("Key 'step' not found in checkpoint, but required for training.")
 
@@ -809,6 +850,7 @@ def main(args):
             total_steps=total_steps,
             args=args,
             tb_writer=writer,
+            ref_model=ref_model
         )
 
         if args.distributed:
