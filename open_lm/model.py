@@ -4,8 +4,7 @@ import re
 from copy import deepcopy
 from pathlib import Path
 from dataclasses import dataclass
-from typing import Callable, Union
-import inspect
+from typing import Callable
 
 import torch
 import torch.nn.functional as F
@@ -100,7 +99,7 @@ class Params:
     post_embed_norm: bool = False
     weight_tying: bool = False
     norm_type: nn.Module = te.LayerNorm if using_te else nn.LayerNorm
-    linear_type: nn.Linear = te.Linear if using_te else nn.Linear
+    linear_type: nn.Module = te.Linear if using_te else nn.Linear
     linear_device: str = "cuda" if using_te else None
     attn_func: Callable = xformers_attn if torch.cuda.is_available() else torch_attn
     apply_qk_norm: bool = False
@@ -241,7 +240,7 @@ class GemmaMLP(nn.Module):
 # Same as pseudocode provided from xformers SwiGLU
 # https://github.com/facebookresearch/xformers
 class SwiGLUTorch(nn.Module):
-    def __init__(self, in_dim, hidden_dim, out_dim, args: Params, bias=True):
+    def __init__(self, in_dim, hidden_dim, out_dim, args: Params = Params, bias=True):
         super().__init__()
         self.w12 = args.linear_type(in_dim, 2 * hidden_dim, bias=bias, device=args.linear_device)
         self.w3 = args.linear_type(hidden_dim, out_dim, bias=bias, device=args.linear_device)
@@ -474,7 +473,11 @@ def create_params(args):
             linear_type=te.Linear if (using_te and args.use_fp8) else nn.Linear,
             linear_device="cuda" if (using_te and args.use_fp8) else None,
             attn_func=get_attn_func(
-                args.attn_name, args.attn_activation, args.attn_seq_scalar, args.attn_seq_scalar_alpha
+                args.attn_name,
+                args.attn_activation,
+                args.attn_seq_scalar,
+                args.attn_seq_scalar_alpha,
+                use_fp8=args.use_fp8,
             ),
             apply_qk_norm=cfg.get("qk_norm", args.qk_norm),
             positional_embedding_type=cfg.get("positional_embedding_type", args.positional_embedding_type),
