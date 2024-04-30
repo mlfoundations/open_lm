@@ -10,6 +10,17 @@ from typing import Union, Tuple, Optional, List
 import os
 
 
+def is_attention_mask_right(attention_mask):
+    # Get the first zero index in each sequence
+    first_zero_index = torch.min(attention_mask, dim=1).indices
+    # Sum each sequence mask
+    sum_values = torch.sum(attention_mask, dim=1)
+    # Check if the sum of the mask is equal to the first zero index (meaning that the rest of the sequence after the first 0 is also 0)
+    is_valid_sequence = (sum_values % attention_mask.shape[1] == first_zero_index).all()
+    
+    return is_valid_sequence
+
+
 class OpenLMModel(PreTrainedModel):
     config_class = OpenLMConfig
 
@@ -107,6 +118,14 @@ class OpenLMforCausalLM(OpenLMModel):
         ```"""
         assert position_ids is None, "Position IDs are not supported"
         # decoder outputs consists of (dec_features, layer_state, dec_hidden, dec_attn)
+
+        if is_attention_mask_right(attention_mask):
+            # The masking can be done on the loss only
+            loss_mask = attention_mask
+            attention_mask = None
+        else:
+            loss_mask = None
+
         logits, _, past_key_values = self.model(
             input_ids=input_ids,
             inputs_embeds=inputs_embeds,
@@ -118,10 +137,16 @@ class OpenLMforCausalLM(OpenLMModel):
         if labels is not None:
             shift_logits = logits[..., :-1, :].contiguous()
             shift_labels = labels[..., 1:].contiguous()
-            loss_fct = nn.CrossEntropyLoss()
             shift_logits = shift_logits.view(-1, shift_logits.size(-1))
             shift_labels = shift_labels.view(-1).to(shift_logits.device)
-            loss = loss_fct(shift_logits, shift_labels)
+            if loss_mask is not None:
+                shift_mask = loss_mask[..., 1:].contiguous()
+                loss_fct = nn.CrossEntropyLoss(reduction="none")
+                loss = loss_fct(shift_logits, shift_labels)
+                loss = loss[shift_mask.view(-1)].sum()/shift_mask.sum()
+            else:
+                loss_fct = nn.CrossEntropyLoss()
+                loss = loss_fct(shift_logits, shift_labels)
 
         output = CausalLMOutputWithPast(logits=logits, past_key_values=past_key_values, loss=loss)
         return output
