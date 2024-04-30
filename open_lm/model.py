@@ -98,15 +98,16 @@ class Params:
     moe_top_k: int = 2
     moe_freq: int = 0
     positional_embedding_type: str = "rotary"
+    rotary_freq: float = 10000
     ffn_type: str = "swiglu"
 
 
 def get_pos_embed(args: Params):
     head_dim = args.dim // args.n_heads
     if args.positional_embedding_type == "rotary":
-        return RotaryWithCast(head_dim, args.seq_len)
+        return RotaryWithCast(head_dim, args.seq_len, args.rotary_freq)
     elif args.positional_embedding_type == "llama_rotary":
-        return LLaMARotaryWithCast(head_dim, args.n_heads, args.seq_len)
+        return LLaMARotaryWithCast(head_dim, args.n_heads, args.seq_len, args.rotary_freq)
     elif args.positional_embedding_type == "head_rotary":
         return HeadRotaryWithCast(head_dim, args.seq_len)
     elif args.positional_embedding_type == "none":
@@ -462,6 +463,7 @@ def create_params(args):
             ),
             apply_qk_norm=cfg.get("qk_norm", args.qk_norm),
             positional_embedding_type=cfg.get("positional_embedding_type", args.positional_embedding_type),
+            rotary_freq=cfg.get("rotary_freq", args.rotary_freq),
             ffn_type=cfg.get("ffn_type", args.ffn_type),
             moe_num_experts=cfg.get("moe_num_experts", args.moe_num_experts),
             moe_loss_weight=cfg.get("moe_loss_weight", args.moe_loss_weight),
