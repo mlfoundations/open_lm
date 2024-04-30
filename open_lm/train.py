@@ -14,7 +14,9 @@ try:
     from megablocks.layers.moe import batched_load_balancing_loss, clear_load_balancing_loss
     from megablocks.layers.arguments import Arguments as MoEArgs
 except ImportError:
-    logging.warning(f"Megablocks not installed. To train MoE, install with pip install megablocks.")
+    batched_load_balancing_loss = None
+    clear_load_balancing_loss = None
+    MoEArgs = None
 
 try:
     import wandb
