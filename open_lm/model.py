@@ -27,9 +27,8 @@ try:
     from megablocks.layers.moe import MoE
     from megablocks.layers.arguments import Arguments as MoEArgs
 except ImportError:
-    import logging
-
-    logging.warning(f"Megablocks not installed. To train MoE, install with pip install megablocks.")
+    MoE = None
+    MoEArgs = None
 
 try:  # optional import
     from mamba_ssm import MambaLMHeadModel
