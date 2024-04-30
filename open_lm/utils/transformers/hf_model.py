@@ -119,7 +119,7 @@ class OpenLMforCausalLM(OpenLMModel):
         assert position_ids is None, "Position IDs are not supported"
         # decoder outputs consists of (dec_features, layer_state, dec_hidden, dec_attn)
 
-        if is_attention_mask_right(attention_mask):
+        if attention_mask is not None and is_attention_mask_right(attention_mask):
             # The masking can be done on the loss only
             loss_mask = attention_mask
             attention_mask = None
