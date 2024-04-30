@@ -247,12 +247,7 @@ def custom_attn(
     return torch.einsum("bhqk,bkhd->bqhd", attn_weight, values)
 
 
-def get_attn_func(
-    attn_name,
-    attn_activation=None,
-    attn_seq_scalar=None,
-    alpha=None,
-):
+def get_attn_func(attn_name, attn_activation=None, attn_seq_scalar=None, alpha=None, use_fp8=False):
     if attn_name == "auto":
         return xformers_attn if torch.cuda.is_available() else torch_attn
     elif attn_name == "xformers_attn":
@@ -264,6 +259,8 @@ def get_attn_func(
         # call .contiguous() on the output tensor. [#188]
         return lambda *args, **kwargs: xformers_attn(*args, **kwargs).contiguous()
     elif attn_name == "torch_attn":
+        if using_te and use_fp8:
+            return torch_attn_te
         return torch_attn
     elif attn_name == "custom_attn":
         assert (

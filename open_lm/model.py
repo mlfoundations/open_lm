@@ -473,7 +473,11 @@ def create_params(args):
             linear_type=te.Linear if (using_te and args.use_fp8) else nn.Linear,
             linear_device="cuda" if (using_te and args.use_fp8) else None,
             attn_func=get_attn_func(
-                args.attn_name, args.attn_activation, args.attn_seq_scalar, args.attn_seq_scalar_alpha
+                args.attn_name,
+                args.attn_activation,
+                args.attn_seq_scalar,
+                args.attn_seq_scalar_alpha,
+                use_fp8=args.use_fp8,
             ),
             apply_qk_norm=cfg.get("qk_norm", args.qk_norm),
             positional_embedding_type=cfg.get("positional_embedding_type", args.positional_embedding_type),
