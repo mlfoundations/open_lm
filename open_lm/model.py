@@ -469,7 +469,7 @@ def create_params(args):
             post_embed_norm=cfg["post_embed_norm"],
             weight_tying=cfg["weight_tying"],
             norm_type=get_norm_class(cfg.get("model_norm", args.model_norm), args.use_fp8),
-            linear_type=nn.Linear #te.Linear if (using_te and args.use_fp8) else nn.Linear,
+            linear_type=nn.Linear, #te.Linear if (using_te and args.use_fp8) else nn.Linear,
             linear_device="cuda" if (using_te and args.use_fp8) else None,
             attn_func=get_attn_func(
                 args.attn_name,
