@@ -33,7 +33,8 @@ try:
     from transformer_engine.common import recipe
 
     fp8_format = recipe.Format.HYBRID
-    fp8_recipe = recipe.DelayedScaling(fp8_format=fp8_format, amax_history_len=16, amax_compute_algo="max")
+    fp8_recipe = recipe.DelayedScaling(fp8_format=fp8_format, amax_history_len=16, amax_compute_algo="max", margin=0, interval=1)
+    fp8_recipe.reduce_amax = False
     using_te = True
 except ImportError as ie:
     using_te = False
@@ -149,6 +150,7 @@ def train_one_epoch(
                 inputs, targets = sample_chunk(texts, args)
 
                 out, _, _ = model(inputs)
+                torch.cuda.synchronize()
 
                 if args.log_logit_mean:
                     logit_m.update(torch.mean(out).item())
@@ -193,6 +195,7 @@ def train_one_epoch(
                         targets_ii = targets[ii * per_batch : (ii + 1) * per_batch]
 
                         out, _, _ = model(inputs_ii)
+                        torch.cuda.synchronize()
 
                         if args.log_logit_mean:
                             logit_m.update(torch.mean(out).item())
