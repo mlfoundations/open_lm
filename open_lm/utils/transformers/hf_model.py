@@ -143,7 +143,7 @@ class OpenLMforCausalLM(OpenLMModel):
                 shift_mask = loss_mask[..., 1:].contiguous()
                 loss_fct = nn.CrossEntropyLoss(reduction="none")
                 loss = loss_fct(shift_logits, shift_labels)
-                loss = loss[shift_mask.view(-1)].sum()/shift_mask.sum()
+                loss = loss[shift_mask.view(-1)].sum() / shift_mask.sum()
             else:
                 loss_fct = nn.CrossEntropyLoss()
                 loss = loss_fct(shift_logits, shift_labels)
