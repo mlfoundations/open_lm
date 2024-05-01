@@ -140,10 +140,11 @@ class OpenLMforCausalLM(OpenLMModel):
             shift_logits = shift_logits.view(-1, shift_logits.size(-1))
             shift_labels = shift_labels.view(-1).to(shift_logits.device)
             if loss_mask is not None:
-                shift_mask = loss_mask[..., 1:].contiguous()
+                shift_mask = loss_mask[..., :-1].contiguous()
                 loss_fct = nn.CrossEntropyLoss(reduction="none")
                 loss = loss_fct(shift_logits, shift_labels)
-                loss = loss[shift_mask.view(-1)].sum() / shift_mask.sum()
+                shift_mask = torch.logical_and(shift_mask.view(-1), shift_labels != -100)
+                loss = loss[shift_mask.view(-1)].sum()/shift_mask.sum()
             else:
                 loss_fct = nn.CrossEntropyLoss()
                 loss = loss_fct(shift_logits, shift_labels)
