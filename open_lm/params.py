@@ -245,6 +245,16 @@ def check_args(args):
     if args.experimental_meta_device:
         print("WARNING: Meta device initialization requested, but this is not currently fully tested.")
 
+    if args.moe_freq != 0 or args.moe_num_experts is not None:
+        assert (
+            args.moe_freq != 0 and args.moe_num_experts is not None
+        ), "For MoE training, pass --moe-freq and --moe-num-experts"
+
+        try:
+            import megablocks
+        except ImportError:
+            raise ValueError("Megablocks not installed. To train MoE, install with pip install megablocks.")
+
 
 def parse_args(args):
     parser = argparse.ArgumentParser()
