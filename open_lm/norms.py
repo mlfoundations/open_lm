@@ -171,16 +171,16 @@ def get_norm_class(model_norm, use_fp8=False):
     if model_norm == "default_layer_norm":
         return torch.nn.LayerNorm
     elif model_norm == "lp_layer_norm":
-        if use_fp8 and using_te:
-            return LPLayerNormTE
+        # if use_fp8 and using_te:
+        #     return LPLayerNormTE
         return LPLayerNorm
     elif model_norm == "gain_only_lp_layer_norm":
-        if use_fp8 and using_te:
-            return partial(LPLayerNormTE, elementwise_gain=True, elementwise_bias=False)
+        # if use_fp8 and using_te:
+        #     return partial(LPLayerNormTE, elementwise_gain=True, elementwise_bias=False)
         return partial(LPLayerNorm, elementwise_gain=True, elementwise_bias=False)
     elif model_norm == "gain_only_layer_norm":
-        if use_fp8 and using_te:
-            return partial(LayerNormTE, elementwise_gain=True, elementwise_bias=False)
+        # if use_fp8 and using_te:
+        #     return partial(LayerNormTE, elementwise_gain=True, elementwise_bias=False)
         return partial(LayerNorm, elementwise_gain=True, elementwise_bias=False)
 
     elif model_norm == "no_wb_layer_norm":
