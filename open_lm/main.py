@@ -578,11 +578,11 @@ def main(args):
     elif args.pretrained is not None:
         print("=> loading from a pre-trained model.")
         args.resume = args.pretrained
-        _epoch, _step, _shard_shuffle_seed = load_model(args, model)
         # this flag continues training from the pre-trained model.
         if args.load_pretrained_state:
-            start_epoch, global_step, shard_shuffle_seed = _epoch, _step, _shard_shuffle_seed
+            start_epoch, global_step, shard_shuffle_seed = load_model(args, model)
         else:
+            load_model(args, model, different_seed=True)
             args.resume = None
     elif args.average is not None:
         num_models_to_average = len(args.average)
