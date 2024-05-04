@@ -91,10 +91,11 @@ def init_distributed_device(args):
         args.distributed = True
 
     if torch.cuda.is_available():
-        if args.distributed and not args.no_set_device_rank:
-            device = "cuda:%d" % args.local_rank
-        else:
-            device = "cuda:0"
+        # if args.distributed and not args.no_set_device_rank:
+        #     device = "cuda:%d" % args.local_rank
+        # else:
+        #     device = "cuda:0"
+        device = "cuda:%d" % args.local_rank
         torch.cuda.set_device(device)
     else:
         device = "cpu"
