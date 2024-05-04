@@ -42,6 +42,12 @@ using_te = False
 try:
     import transformer_engine.pytorch as te
 
+    world_group = torch.distributed.init_process_group(
+        "nccl",
+        init_method="file:///tmp/rdzv",
+        world_size=1,
+        rank=0,
+    )
     tensor_parallel_group = torch.distributed.new_group(ranks=[0], backend="nccl")
     using_te = True
 except ImportError as ie:
