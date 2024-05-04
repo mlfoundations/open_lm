@@ -132,10 +132,10 @@ class CustomAttn(nn.Module):
         super().__init__()
         self.n_heads = args.n_heads
         self.head_dim = args.dim // args.n_heads
-        self.in_proj = args.linear_type(
+        self.in_proj = te.Linear(
             args.dim, 3 * args.n_heads * self.head_dim, bias=False, device=args.linear_device
         )
-        self.out_proj = args.linear_type(args.n_heads * self.head_dim, args.dim, bias=False, device=args.linear_device)
+        self.out_proj = te.Linear(args.n_heads * self.head_dim, args.dim, bias=False, device=args.linear_device)
         self.pos_embed = get_pos_embed(args)
         self.attn_fn = args.attn_func
         self.apply_qk_norm = args.apply_qk_norm
@@ -213,9 +213,9 @@ class GemmaMLP(nn.Module):
         super().__init__()
         self.dim = dim
         self.hidden_dim = hidden_dim
-        self.gate_proj = args.linear_type(dim, hidden_dim, device=args.linear_device)
-        self.up_proj = args.linear_type(dim, hidden_dim, device=args.linear_device)
-        self.down_proj = args.linear_type(hidden_dim, dim, device=args.linear_device)
+        self.gate_proj = te.Linear(dim, hidden_dim, device=args.linear_device)
+        self.up_proj = te.Linear(dim, hidden_dim, device=args.linear_device)
+        self.down_proj = te.Linear(hidden_dim, dim, device=args.linear_device)
         self._layer_id = layer_id
 
     def forward(self, x):
@@ -241,8 +241,8 @@ class GemmaMLP(nn.Module):
 class SwiGLUTorch(nn.Module):
     def __init__(self, in_dim, hidden_dim, out_dim, args: Params = Params, bias=True):
         super().__init__()
-        self.w12 = args.linear_type(in_dim, 2 * hidden_dim, bias=bias, device=args.linear_device)
-        self.w3 = args.linear_type(hidden_dim, out_dim, bias=bias, device=args.linear_device)
+        self.w12 = te.Linear(in_dim, 2 * hidden_dim, bias=bias, device=args.linear_device)
+        self.w3 = te.Linear(hidden_dim, out_dim, bias=bias, device=args.linear_device)
 
     def forward(self, x):
         gate, x = self.w12(x).chunk(2, dim=-1)
@@ -270,8 +270,8 @@ class Block(nn.Module):
         elif args.ffn_type == "gelu":
             # Follows mosaic mpt7b, but without a bias.
             self.hidden_dim = args.dim * 4
-            self._ff_w1 = args.linear_type(args.dim, self.hidden_dim, bias=False, device=args.linear_device)
-            self._ff_w2 = args.linear_type(self.hidden_dim, args.dim, bias=False, device=args.linear_device)
+            self._ff_w1 = te.Linear(args.dim, self.hidden_dim, bias=False, device=args.linear_device)
+            self._ff_w2 = te.Linear(self.hidden_dim, args.dim, bias=False, device=args.linear_device)
             self.feed_forward = nn.Sequential(self._ff_w1, nn.GELU(approximate="none"), self._ff_w2)
         elif args.ffn_type == "gemma_geglu":
             # this follows llama / lit llama -- go to multiple of 256
