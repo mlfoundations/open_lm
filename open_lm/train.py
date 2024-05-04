@@ -152,7 +152,7 @@ def train_one_epoch(
                 inputs, targets = sample_chunk(texts, args)
 
                 out, _, _ = model(inputs)
-                torch.cuda.synchronize()
+                # torch.cuda.synchronize()
 
                 if args.log_logit_mean:
                     logit_m.update(torch.mean(out).item())
@@ -198,7 +198,7 @@ def train_one_epoch(
                         targets_ii = targets[ii * per_batch : (ii + 1) * per_batch]
 
                         out, _, _ = model(inputs_ii)
-                        torch.cuda.synchronize()
+                        # torch.cuda.synchronize()
 
                         if args.log_logit_mean:
                             logit_m.update(torch.mean(out).item())
