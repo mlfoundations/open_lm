@@ -449,8 +449,8 @@ def main(args):
     data_parallel_group = None
     tensor_parallel_group = None
     if args.use_fp8:
-        data_parallel_group = torch.distributed.new_group(ranks=[0], backend="nccl")
-        tensor_parallel_group = torch.distributed.new_group(ranks=[0], backend="nccl")
+        data_parallel_group = torch.distributed.new_group(ranks=[1], backend="nccl")
+        tensor_parallel_group = torch.distributed.new_group(ranks=[1], backend="nccl")
         logging.info("Using FP8 to run training.")
 
     model = None
