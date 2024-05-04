@@ -175,8 +175,8 @@ def get_norm_class(model_norm, use_fp8=False):
             return LPLayerNormTE
         return LPLayerNorm
     elif model_norm == "gain_only_lp_layer_norm":
-        # if use_fp8 and using_te:
-        #     return partial(LPLayerNormTE, elementwise_gain=True, elementwise_bias=False)
+        if use_fp8 and using_te:
+            return partial(LPLayerNormTE, elementwise_gain=True, elementwise_bias=False)
         return partial(LPLayerNorm, elementwise_gain=True, elementwise_bias=False)
     elif model_norm == "gain_only_layer_norm":
         if use_fp8 and using_te:

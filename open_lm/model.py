@@ -470,7 +470,7 @@ def create_params(args):
             weight_tying=cfg["weight_tying"],
             norm_type=get_norm_class(cfg.get("model_norm", args.model_norm), args.use_fp8),
             linear_type=nn.Linear,
-            linear_device="cuda" if (using_te and args.use_fp8) else None,
+            linear_device=None, #"cuda" if (using_te and args.use_fp8) else None,
             attn_func=get_attn_func(
                 args.attn_name,
                 args.attn_activation,
