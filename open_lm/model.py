@@ -518,28 +518,20 @@ def te_linear_ops(model, exclude_modules=['output'], tensor_parallel_group=None)
     for name, module in model.named_children():
         if len(list(module.children())) > 0:
             te_linear_ops(module, exclude_modules, tensor_parallel_group)
-        print(f"[FP8] {name}: {module}")
-        print(f"[FP8] {isinstance(module, te.Linear)} or {isinstance(module, nn.Linear)}")
-        # if isinstance(module, te.Linear) and name not in exclude_modules:
-        #     old_module = model._modules[name]
-        #     model._modules[name] = linear_replacement(
-        #         module.in_features,
-        #         module.out_features,
-        #         module.bias is not None,
-        #     )
-        #     if copy_weights:
-        #         model._modules[name].weight.data.copy_(old_module.weight.data)
-        #         if model._modules[name].bias is not None:
-        #             model._modules[name].bias.data.copy_(old_module.bias)
+        if isinstance(module, te.Linear):
+            print(f"[FP8] Setting TP GROUP for {name}")
+            model._modules[name].set_tensor_parallel_group(tensor_parallel_group)
     return model
 
 
 def create_model(args, tensor_parallel_group=None):
     if "mamba" in args.model:
         model = Mamba(create_params(args))
-        te_linear_ops(model, tensor_parallel_group)
+        if args.use_fp8 and using_te:
+            model = te_linear_ops(model, tensor_parallel_group)
         return model
     else:
         model = Transformer(create_params(args))
-        te_linear_ops(model, tensor_parallel_group)
+        if args.use_fp8 and using_te:
+            model = te_linear_ops(model, tensor_parallel_group)
         return model
