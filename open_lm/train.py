@@ -6,7 +6,6 @@ from contextlib import nullcontext
 
 import numpy as np
 import torch
-print(f"TORCH VERSION = {torch.__version__}")
 import torch.distributed as dist
 from torch.distributed.distributed_c10d import ReduceOp
 from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
