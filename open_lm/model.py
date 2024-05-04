@@ -526,7 +526,6 @@ def te_linear_ops(model, exclude_modules=['output'], tensor_parallel_group=None)
         if len(list(module.children())) > 0:
             te_linear_ops(module, exclude_modules, tensor_parallel_group)
         if isinstance(module, te.Linear):
-            print(f"[FP8] Setting TP GROUP for {name}")
             model._modules[name].set_tensor_parallel_group(tensor_parallel_group)
     return model
 
