@@ -57,6 +57,7 @@ def init_distributed_device(args):
     args.world_size = 1
     args.rank = 0  # global rank
     args.local_rank = 0
+    args.world_group = None
     # For testing, allow forcing distributed mode to test distributed code path even on one gpu.
     if is_using_distributed() or args.force_distributed:
         if "SLURM_PROCID" in os.environ:
@@ -74,7 +75,7 @@ def init_distributed_device(args):
             os.environ["LOCAL_RANK"] = str(args.local_rank)
             os.environ["RANK"] = str(args.rank)
             os.environ["WORLD_SIZE"] = str(args.world_size)
-            torch.distributed.init_process_group(
+            args.world_group = torch.distributed.init_process_group(
                 backend=args.dist_backend,
                 init_method=args.dist_url,
                 world_size=args.world_size,
@@ -85,7 +86,7 @@ def init_distributed_device(args):
             # Note that this currently assumes that the world size is all gpus in a node.
             assert args.preset_world_size is None, "--preset_world_size with torchrun is not currently supported."
             args.local_rank, _, _ = world_info_from_env()
-            torch.distributed.init_process_group(backend=args.dist_backend, init_method=args.dist_url)
+            args.world_group = torch.distributed.init_process_group(backend=args.dist_backend, init_method=args.dist_url)
             args.world_size = torch.distributed.get_world_size()
             args.rank = torch.distributed.get_rank()
         args.distributed = True
