@@ -144,16 +144,7 @@ def tar_reader(fh: BinaryIO, content_key: str):
 
 
 def get_reader(file_type, content_key: str):
-    if file_type == RawFileType.JSONL:
-        return lambda x: jsonl_file_reader(x, content_key=content_key)
-    if file_type == RawFileType.ZSTD_JSONL_COMPRESSED:
-        return lambda x: zstd_compressed_reader(x, content_key=content_key)
-    if file_type == RawFileType.GZIP_JSONL_COMPRESSED:
-        return lambda x: gzip_compressed_reader(x, content_key=content_key)
-    if file_type == RawFileType.TAR:
-        return lambda x: tar_reader(x, content_key=content_key)
-    else:
-        raise Exception("Unsupported filetype")
+    return lambda x: gzip_compressed_reader(x, content_key=content_key)
 
 
 def get_raw_filetype(key: str):
