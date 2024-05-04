@@ -145,6 +145,8 @@ def train_one_epoch(
         data_time_m.update(time.time() - end)
         optimizer.zero_grad()
 
+        torch.cuda.synchronize()
+
         if args.accum_freq == 1:
             with te.fp8_autocast(enabled=True, fp8_recipe=fp8_recipe, fp8_group=all_gpus) if (
                 using_te and args.use_fp8
@@ -152,7 +154,6 @@ def train_one_epoch(
                 inputs, targets = sample_chunk(texts, args)
 
                 out, _, _ = model(inputs)
-                torch.cuda.synchronize()
 
                 if args.log_logit_mean:
                     logit_m.update(torch.mean(out).item())
@@ -197,7 +198,6 @@ def train_one_epoch(
                         targets_ii = targets[ii * per_batch : (ii + 1) * per_batch]
 
                         out, _, _ = model(inputs_ii)
-                        torch.cuda.synchronize()
 
                         if args.log_logit_mean:
                             logit_m.update(torch.mean(out).item())
@@ -256,6 +256,8 @@ def train_one_epoch(
             total_loss = total_lm_loss
             if args.moe_freq > 0:
                 total_loss += total_load_balancing_loss
+        
+        torch.cuda.synchronize()
 
         if scaler is not None:
             if args.grad_clip_norm is not None:
