@@ -535,7 +535,7 @@ def main(args):
 
             model = FSDP(
                 model,
-                process_group=all_gpus,
+                # process_group=all_gpus,
                 auto_wrap_policy=transformer_auto_wrapper_policy,
                 device_id=device,
                 mixed_precision=mp_policy,
