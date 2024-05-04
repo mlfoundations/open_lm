@@ -146,9 +146,10 @@ def train_one_epoch(
         optimizer.zero_grad()
 
         if args.accum_freq == 1:
-            with te.fp8_autocast(enabled=True, fp8_recipe=fp8_recipe, fp8_group=all_gpus) if (
-                using_te and args.use_fp8
-            ) else autocast():
+            # with te.fp8_autocast(enabled=True, fp8_recipe=fp8_recipe, fp8_group=all_gpus) if (
+            #     using_te and args.use_fp8
+            # ) else autocast():
+            with autocast():
                 inputs, targets = sample_chunk(texts, args)
 
                 out, _, _ = model(inputs)
@@ -189,9 +190,10 @@ def train_one_epoch(
                 if isinstance(model, FSDP) and ii != args.accum_freq - 1:
                     maybe_no_sync = model.no_sync
                 with maybe_no_sync():
-                    with te.fp8_autocast(enabled=True, fp8_recipe=fp8_recipe, fp8_group=all_gpus) if (
-                        using_te and args.use_fp8
-                    ) else autocast():
+                    # with te.fp8_autocast(enabled=True, fp8_recipe=fp8_recipe, fp8_group=all_gpus) if (
+                    #     using_te and args.use_fp8
+                    # ) else autocast():
+                    with autocast():
                         inputs_ii = inputs[ii * per_batch : (ii + 1) * per_batch]
                         if inputs_ii.shape[0] == 0:
                             break
