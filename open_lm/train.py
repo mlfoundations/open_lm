@@ -166,9 +166,10 @@ def train_one_epoch(
 
             backward(total_loss, scaler)
             if averagers is not None and args.log_avg_model_training_loss and i % args.log_avg_model_training_loss == 0:
-                with te.fp8_autocast(enabled=True, fp8_recipe=fp8_recipe, fp8_group=all_gpus) if (
-                    using_te and args.use_fp8
-                ) else autocast():
+                # with te.fp8_autocast(enabled=True, fp8_recipe=fp8_recipe, fp8_group=all_gpus) if (
+                #     using_te and args.use_fp8
+                # ) else autocast():
+                with autocast():
                     for key, averager in averagers.avgs_dict.items():
                         with torch.no_grad():
                             out_avg, _, _ = averager.av_model(inputs)
@@ -214,9 +215,10 @@ def train_one_epoch(
                         local_loss += local_load_balancing_loss
 
                     backward(local_loss, scaler)
-                    with te.fp8_autocast(enabled=True, fp8_recipe=fp8_recipe, fp8_group=all_gpus) if (
-                        using_te and args.use_fp8
-                    ) else autocast():
+                    # with te.fp8_autocast(enabled=True, fp8_recipe=fp8_recipe, fp8_group=all_gpus) if (
+                    #     using_te and args.use_fp8
+                    # ) else autocast():
+                    with autocast():
                         if (
                             averagers is not None
                             and args.log_avg_model_training_loss
