@@ -456,6 +456,12 @@ def main(args):
 
     data_parallel_group = None
     if args.use_fp8:
+        world_group = torch.distributed.init_process_group(
+            "nccl",
+            init_method="file:///tmp/rdzv",
+            world_size=1,
+            rank=0,
+        )
         data_parallel_group = torch.distributed.new_group(ranks=[0], backend="nccl")
         logging.info("Using FP8 to run training.")
 
