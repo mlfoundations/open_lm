@@ -545,6 +545,7 @@ def main(args):
             model = FSDP(
                 model,
                 process_group=data_parallel_group,
+                sync_module_states=True,
                 auto_wrap_policy=transformer_auto_wrapper_policy,
                 device_id=device,
                 mixed_precision=mp_policy,
