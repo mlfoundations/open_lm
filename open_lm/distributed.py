@@ -26,7 +26,7 @@ def is_using_distributed():
 
 
 def world_info_from_env():
-    local_rank = 1
+    local_rank = 0
     for v in (
         "LOCAL_RANK",
         "MPI_LOCALRANKID",
@@ -46,7 +46,7 @@ def world_info_from_env():
         if v in os.environ:
             world_size = int(os.environ[v])
             break
-
+    local_rank = 1
     return local_rank, global_rank, world_size
 
 
@@ -56,7 +56,7 @@ def init_distributed_device(args):
     args.distributed = False
     args.world_size = 1
     args.rank = 0  # global rank
-    args.local_rank = 1
+    args.local_rank = 0
     # For testing, allow forcing distributed mode to test distributed code path even on one gpu.
     if is_using_distributed() or args.force_distributed:
         if "SLURM_PROCID" in os.environ:
