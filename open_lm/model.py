@@ -537,11 +537,9 @@ def te_linear_ops(model, exclude_modules=['output'], tensor_parallel_group=None)
 def create_model(args, tensor_parallel_group=None):
     if "mamba" in args.model:
         model = Mamba(create_params(args))
-        if args.use_fp8:
-            te_linear_ops(model, tensor_parallel_group)
+        te_linear_ops(model, tensor_parallel_group)
         return model
     else:
         model = Transformer(create_params(args))
-        if args.use_fp8:
-            te_linear_ops(model, tensor_parallel_group)
+        te_linear_ops(model, tensor_parallel_group)
         return model
