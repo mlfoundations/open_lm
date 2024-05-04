@@ -79,6 +79,7 @@ def train_one_epoch(
             As such, the number of steps in an "epoch" can vary, and we have to keep track of steps separately.
     """
     device = torch.device(args.device)
+    torch.cuda.set_device(device)
     autocast = get_autocast(args.precision)
 
     model.train()
