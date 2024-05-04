@@ -35,7 +35,7 @@ try:
     from transformer_engine.common import recipe
 
     fp8_format = recipe.Format.HYBRID
-    fp8_recipe = recipe.DelayedScaling(fp8_format=fp8_format, amax_history_len=32, amax_compute_algo="max")
+    fp8_recipe = recipe.DelayedScaling(fp8_format=fp8_format, amax_history_len=16, amax_compute_algo="max")
     using_te = True
 except ImportError as ie:
     using_te = False
@@ -68,6 +68,7 @@ def train_one_epoch(
     args,
     tb_writer=None,
     averagers=None,
+    data_parallel_group=None
 ):
     """Trains model for one epoch on the provided data.
 
@@ -143,10 +144,12 @@ def train_one_epoch(
         data_time_m.update(time.time() - end)
         optimizer.zero_grad()
 
-        torch.cuda.synchronize()
+        # torch.cuda.synchronize()
 
         if args.accum_freq == 1:
-            with autocast():
+            with te.fp8_autocast(enabled=True, fp8_recipe=fp8_recipe, fp8_group=data_parallel_group) if (
+                using_te and args.use_fp8
+            ) else autocast():
                 inputs, targets = sample_chunk(texts, args)
 
                 out, _, _ = model(inputs)
@@ -163,7 +166,9 @@ def train_one_epoch(
 
             backward(total_loss, scaler)
             if averagers is not None and args.log_avg_model_training_loss and i % args.log_avg_model_training_loss == 0:
-                with autocast():
+                with te.fp8_autocast(enabled=True, fp8_recipe=fp8_recipe, fp8_group=data_parallel_group) if (
+                    using_te and args.use_fp8
+                ) else autocast():
                     for key, averager in averagers.avgs_dict.items():
                         with torch.no_grad():
                             out_avg, _, _ = averager.av_model(inputs)
@@ -183,7 +188,9 @@ def train_one_epoch(
                 if isinstance(model, FSDP) and ii != args.accum_freq - 1:
                     maybe_no_sync = model.no_sync
                 with maybe_no_sync():
-                    with autocast():
+                    with te.fp8_autocast(enabled=True, fp8_recipe=fp8_recipe, fp8_group=data_parallel_group) if (
+                        using_te and args.use_fp8
+                    ) else autocast():
                         inputs_ii = inputs[ii * per_batch : (ii + 1) * per_batch]
                         if inputs_ii.shape[0] == 0:
                             break
@@ -206,7 +213,9 @@ def train_one_epoch(
                         local_loss += local_load_balancing_loss
 
                     backward(local_loss, scaler)
-                    with autocast():
+                    with te.fp8_autocast(enabled=True, fp8_recipe=fp8_recipe, fp8_group=data_parallel_group) if (
+                        using_te and args.use_fp8
+                    ) else autocast():
                         if (
                             averagers is not None
                             and args.log_avg_model_training_loss
@@ -247,7 +256,7 @@ def train_one_epoch(
             if args.moe_freq > 0:
                 total_loss += total_load_balancing_loss
         
-        torch.cuda.synchronize()
+        # torch.cuda.synchronize()
 
         if scaler is not None:
             if args.grad_clip_norm is not None:

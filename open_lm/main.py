@@ -18,6 +18,7 @@ from torch.cuda.amp import GradScaler
 
 import torch.distributed as dist
 
+import torch.distributed
 from torch.distributed.fsdp import (
     FullyShardedDataParallel as FSDP,
     MixedPrecision,
@@ -453,10 +454,10 @@ def main(args):
         with torch.device("meta" if args.experimental_meta_device and args.fsdp else args.device):
             model = create_model(args)
 
-    # all_gpus = None
-    # if args.use_fp8:
-    #     all_gpus = dist.new_group(backend="nccl")
-    #     logging.info("Using FP8 to run training.")
+    data_parallel_group = None
+    if args.use_fp8:
+        data_parallel_group = torch.distributed.new_group(ranks=[0], backend="nccl")
+        logging.info("Using FP8 to run training.")
 
     args.vocab_size = model.vocab_size
     args.seq_len = model.seq_len
@@ -535,6 +536,7 @@ def main(args):
 
             model = FSDP(
                 model,
+                process_group=data_parallel_group,
                 auto_wrap_policy=transformer_auto_wrapper_policy,
                 device_id=device,
                 mixed_precision=mp_policy,
@@ -816,6 +818,7 @@ def main(args):
             total_steps=total_steps,
             args=args,
             tb_writer=writer,
+            data_parallel_group=data_parallel_group
         )
 
         if args.distributed:
