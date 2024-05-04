@@ -26,7 +26,7 @@ def is_using_distributed():
 
 
 def world_info_from_env():
-    local_rank = 0
+    local_rank = 1
     for v in (
         "LOCAL_RANK",
         "MPI_LOCALRANKID",
@@ -91,11 +91,10 @@ def init_distributed_device(args):
         args.distributed = True
 
     if torch.cuda.is_available():
-        # if args.distributed and not args.no_set_device_rank:
-        #     device = "cuda:%d" % args.local_rank
-        # else:
-        #     device = "cuda:0"
-        device = "cuda:%d" % args.local_rank
+        if args.distributed and not args.no_set_device_rank:
+            device = "cuda:%d" % args.local_rank
+        else:
+            device = "cuda:0"
         torch.cuda.set_device(device)
     else:
         device = "cpu"
