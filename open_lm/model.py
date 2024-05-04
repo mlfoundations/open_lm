@@ -220,9 +220,9 @@ class GemmaMLP(nn.Module):
         super().__init__()
         self.dim = dim
         self.hidden_dim = hidden_dim
-        self.gate_proj = args.linear_type(dim, hidden_dim, device=args.linear_device)
-        self.up_proj = args.linear_type(dim, hidden_dim, device=args.linear_device)
-        self.down_proj = args.linear_type(hidden_dim, dim, device=args.linear_device)
+        self.gate_proj = nn.Linear(dim, hidden_dim)
+        self.up_proj = nn.Linear(dim, hidden_dim)
+        self.down_proj = nn.Linear(hidden_dim, dim)
         self._layer_id = layer_id
 
     def forward(self, x):
@@ -248,8 +248,8 @@ class GemmaMLP(nn.Module):
 class SwiGLUTorch(nn.Module):
     def __init__(self, in_dim, hidden_dim, out_dim, args: Params = Params, bias=True):
         super().__init__()
-        self.w12 = nn.Linear(in_dim, 2 * hidden_dim, bias=bias, device=args.linear_device)
-        self.w3 = nn.Linear(hidden_dim, out_dim, bias=bias, device=args.linear_device)
+        self.w12 = nn.Linear(in_dim, 2 * hidden_dim, bias=bias)
+        self.w3 = nn.Linear(hidden_dim, out_dim, bias=bias)
 
     def forward(self, x):
         gate, x = self.w12(x).chunk(2, dim=-1)
