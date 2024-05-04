@@ -514,10 +514,10 @@ class Mamba(nn.Module):
         return out, None, None
 
 
-def te_linear_ops(model, linear_replacement, exclude_modules=['output'], copy_weights=True):
+def te_linear_ops(model, exclude_modules=['output']):
     for name, module in model.named_children():
         if len(list(module.children())) > 0:
-            te_linear_ops(module, linear_replacement, exclude_modules, copy_weights)
+            te_linear_ops(module, exclude_modules)
         print(f"[FP8] {name}: {module}")
         # if isinstance(module, te.Linear) and name not in exclude_modules:
         #     old_module = model._modules[name]
