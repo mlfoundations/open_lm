@@ -143,7 +143,7 @@ def train_one_epoch(
         data_time_m.update(time.time() - end)
         optimizer.zero_grad()
 
-        # torch.cuda.synchronize()
+        torch.cuda.synchronize()
 
         if args.accum_freq == 1:
             with autocast():
@@ -247,7 +247,7 @@ def train_one_epoch(
             if args.moe_freq > 0:
                 total_loss += total_load_balancing_loss
         
-        # torch.cuda.synchronize()
+        torch.cuda.synchronize()
 
         if scaler is not None:
             if args.grad_clip_norm is not None:
