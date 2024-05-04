@@ -36,6 +36,7 @@ try:
 
     fp8_format = recipe.Format.HYBRID
     fp8_recipe = recipe.DelayedScaling(fp8_format=fp8_format, amax_history_len=16, amax_compute_algo="max")
+    fp8_recipe.reduce_amax = True
     using_te = True
 except ImportError as ie:
     using_te = False
@@ -79,7 +80,6 @@ def train_one_epoch(
             As such, the number of steps in an "epoch" can vary, and we have to keep track of steps separately.
     """
     device = torch.device(args.device)
-    torch.cuda.set_device(device)
     autocast = get_autocast(args.precision)
 
     model.train()
@@ -148,7 +148,7 @@ def train_one_epoch(
         # torch.cuda.synchronize()
 
         if args.accum_freq == 1:
-            with te.fp8_autocast(enabled=False, fp8_recipe=fp8_recipe, fp8_group=all_gpus) if (
+            with te.fp8_autocast(enabled=True, fp8_recipe=fp8_recipe, fp8_group=all_gpus) if (
                 using_te and args.use_fp8
             ) else autocast():
                 inputs, targets = sample_chunk(texts, args)
@@ -167,7 +167,7 @@ def train_one_epoch(
 
             backward(total_loss, scaler)
             if averagers is not None and args.log_avg_model_training_loss and i % args.log_avg_model_training_loss == 0:
-                with te.fp8_autocast(enabled=False, fp8_recipe=fp8_recipe, fp8_group=all_gpus) if (
+                with te.fp8_autocast(enabled=True, fp8_recipe=fp8_recipe, fp8_group=all_gpus) if (
                     using_te and args.use_fp8
                 ) else autocast():
                     for key, averager in averagers.avgs_dict.items():
@@ -189,7 +189,7 @@ def train_one_epoch(
                 if isinstance(model, FSDP) and ii != args.accum_freq - 1:
                     maybe_no_sync = model.no_sync
                 with maybe_no_sync():
-                    with te.fp8_autocast(enabled=False, fp8_recipe=fp8_recipe, fp8_group=all_gpus) if (
+                    with te.fp8_autocast(enabled=True, fp8_recipe=fp8_recipe, fp8_group=all_gpus) if (
                         using_te and args.use_fp8
                     ) else autocast():
                         inputs_ii = inputs[ii * per_batch : (ii + 1) * per_batch]
@@ -214,7 +214,7 @@ def train_one_epoch(
                         local_loss += local_load_balancing_loss
 
                     backward(local_loss, scaler)
-                    with te.fp8_autocast(enabled=False, fp8_recipe=fp8_recipe, fp8_group=all_gpus) if (
+                    with te.fp8_autocast(enabled=True, fp8_recipe=fp8_recipe, fp8_group=all_gpus) if (
                         using_te and args.use_fp8
                     ) else autocast():
                         if (
