@@ -46,7 +46,7 @@ def world_info_from_env():
         if v in os.environ:
             world_size = int(os.environ[v])
             break
-    local_rank = 1
+
     return local_rank, global_rank, world_size
 
 
