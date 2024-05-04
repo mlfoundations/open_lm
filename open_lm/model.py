@@ -105,7 +105,7 @@ class Params:
     post_embed_norm: bool = False
     weight_tying: bool = False
     norm_type: nn.Module = te.LayerNorm if using_te else nn.LayerNorm
-    linear_type: nn.Module = LinearTE if using_te else nn.Linear
+    linear_type: nn.Module = nn.Linear #LinearTE if using_te else nn.Linear
     linear_device: str = None #"cuda" if using_te else None
     attn_func: Callable = xformers_attn if torch.cuda.is_available() else torch_attn
     apply_qk_norm: bool = False
@@ -476,8 +476,8 @@ def create_params(args):
             post_embed_norm=cfg["post_embed_norm"],
             weight_tying=cfg["weight_tying"],
             norm_type=get_norm_class(cfg.get("model_norm", args.model_norm), args.use_fp8),
-            linear_type=LinearTE if (using_te and args.use_fp8) else nn.Linear,
-            linear_device=None #"cuda" if (using_te and args.use_fp8) else None,
+            linear_type=nn.Linear, #LinearTE if (using_te and args.use_fp8) else nn.Linear,
+            linear_device=None, #"cuda" if (using_te and args.use_fp8) else None,
             attn_func=get_attn_func(
                 args.attn_name,
                 args.attn_activation,
@@ -533,11 +533,11 @@ def te_linear_ops(model, exclude_modules=['output'], tensor_parallel_group=None)
 def create_model(args, tensor_parallel_group=None):
     if "mamba" in args.model:
         model = Mamba(create_params(args))
-        if tensor_parallel_group is not None:
+        if tensor_parallel_group is not None and using_te:
             model = te_linear_ops(model, tensor_parallel_group)
         return model
     else:
         model = Transformer(create_params(args))
-        if tensor_parallel_group is not None:
+        if tensor_parallel_group is not None and using_te:
             model = te_linear_ops(model, tensor_parallel_group)
         return model
