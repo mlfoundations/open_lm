@@ -28,7 +28,7 @@ from torch.distributed.fsdp import (
     StateDictType,
     CPUOffload,
 )
-from torch.distributed.fsdp.wrap import always_wrap_policy, transformer_auto_wrap_policy
+from torch.distributed.fsdp.wrap import always_wrap_policy, transformer_auto_wrap_policy, size_based_auto_wrap_policy
 
 from open_lm.data import proc_token
 from open_lm.model import Block
@@ -525,6 +525,7 @@ def main(args):
             assert not (
                 args.fsdp_hybrid and args.fsdp_hybrid_o2
             ), "Only --fsdp-hybrid or --fsdp-hybrid-o2 should be set."
+            fsdp_kwargs["sharding_strategy"] = ShardingStrategy.FULL_SHARD
             if args.fsdp_backward_prefetch:
                 fsdp_kwargs["backward_prefetch"] = BackwardPrefetch.BACKWARD_PRE
             if args.fsdp_hybrid:
