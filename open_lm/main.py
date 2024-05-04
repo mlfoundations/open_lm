@@ -446,15 +446,8 @@ def main(args):
 
     random_seed(args.seed, 0)
 
-    model = None
-    if args.hf_model is not None:
-        model = create_wrapped_hf_model(args)
-    else:
-        # Optional: Use meta device
-        with torch.device("meta" if args.experimental_meta_device and args.fsdp else args.device):
-            model = create_model(args)
-
     data_parallel_group = None
+    tensor_parallel_group = None
     if args.use_fp8:
         world_group = torch.distributed.init_process_group(
             "nccl",
@@ -462,8 +455,17 @@ def main(args):
             world_size=1,
             rank=0,
         )
+        tensor_parallel_group = torch.distributed.new_group(ranks=[0], backend="nccl")
         data_parallel_group = torch.distributed.new_group(ranks=[0], backend="nccl")
         logging.info("Using FP8 to run training.")
+
+    model = None
+    if args.hf_model is not None:
+        model = create_wrapped_hf_model(args)
+    else:
+        # Optional: Use meta device
+        with torch.device("meta" if args.experimental_meta_device and args.fsdp else args.device):
+            model = create_model(args, tensor_parallel_group)
 
     args.vocab_size = model.vocab_size
     args.seq_len = model.seq_len
@@ -824,7 +826,7 @@ def main(args):
             total_steps=total_steps,
             args=args,
             tb_writer=writer,
-            data_parallel_group=data_parallel_group
+            data_parallel_group=data_parallel_group,
         )
 
         if args.distributed:

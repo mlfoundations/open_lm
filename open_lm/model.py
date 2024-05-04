@@ -42,13 +42,6 @@ using_te = False
 try:
     import transformer_engine.pytorch as te
 
-    world_group = torch.distributed.init_process_group(
-        "nccl",
-        init_method="file:///tmp/rdzv",
-        world_size=1,
-        rank=0,
-    )
-    tensor_parallel_group = torch.distributed.new_group(ranks=[0], backend="nccl")
     using_te = True
 except ImportError as ie:
     using_te = False
@@ -540,7 +533,7 @@ def te_linear_ops(model, linear_replacement, exclude_modules=['output'], copy_we
     return model
 
 
-def create_model(args):
+def create_model(args, tensor_parallel_group=None):
     if "mamba" in args.model:
         model = Mamba(create_params(args))
         if args.use_fp8:
