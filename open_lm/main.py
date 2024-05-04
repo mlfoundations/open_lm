@@ -545,7 +545,7 @@ def main(args):
             model = FSDP(
                 model,
                 process_group=data_parallel_group,
-                auto_wrap_policy=transformer_auto_wrapper_policy,
+                auto_wrap_policy=always_wrap_policy,
                 device_id=device,
                 mixed_precision=mp_policy,
                 cpu_offload=CPUOffload(offload_params=args.fsdp_cpu_offload),
