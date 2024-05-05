@@ -109,7 +109,9 @@ def _cast_if_autocast_enabled(tensor):
 
 class LayerNormTE(LayerNorm):
     def forward(self, x):
-        layer_norm_module = te.LayerNorm(self.normalized_shape, eps=self.eps, device="cuda", params_dtype=x.dtype)
+        layer_norm_module = te.LayerNorm(
+            self.normalized_shape, eps=self.eps, device="cuda", params_dtype=x.dtype
+        )
         output_tensor = layer_norm_module(x)
         if self.weight is not None and self.bias is not None:
             output_tensor = output_tensor * self.weight + self.bias
@@ -122,10 +124,10 @@ class LPLayerNormTE(LayerNorm):
         downcast_x = _cast_if_autocast_enabled(x)
         downcast_weight = _cast_if_autocast_enabled(self.weight) if self.weight is not None else self.weight
         downcast_bias = _cast_if_autocast_enabled(self.bias) if self.bias is not None else self.bias
-        with torch.autocast(enabled=False, device_type=module_device.type):
-            layer_norm_module = te.LayerNorm(
-                self.normalized_shape, eps=self.eps, device="cuda", params_dtype=downcast_x.dtype
-            )
+        # with torch.autocast(enabled=False, device_type=module_device.type):
+        layer_norm_module = te.LayerNorm(
+            self.normalized_shape, eps=self.eps, device="cuda", params_dtype=downcast_x.dtype
+        )
         output_tensor = layer_norm_module(downcast_x)
         if downcast_weight is not None and downcast_bias is not None:
             output_tensor = output_tensor * downcast_weight + downcast_bias
@@ -193,28 +195,3 @@ def get_norm_class(model_norm, use_fp8=False):
 
     else:
         raise ValueError(f"Unsupported model-norm: {model_norm}")
-
-class LayerNormTE(LayerNorm):
-    def forward(self, x):
-        layer_norm_module = te.LayerNorm(
-            self.normalized_shape, eps=self.eps, device="cuda", params_dtype=x.dtype
-        )
-        output_tensor = layer_norm_module(x)
-        if self.weight is not None and self.bias is not None:
-            output_tensor = output_tensor * self.weight + self.bias
-        return output_tensor
-    
-class LPLayerNormTE(LayerNorm):
-    def forward(self, x):
-        module_device = x.device
-        downcast_x = _cast_if_autocast_enabled(x)
-        downcast_weight = _cast_if_autocast_enabled(self.weight) if self.weight is not None else self.weight
-        downcast_bias = _cast_if_autocast_enabled(self.bias) if self.bias is not None else self.bias
-        with torch.autocast(enabled=False, device_type=module_device.type):
-            layer_norm_module = te.LayerNorm(
-            self.normalized_shape, eps=self.eps, device="cuda", params_dtype=downcast_x.dtype
-        )
-        output_tensor = layer_norm_module(downcast_x)
-        if downcast_weight is not None and downcast_bias is not None:
-            output_tensor = output_tensor * downcast_weight + downcast_bias
-        return output_tensor
