@@ -492,7 +492,7 @@ def main(args):
                     return -1
 
             else:
-                transformer_layer_cls = {SwiGLUTorch, Block, LinearTE}
+                transformer_layer_cls = {}
             # from https://pytorch.org/blog/efficient-large-scale-training-with-pytorch/
             transformer_auto_wrapper_policy = functools.partial(
                 transformer_auto_wrap_policy,
