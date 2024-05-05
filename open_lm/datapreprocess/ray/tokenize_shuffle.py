@@ -606,7 +606,7 @@ def main(args):
     input_paths = []
     for inp_folder in input_folders:
         input_paths += glob_files(inp_folder, suffixes=args.suffixes)
-    input_paths = sorted(set(input_paths))
+    input_paths = sorted(input_paths)
     rng = random.Random(args.seed)
     rng.shuffle(input_paths)  # shuffle before selecting subsets
     if args.subset is not None:
