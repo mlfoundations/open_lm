@@ -28,7 +28,7 @@ from torch.distributed.fsdp import (
     StateDictType,
     CPUOffload,
 )
-from torch.distributed.fsdp.wrap import transformer_auto_wrap_policy, always_wrap_policy
+from torch.distributed.fsdp.wrap import transformer_auto_wrap_policy
 
 from open_lm.data import proc_token
 from open_lm.model import Block
@@ -498,7 +498,6 @@ def main(args):
                 transformer_auto_wrap_policy,
                 transformer_layer_cls=transformer_layer_cls,
             )
-            transformer_auto_wrapper_policy = always_wrap_policy
             # tries to follow gopher...
             mp_policy = None
             if args.fsdp_amp:
