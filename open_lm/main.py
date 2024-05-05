@@ -31,7 +31,7 @@ from torch.distributed.fsdp import (
 from torch.distributed.fsdp.wrap import transformer_auto_wrap_policy
 
 from open_lm.data import proc_token
-from open_lm.model import Block, Transformer
+from open_lm.model import Block
 from open_lm.losses import CrossEntropyLossWithZLoss
 from open_lm.utils.averaging_utils import ModelAverager
 
@@ -492,7 +492,7 @@ def main(args):
                     return -1
 
             else:
-                transformer_layer_cls = {Transformer}
+                transformer_layer_cls = {Block}
             # from https://pytorch.org/blog/efficient-large-scale-training-with-pytorch/
             transformer_auto_wrapper_policy = functools.partial(
                 transformer_auto_wrap_policy,
