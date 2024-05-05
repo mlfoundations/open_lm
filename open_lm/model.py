@@ -248,8 +248,8 @@ class GemmaMLP(nn.Module):
 class SwiGLUTorch(nn.Module):
     def __init__(self, in_dim, hidden_dim, out_dim, args: Params = Params, bias=True):
         super().__init__()
-        self.w12 = LinearTE(in_dim, 2 * hidden_dim, bias=bias)
-        self.w3 = LinearTE(hidden_dim, out_dim, bias=bias)
+        self.w12 = LinearTE(in_dim, 2 * hidden_dim, bias=bias, device=args.linear_device)
+        self.w3 = LinearTE(hidden_dim, out_dim, bias=bias, device=args.linear_device)
 
     def forward(self, x):
         gate, x = self.w12(x).chunk(2, dim=-1)
