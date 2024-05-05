@@ -95,18 +95,6 @@ class LPLayerNorm(LayerNorm):
             )
 
 
-def _cast_if_autocast_enabled(tensor):
-    if torch.is_autocast_enabled():
-        if tensor.device.type == "cuda":
-            dtype = torch.get_autocast_gpu_dtype()
-        elif tensor.device.type == "cpu":
-            dtype = torch.get_autocast_cpu_dtype()
-        else:
-            raise NotImplementedError()
-        return tensor.to(dtype=dtype)
-    return tensor
-
-
 class LayerNormTE(LayerNorm):
     def forward(self, x):
         layer_norm_module = te.LayerNorm(
@@ -131,6 +119,18 @@ class LPLayerNormTE(LayerNorm):
         if downcast_weight is not None and downcast_bias is not None:
             output_tensor = output_tensor * downcast_weight + downcast_bias
         return output_tensor
+
+
+def _cast_if_autocast_enabled(tensor):
+    if torch.is_autocast_enabled():
+        if tensor.device.type == "cuda":
+            dtype = torch.get_autocast_gpu_dtype()
+        elif tensor.device.type == "cpu":
+            dtype = torch.get_autocast_cpu_dtype()
+        else:
+            raise NotImplementedError()
+        return tensor.to(dtype=dtype)
+    return tensor
 
 
 class RmsNorm(nn.Module):
