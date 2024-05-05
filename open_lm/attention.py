@@ -260,8 +260,8 @@ def get_attn_func(attn_name, attn_activation=None, attn_seq_scalar=None, alpha=N
         # call .contiguous() on the output tensor. [#188]
         return lambda *args, **kwargs: xformers_attn(*args, **kwargs).contiguous()
     elif attn_name == "torch_attn":
-        # if using_te and use_fp8:
-        #     return torch_attn_te
+        if using_te and use_fp8:
+            return torch_attn_te
         return torch_attn
     elif attn_name == "custom_attn":
         assert (
