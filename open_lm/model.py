@@ -531,17 +531,17 @@ def te_linear_ops(model, exclude_modules=['output'], tensor_parallel_group=None)
             te_linear_ops(module, exclude_modules, tensor_parallel_group)
         if isinstance(module, te.Linear):
             model._modules[name].set_tensor_parallel_group(tensor_parallel_group)
-    return model.cuda()
+    return model
 
 
 def create_model(args, tensor_parallel_group=None):
     if "mamba" in args.model:
         model = Mamba(create_params(args))
         if tensor_parallel_group is not None and using_te:
-            model = te_linear_ops(model, tensor_parallel_group)
+            model = te_linear_ops(model.to(torch.bfloat16).cuda(), tensor_parallel_group)
         return model
     else:
         model = Transformer(create_params(args))
         if tensor_parallel_group is not None and using_te:
-            model = te_linear_ops(model, tensor_parallel_group)
+            model = te_linear_ops(model.to(torch.bfloat16).cuda(), tensor_parallel_group)
         return model
