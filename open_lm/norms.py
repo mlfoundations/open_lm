@@ -124,7 +124,6 @@ class LPLayerNormTE(LayerNorm):
         downcast_x = _cast_if_autocast_enabled(x)
         downcast_weight = _cast_if_autocast_enabled(self.weight) if self.weight is not None else self.weight
         downcast_bias = _cast_if_autocast_enabled(self.bias) if self.bias is not None else self.bias
-        # with torch.autocast(enabled=False, device_type=module_device.type):
         layer_norm_module = te.LayerNorm(
             self.normalized_shape, eps=self.eps, device="cuda", params_dtype=downcast_x.dtype
         )
