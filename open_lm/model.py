@@ -250,8 +250,8 @@ class GemmaMLP(nn.Module):
 class SwiGLUTorch(nn.Module):
     def __init__(self, in_dim, hidden_dim, out_dim, args: Params = Params, bias=True):
         super().__init__()
-        self.w12 = nn.Linear(in_dim, 2 * hidden_dim, bias=bias, device=args.te_device)
-        self.w3 = nn.Linear(hidden_dim, out_dim, bias=bias, device=args.te_device)
+        self.w12 = args.linear_type(in_dim, 2 * hidden_dim, bias=bias, device=args.te_device)
+        self.w3 = args.linear_type(hidden_dim, out_dim, bias=bias, device=args.te_device)
 
     def forward(self, x):
         gate, x = self.w12(x).chunk(2, dim=-1)
@@ -279,8 +279,8 @@ class Block(nn.Module):
         elif args.ffn_type == "gelu":
             # Follows mosaic mpt7b, but without a bias.
             self.hidden_dim = args.dim * 4
-            self._ff_w1 = nn.Linear(args.dim, self.hidden_dim, bias=False, device=args.te_device)
-            self._ff_w2 = nn.Linear(self.hidden_dim, args.dim, bias=False, device=args.te_device)
+            self._ff_w1 = args.linear_type(args.dim, self.hidden_dim, bias=False, device=args.te_device)
+            self._ff_w2 = args.linear_type(self.hidden_dim, args.dim, bias=False, device=args.te_device)
             self.feed_forward = nn.Sequential(self._ff_w1, nn.GELU(approximate="none"), self._ff_w2)
         elif args.ffn_type == "gemma_geglu":
             # this follows llama / lit llama -- go to multiple of 256
