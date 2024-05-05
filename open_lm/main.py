@@ -498,6 +498,7 @@ def main(args):
                 transformer_auto_wrap_policy,
                 transformer_layer_cls=transformer_layer_cls,
             )
+            transformer_auto_wrapper_policy = always_wrap_policy
             # tries to follow gopher...
             mp_policy = None
             if args.fsdp_amp:
