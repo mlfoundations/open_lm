@@ -28,10 +28,10 @@ from torch.distributed.fsdp import (
     StateDictType,
     CPUOffload,
 )
-from torch.distributed.fsdp.wrap import transformer_auto_wrap_policy
+from torch.distributed.fsdp.wrap import transformer_auto_wrap_policy, always_wrap_policy
 
 from open_lm.data import proc_token
-from open_lm.model import Block, LinearTE, SwiGLUTorch
+from open_lm.model import Block
 from open_lm.losses import CrossEntropyLossWithZLoss
 from open_lm.utils.averaging_utils import ModelAverager
 
@@ -492,12 +492,13 @@ def main(args):
                     return -1
 
             else:
-                transformer_layer_cls = {}
+                transformer_layer_cls = {Block}
             # from https://pytorch.org/blog/efficient-large-scale-training-with-pytorch/
             transformer_auto_wrapper_policy = functools.partial(
                 transformer_auto_wrap_policy,
                 transformer_layer_cls=transformer_layer_cls,
             )
+            transformer_auto_wrapper_policy = always_wrap_policy
             # tries to follow gopher...
             mp_policy = None
             if args.fsdp_amp:
