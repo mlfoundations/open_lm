@@ -139,10 +139,10 @@ class CustomAttn(nn.Module):
         super().__init__()
         self.n_heads = args.n_heads
         self.head_dim = args.dim // args.n_heads
-        self.in_proj = args.linear_type(
+        self.in_proj = nn.Linear(
             args.dim, 3 * args.n_heads * self.head_dim, bias=False, device=args.linear_device
         )
-        self.out_proj = args.linear_type(args.n_heads * self.head_dim, args.dim, bias=False, device=args.linear_device)
+        self.out_proj = nn.Linear(args.n_heads * self.head_dim, args.dim, bias=False, device=args.linear_device)
         self.pos_embed = get_pos_embed(args)
         self.attn_fn = args.attn_func
         self.apply_qk_norm = args.apply_qk_norm
@@ -248,8 +248,8 @@ class GemmaMLP(nn.Module):
 class SwiGLUTorch(nn.Module):
     def __init__(self, in_dim, hidden_dim, out_dim, args: Params = Params, bias=True):
         super().__init__()
-        self.w12 = nn.Linear(in_dim, 2 * hidden_dim, bias=bias, device=args.linear_device)
-        self.w3 = nn.Linear(hidden_dim, out_dim, bias=bias, device=args.linear_device)
+        self.w12 = args.linear_type(in_dim, 2 * hidden_dim, bias=bias, device=args.linear_device)
+        self.w3 = args.linear_type(hidden_dim, out_dim, bias=bias, device=args.linear_device)
 
     def forward(self, x):
         gate, x = self.w12(x).chunk(2, dim=-1)
