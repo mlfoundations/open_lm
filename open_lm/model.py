@@ -89,8 +89,8 @@ _rescan_model_configs()  # initial populate of model config registry
 class LinearTE(te.Linear):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-    def forward(self, inp: torch.Tensor, is_first_microbatch: bool = False):
-        return super().forward(inp, is_first_microbatch=False)
+    def forward(self, inp: torch.Tensor, is_first_microbatch: bool = True):
+        return super().forward(inp, is_first_microbatch=True)
 
 
 # args and default params follow llama (except with LayerNorm instead of RmsNorm)
