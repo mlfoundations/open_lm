@@ -31,14 +31,14 @@ Some considerations:
 - We like [WandB](https://wandb.ai/) and [tensorboard](https://www.tensorflow.org/tensorboard) for logging. We specify how to use these during training below.
 
 ## Process Training Data
-Next you must specify a collection of tokenized data. For the purposes of this example, we will use a recent dump of english Wikipedia, available on HuggingFace. To download this locally, we've included a script located at [datapreprocess/wiki_download.py](datapreprocess/wiki_download.py). All you have to do is specify an output directory for where the raw data should be stored:
+Next you must specify a collection of tokenized data. For the purposes of this example, we will use a recent dump of english Wikipedia, available on HuggingFace. To download this locally, we've included a script located at [open_lm/datapreprocess/wiki_download.py](open_lm/datapreprocess/wiki_download.py). All you have to do is specify an output directory for where the raw data should be stored:
 ```
-python datapreprocess/wiki_download.py --output-dir path/to/raw_data
+python open_lm/datapreprocess/wiki_download.py --output-dir path/to/raw_data
 ```
 
 Next we process our training data by running it through a BPE tokenizer and chunk it into chunks of appropriate length. By default we use the tokenizer attached with [GPT-NeoX-20B](https://github.com/EleutherAI/gpt-neox). To do this, use the script `datapreprocess/make_2048.py`:
 ```
->>> python datapreprocess/make_2048.py \
+>>> python open_lm/datapreprocess/make_2048.py \
     --input-files path_to_raw_data/*.jsonl
     --output-dir preproc_data
     --num-workers 32
@@ -47,7 +47,7 @@ Next we process our training data by running it through a BPE tokenizer and chun
 Where `input-files` passes all of its (possibly many) arguments through the python `glob` module, allowing for wildcards. Optionally, data can be stored in S3 by setting the environment variables: `S3_BASE`,  and passing the flag `--upload-to-s3` to the script. This saves sharded data to the given bucket with prefix of `S3_BASE`. E.g.
 ```
 >>> export S3_BASE=preproc_data-v1/
->>> python datapreprocess/make2048.py --upload-to-s3 ... # same arguments as before
+>>> python open_lm/datapreprocess/make2048.py --upload-to-s3 ... # same arguments as before
 ```
 
 ## Run Training
