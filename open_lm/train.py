@@ -68,7 +68,7 @@ def train_one_epoch(
     args,
     tb_writer=None,
     averagers=None,
-    all_gpus=None,
+    data_parallel_group=None,
 ):
     """Trains model for one epoch on the provided data.
 
@@ -145,7 +145,7 @@ def train_one_epoch(
         optimizer.zero_grad()
 
         if args.accum_freq == 1:
-            with te.fp8_autocast(enabled=True, fp8_recipe=fp8_recipe, fp8_group=all_gpus) if (
+            with te.fp8_autocast(enabled=True, fp8_recipe=fp8_recipe, fp8_group=data_parallel_group) if (
                 using_te and args.use_fp8
             ) else autocast():
                 inputs, targets = sample_chunk(texts, args)
@@ -164,7 +164,7 @@ def train_one_epoch(
 
             backward(total_loss, scaler)
             if averagers is not None and args.log_avg_model_training_loss and i % args.log_avg_model_training_loss == 0:
-                with te.fp8_autocast(enabled=True, fp8_recipe=fp8_recipe, fp8_group=all_gpus) if (
+                with te.fp8_autocast(enabled=True, fp8_recipe=fp8_recipe, fp8_group=data_parallel_group) if (
                     using_te and args.use_fp8
                 ) else autocast():
                     for key, averager in averagers.avgs_dict.items():
@@ -186,7 +186,7 @@ def train_one_epoch(
                 if isinstance(model, FSDP) and ii != args.accum_freq - 1:
                     maybe_no_sync = model.no_sync
                 with maybe_no_sync():
-                    with te.fp8_autocast(enabled=True, fp8_recipe=fp8_recipe, fp8_group=all_gpus) if (
+                    with te.fp8_autocast(enabled=True, fp8_recipe=fp8_recipe, fp8_group=data_parallel_group) if (
                         using_te and args.use_fp8
                     ) else autocast():
                         inputs_ii = inputs[ii * per_batch : (ii + 1) * per_batch]
@@ -211,7 +211,7 @@ def train_one_epoch(
                         local_loss += local_load_balancing_loss
 
                     backward(local_loss, scaler)
-                    with te.fp8_autocast(enabled=True, fp8_recipe=fp8_recipe, fp8_group=all_gpus) if (
+                    with te.fp8_autocast(enabled=True, fp8_recipe=fp8_recipe, fp8_group=data_parallel_group) if (
                         using_te and args.use_fp8
                     ) else autocast():
                         if (
