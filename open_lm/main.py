@@ -58,7 +58,7 @@ from open_lm.file_utils import (
     pt_load,
     check_exists,
     start_sync_process,
-    remote_sync,
+    remote_sync_with_expon_backoff,
     get_string_for_epoch,
     log_num_checkpoints,
     terminate_sync_process,
@@ -404,7 +404,8 @@ def main(args):
     remote_sync_process = None
     if is_master(args) and args.remote_sync is not None:
         # first make sure it works
-        result = remote_sync(
+        result = remote_sync_with_expon_backoff(
+            args.remote_sync_frequency,
             os.path.join(args.logs, args.name),
             os.path.join(args.remote_sync, args.name),
             args.remote_sync_protocol,
@@ -867,7 +868,8 @@ def main(args):
     if remote_sync_process is not None:
         logging.info("Final remote sync.")
         terminate_sync_process(remote_sync_process)
-        result = remote_sync(
+        result = remote_sync_with_expon_backoff(
+            args.remote_sync_frequency,
             os.path.join(args.logs, args.name),
             os.path.join(args.remote_sync, args.name),
             args.remote_sync_protocol,
