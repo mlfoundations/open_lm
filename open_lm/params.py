@@ -197,8 +197,7 @@ def check_args(args):
         args.global_val_batch_size = args.global_batch_size // args.accum_freq
 
     assert (
-        args.train_data is None
-        or args.dataset_manifest is None
+        args.train_data is None or args.dataset_manifest is None
     ), "--dataset-manifest and --train-data cannot both be set"
 
     # custom_attn checks
