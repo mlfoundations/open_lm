@@ -200,10 +200,6 @@ def check_args(args):
         args.train_data is None or args.dataset_manifest is None
     ), "--dataset-manifest and --train-data cannot both be set"
 
-    assert (
-        args.dataset_resampled or args.dataset_manifest is not None
-    ), "If sampling without remplacement, --dataset-manifest must be set"
-
     # custom_attn checks
     if args.attn_name == "custom_attn":
         assert (
