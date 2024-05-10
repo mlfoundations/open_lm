@@ -11,7 +11,6 @@ And generally we want to assert that:
 
 """
 
-
 import pytest
 import random
 import os

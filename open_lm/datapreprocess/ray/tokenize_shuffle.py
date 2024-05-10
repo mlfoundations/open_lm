@@ -277,9 +277,9 @@ def preprocess(
             tokens = tokenizer_fn(string)
             tokens.append(EOT)
             while len(tokens) > 0:
-                # Add tokens to the buffer while controlling buffer, speeds up slicing for large documents 
-                idx = min(seqlen*max_buffer_seqs-len(buffer), len(tokens))
-                buffer += tokens[:idx] 
+                # Add tokens to the buffer while controlling buffer, speeds up slicing for large documents
+                idx = min(seqlen * max_buffer_seqs - len(buffer), len(tokens))
+                buffer += tokens[:idx]
                 tokens = tokens[idx:]
 
                 while len(buffer) >= seqlen:
@@ -315,7 +315,9 @@ def preprocess(
         return []
 
 
-def process_keys(data, tokenizer, seqlen, seed, content_key, do_sample, sources=None, source_counters=None, max_buffer_seqs=1000):
+def process_keys(
+    data, tokenizer, seqlen, seed, content_key, do_sample, sources=None, source_counters=None, max_buffer_seqs=1000
+):
     path = data["path"]
 
     if path.startswith("s3"):
@@ -579,7 +581,6 @@ def main(args):
     parser.add_argument("--suffixes", nargs="+", default=[".json", ".jsonl", ".zst", ".zstd", ".tar", ".gz"])
     parser.add_argument("--presort", action="store_true")
     parser.add_argument("--max_buffer_seqs", type=int, default=1000)
-
 
     args = parser.parse_args(args)
     if args.do_sample:
