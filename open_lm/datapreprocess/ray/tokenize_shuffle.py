@@ -281,7 +281,7 @@ def preprocess(
                 if do_sample:
                     local_sample_freq = sample_freq
                     # This code does the following
-                    # yield a int(sample_freq) copies of the current sample 
+                    # yield a int(sample_freq) copies of the current sample
                     # then yield 1 more sample with Pr[sample_freq - int(sample_freq)]
                     # in expectation we will yield sample_freq copies of the current sample
                     while local_sample_freq > 1:
@@ -313,9 +313,7 @@ def preprocess(
         return []
 
 
-def process_keys(
-    data, tokenizer, seqlen, seed, content_key, do_sample, sources=None, source_counters=None
-):
+def process_keys(data, tokenizer, seqlen, seed, content_key, do_sample, sources=None, source_counters=None):
     path = data["path"]
 
     if path.startswith("s3"):
@@ -336,7 +334,7 @@ def process_keys(
                 print(f"Attempt {attempt + 1} failed: {str(e)}")
                 attempt += 1
                 if attempt < max_attempts:
-                    sleep_time = base_delay * (2 ** attempt) + random.uniform(0, base_delay)
+                    sleep_time = base_delay * (2**attempt) + random.uniform(0, base_delay)
                     print(f"Retrying in {sleep_time:.2f} seconds...")
                     time.sleep(sleep_time)
                 else:
