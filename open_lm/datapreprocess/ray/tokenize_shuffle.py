@@ -324,7 +324,7 @@ def process_keys(data, tokenizer, seqlen, seed, content_key, do_sample, sources=
     else:
         key = path
         fh = open(path, "rb")
-        
+
     try:
         # select a counter
         if sources is not None and source_counters is not None:
