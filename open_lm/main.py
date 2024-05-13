@@ -824,7 +824,7 @@ def main(args):
             logging.info("Training exiting due to NaN value")
             break
 
-        expected_steps = data["train"].dataloader.total_batches
+        expected_steps = data["train"].dataloader.num_batches
         if steps_done_epoch < (1 - args.data_tolerate_error_p) * expected_steps and not done_training:
             num_ckpt_too_few_tokens += 1
 
