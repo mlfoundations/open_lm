@@ -258,7 +258,7 @@ def save_checkpoint(
 
         if shard_shuffle_seed is not None:
             checkpoint_dict_stats["shard_shuffle_seed"] = shard_shuffle_seed
-        
+
         if train_data_string is not None:
             checkpoint_dict_stats["train_data_string"] = train_data_string
 
