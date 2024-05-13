@@ -752,6 +752,7 @@ def main(args):
     # Only enter training loop if there are steps to be done.
     done_training = global_step >= total_steps
     epoch = start_epoch
+    num_ckpt_too_few_tokens = 0
     while not done_training:
         if is_master(args):
             logging.info(f"Start epoch {epoch}")
@@ -823,6 +824,15 @@ def main(args):
             logging.info("Training exiting due to NaN value")
             break
 
+        expected_steps = sum(num_samples_per_source) // args.global_batch_size
+        if steps_done_epoch < args.expected_tokens * expected_steps:
+            num_ckpt_too_few_tokens += 1
+
+        if num_ckpt_too_few_tokens > args.max_ckpt_too_few_tokens:
+            raise RuntimeError(
+                f"{num_ckpt_too_few_tokens} checkpoints happened where the number of tokens seen was less than {args.expected_tokens} of expected. This is likely due to transient errors e.g. reading from S3."
+            )
+
         epoch = epoch + 1
         evaluation_metrics = []
         if "val_list" in data and (epoch % args.val_frequency == 0 or done_training):
@@ -839,6 +849,24 @@ def main(args):
                     logging.error(e)
                     logging.error(traceback.format_exc())
                     logging.warning("evaluation failed! continuing to save_checkpoint")
+
+        if is_master(args):
+            end_of_epoch_log = {
+                "epoch": epoch,
+                "tokens": (global_step + 1) * args.global_batch_size * args.seq_len,
+                "checkpoints_too_few_tokens": num_ckpt_too_few_tokens,
+            }
+
+            if args.dataset_manifest is not None:
+                end_of_epoch_log["next_shard"] = next_shard_per_source[0]
+
+            for name, val in end_of_epoch_log.items():
+                name = "train/" + name
+                if writer is not None:
+                    writer.add_scalar(name, val, global_step)
+                if args.wandb:
+                    assert wandb is not None, "Please install wandb."
+                    wandb.log({name: val, "step": global_step, "tokens": end_of_epoch_log["tokens"]})
 
         # Saving checkpoints.
         save_checkpoint(
