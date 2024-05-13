@@ -276,28 +276,33 @@ def preprocess(
             tokens = tokenizer_fn(string)
             tokens.append(EOT)
             buffer += tokens
-            while len(buffer) >= seqlen:
+            idx = 0
+            while idx < len(buffer) - seqlen:
                 if do_sample:
                     local_sample_freq = sample_freq
                     # This code does the following
-                    # yield a int(sample_freq) copies of buffer[:seqlen]
+                    # yield a int(sample_freq) copies of the current sample
                     # then yield 1 more sample with Pr[sample_freq - int(sample_freq)]
-                    # in expectation we will yield sample_freq copies of buffer[:seqlen]
+                    # in expectation we will yield sample_freq copies of the current sample
                     while local_sample_freq > 1:
                         if source_counter is not None:
                             ray.get(source_counter.increment_token_count.remote(seqlen))
-                        yield buffer[:seqlen]
+                        yield buffer[idx : idx + seqlen]
                         local_sample_freq -= 1
                     if rng.random() < local_sample_freq:
                         if source_counter is not None:
                             ray.get(source_counter.increment_token_count.remote(seqlen))
-                        yield buffer[:seqlen]
-                    buffer = buffer[seqlen:]
+                        yield buffer[idx : idx + seqlen]
+                    idx += seqlen
                 else:
                     if source_counter is not None:
                         ray.get(source_counter.increment_token_count.remote(seqlen))
-                    yield buffer[:seqlen]
-                    buffer = buffer[seqlen:]
+                    yield buffer[idx : idx + seqlen]
+                    idx += seqlen
+
+            # Remove the tokens that have been yielded from the buffer
+            buffer = buffer[idx:]
+
         if len(buffer) > 0:
             if source_counter is not None:
                 ray.get(source_counter.increment_token_count.remote(len(buffer)))

@@ -3,7 +3,6 @@ This script converts the weights from LLAMA to OpenLM compatible weights.
 Usage: `python convert_llama_to_openlm.py <llama_weight_path> <openlm_weight_path>`
 """
 
-
 import torch
 import sys
 

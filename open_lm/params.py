@@ -196,6 +196,10 @@ def check_args(args):
         # Make sure that val batch size is set to micro batch size
         args.global_val_batch_size = args.global_batch_size // args.accum_freq
 
+    assert (
+        args.train_data is None or args.dataset_manifest is None
+    ), "--dataset-manifest and --train-data cannot both be set"
+
     # custom_attn checks
     if args.attn_name == "custom_attn":
         assert (
