@@ -825,7 +825,7 @@ def main(args):
             break
 
         expected_steps = data["train"].dataloader.total_batches
-        if steps_done_epoch < (1 - args.data_tolerate_error_p) * expected_steps:
+        if steps_done_epoch < (1 - args.data_tolerate_error_p) * expected_steps and not done_training:
             num_ckpt_too_few_tokens += 1
 
         if num_ckpt_too_few_tokens > args.data_tolerate_num_ckpts:
