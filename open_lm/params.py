@@ -776,13 +776,13 @@ def parse_args(args):
         help="Whether to log the average model training loss. if not 0, it will log the average loss over the specified number of steps.",
     )
     parser.add_argument(
-        "--expected-tokens",
+        "--data-tolerate-error-p",
         type=float,
-        default=0.91,  # Roughly the number required to not repeat more than 10% of data.
-        help="This is the percentage of expected tokens below which the checkpoint is considered failed because of not having seen enough data.",
+        default=0.09,  # Roughly the number required to not repeat more than 10% of data.
+        help="This is the percentage of expected tokens above which the checkpoint is considered failed because of not having seen enough data.",
     )
     parser.add_argument(
-        "--max-ckpt-too-few-tokens",
+        "--data-tolerate-num-ckpts",
         type=int,
         default=0,
         help="This is the maximum number of failed checkpoints (due to not having seen enough tokens) that are allowed",

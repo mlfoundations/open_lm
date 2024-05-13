@@ -825,10 +825,10 @@ def main(args):
             break
 
         expected_steps = sum(num_samples_per_source) // args.global_batch_size
-        if steps_done_epoch < args.expected_tokens * expected_steps:
+        if steps_done_epoch < (1 - args.data_tolerate_error_p) * expected_steps:
             num_ckpt_too_few_tokens += 1
 
-        if num_ckpt_too_few_tokens > args.max_ckpt_too_few_tokens:
+        if num_ckpt_too_few_tokens > args.data_tolerate_num_ckpts:
             raise RuntimeError(
                 f"{num_ckpt_too_few_tokens} checkpoints happened where the number of tokens seen was less than {args.expected_tokens} of expected. This is likely due to transient errors e.g. reading from S3."
             )
