@@ -17,6 +17,7 @@ import glob
 from enum import Enum
 from io import BytesIO
 from typing import BinaryIO, List
+import random
 
 import boto3
 import fsspec
@@ -397,7 +398,7 @@ def parse_s3_path(s3_path):
 
 
 def add_hash(item, column="tokens"):
-    item["hash"] = hash(str(item[column]))
+    item["hash"] = hash(str(random.random()) + str(item[column]))
     return item
 
 
