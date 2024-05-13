@@ -203,6 +203,7 @@ def save_checkpoint(
     next_shard_per_source=None,
     samples_seen=None,
     shard_shuffle_seed=None,
+    train_data_string=None,
     averagers=None,
 ):
     cpu_state, optim_state = None, None
@@ -246,6 +247,20 @@ def save_checkpoint(
             "is_final_checkpoint": is_final_checkpoint,
             "evaluation_metrics": evaluation_metrics,
         }
+        if next_shard_per_source is not None:
+            checkpoint_dict_stats["next_shard_per_source"] = next_shard_per_source
+
+        if samples_seen is not None:
+            checkpoint_dict_stats["samples_seen"] = samples_seen
+
+        if step is not None:
+            checkpoint_dict_stats["step"] = step
+
+        if shard_shuffle_seed is not None:
+            checkpoint_dict_stats["shard_shuffle_seed"] = shard_shuffle_seed
+        
+        if train_data_string is not None:
+            checkpoint_dict_stats["train_data_string"] = train_data_string
 
         prefixes = {
             "epoch_": checkpoint_dict_model,
@@ -881,6 +896,7 @@ def main(args):
             next_shard_per_source=next_shard_per_source if args.dataset_manifest is not None else None,
             samples_seen=samples_seen if args.dataset_manifest is not None else None,
             shard_shuffle_seed=args.shard_shuffle_seed,
+            train_data_string=train_data_string_per_source if args.dataset_manifest is not None else None,
             averagers=averagers,
         )
 
