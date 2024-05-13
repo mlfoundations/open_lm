@@ -86,8 +86,6 @@ def test_training_deterministic():
         "json",
         "--model-norm",
         "gain_only_layer_norm",
-        "--data-tolerate-error-p",
-        "1.0",
     ]
     args = [str(x) for x in args]
     args2 = copy.deepcopy(args)
@@ -145,8 +143,6 @@ def test_good_resume_shard_shuffle():
         "json",
         "--model-norm",
         "gain_only_layer_norm",
-        "--data-tolerate-error-p",
-        "1.0",
     ]
     args = [str(x) for x in args]
 
