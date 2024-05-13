@@ -835,7 +835,7 @@ def main(args):
 
         if num_ckpt_too_few_tokens > args.data_tolerate_num_ckpts:
             raise RuntimeError(
-                f"{num_ckpt_too_few_tokens} checkpoints happened where the number of tokens seen was less than {args.expected_tokens} of expected. This is likely due to transient errors e.g. reading from S3."
+                f"{num_ckpt_too_few_tokens} checkpoints happened where the number of tokens seen was less than {1 - args.data_tolerate_error_p} of expected. This is likely due to transient errors e.g. reading from S3."
             )
 
         epoch = epoch + 1
