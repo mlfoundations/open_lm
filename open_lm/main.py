@@ -824,7 +824,12 @@ def main(args):
             logging.info("Training exiting due to NaN value")
             break
 
-        expected_steps = sum(num_samples_per_source) // args.global_batch_size
+        if args.dataset_manifest is not None:
+            expected_samples = sum(num_samples_per_source)
+        else:
+            expected_samples = args.train_num_samples
+
+        expected_steps = expected_samples // args.global_batch_size
         if steps_done_epoch < (1 - args.data_tolerate_error_p) * expected_steps:
             num_ckpt_too_few_tokens += 1
 
