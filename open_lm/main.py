@@ -199,6 +199,7 @@ def save_checkpoint(
     scaler,
     completed_epoch,
     evaluation_metrics,
+    percentage_of_data_seen,
     step,
     is_final_checkpoint,
     next_shard_per_source=None,
@@ -206,6 +207,7 @@ def save_checkpoint(
     shard_shuffle_seed=None,
     train_data_string=None,
     averagers=None,
+    failed=False,
 ):
     cpu_state, optim_state = None, None
     if args.logs and args.logs.lower() != "none" and args.fsdp:
@@ -247,6 +249,7 @@ def save_checkpoint(
             "name": args.name,
             "is_final_checkpoint": is_final_checkpoint,
             "evaluation_metrics": evaluation_metrics,
+            "percentage_of_data_seen": percentage_of_data_seen,
         }
         if next_shard_per_source is not None:
             checkpoint_dict_stats["next_shard_per_source"] = next_shard_per_source
@@ -278,7 +281,8 @@ def save_checkpoint(
             or (args.save_frequency > 0 and (completed_epoch % args.save_frequency) == 0)
         ):
             for prefix in prefixes:
-                path = os.path.join(args.checkpoint_path, f"{prefix}{completed_epoch}.pt")
+                save_path = args.checkpoint_path if not failed else args.failed_checkpoint_path
+                path = os.path.join(save_path, f"{prefix}{completed_epoch}.pt")
                 print(f"Saving {prefix}{completed_epoch} in {path}...")
                 torch.save(
                     prefixes[prefix],
@@ -375,6 +379,7 @@ def main(args):
     args.wandb = "wandb" in args.report_to or "all" in args.report_to
     args.tensorboard = "tensorboard" in args.report_to or "all" in args.report_to
     args.checkpoint_path = os.path.join(log_base_path, "checkpoints")
+    args.failed_checkpoint_path = os.path.join(log_base_path, "checkpoints_failed")
     if is_master(args):
         args.tensorboard_path = os.path.join(log_base_path, "tensorboard") if args.tensorboard else ""
         for dirname in [args.tensorboard_path, args.checkpoint_path]:
@@ -840,18 +845,15 @@ def main(args):
             logging.info("Training exiting due to NaN value")
             break
 
+        failed_ckpt = False
         expected_steps = data["train"].dataloader.num_batches
         if steps_done_epoch < (1 - args.data_tolerate_error_p) * expected_steps and not done_training:
+            failed_ckpt = True
             num_ckpt_too_few_tokens += 1
             if is_master(args):
                 logging.warning(
                     f"Epoch {epoch}, tokens seen: {steps_done_epoch * args.global_batch_size * args.seq_len}, tokens expected: {expected_steps * args.global_batch_size * args.seq_len}, ratio: {steps_done_epoch / expected_steps}"
                 )
-
-        if num_ckpt_too_few_tokens > args.data_tolerate_num_ckpts:
-            raise RuntimeError(
-                f"{num_ckpt_too_few_tokens} checkpoints happened where the number of tokens seen was {1 - args.data_tolerate_error_p} of expected. This is likely due to transient errors e.g. reading from S3."
-            )
 
         epoch = epoch + 1
         evaluation_metrics = []
@@ -901,6 +903,7 @@ def main(args):
             scaler,
             epoch,
             evaluation_metrics,
+            percentage_of_data_seen=1.0 * steps_done_epoch / expected_steps,
             step=global_step,
             is_final_checkpoint=done_training,
             next_shard_per_source=next_shard_per_source if args.dataset_manifest is not None else None,
@@ -908,7 +911,13 @@ def main(args):
             shard_shuffle_seed=args.shard_shuffle_seed,
             train_data_string=train_data_string_per_source if args.dataset_manifest is not None else None,
             averagers=averagers,
+            failed=failed_ckpt,
         )
+
+        if num_ckpt_too_few_tokens > args.data_tolerate_num_ckpts:
+            raise RuntimeError(
+                f"{num_ckpt_too_few_tokens} checkpoints happened where the number of tokens seen was {1 - args.data_tolerate_error_p} of expected. This is likely due to transient errors e.g. reading from S3."
+            )
 
         if done_training:
             if is_master(args):
