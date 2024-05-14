@@ -871,6 +871,7 @@ def main(args):
                 "epoch": epoch,
                 "tokens": (global_step + 1) * args.global_batch_size * args.seq_len,
                 "checkpoints_too_few_tokens": num_ckpt_too_few_tokens,
+                "percentage_of_data_seen": steps_done_epoch / expected_steps,
             }
 
             if args.dataset_manifest is not None:
