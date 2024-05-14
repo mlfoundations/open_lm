@@ -59,6 +59,7 @@ from open_lm.file_utils import (
     check_exists,
     start_sync_process,
     remote_sync_with_expon_backoff,
+    get_metadata_file,
     get_string_for_epoch,
     log_num_checkpoints,
     terminate_sync_process,
@@ -875,6 +876,9 @@ def main(args):
             if args.dataset_manifest is not None:
                 for i in range(len(next_shard_per_source)):
                     end_of_epoch_log[f"next_shard_{i}"] = next_shard_per_source[i]
+                    end_of_epoch_log[f"dataset_pass_{i}"] = next_shard_per_source[i] // len(
+                        get_metadata_file(args.dataset_manifest[i])
+                    )
 
             for name, val in end_of_epoch_log.items():
                 name = "train/" + name
