@@ -844,7 +844,9 @@ def main(args):
         if steps_done_epoch < (1 - args.data_tolerate_error_p) * expected_steps and not done_training:
             num_ckpt_too_few_tokens += 1
             if is_master(args):
-                logging.warning(f"Epoch {epoch}, tokens seen: {steps_done_epoch * args.global_batch_size * args.seq_len}, tokens expected: {expected_steps * args.global_batch_size * args.seq_len}, ratio: {steps_done_epoch / expected_steps}")
+                logging.warning(
+                    f"Epoch {epoch}, tokens seen: {steps_done_epoch * args.global_batch_size * args.seq_len}, tokens expected: {expected_steps * args.global_batch_size * args.seq_len}, ratio: {steps_done_epoch / expected_steps}"
+                )
 
         if num_ckpt_too_few_tokens > args.data_tolerate_num_ckpts:
             raise RuntimeError(
