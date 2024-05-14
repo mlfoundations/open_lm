@@ -302,6 +302,8 @@ def train_one_epoch(
                     "samples_per_second_per_gpu": samples_per_second_per_gpu,
                     "lr": optimizer.param_groups[0]["lr"],
                     "tokens": (step + 1) * args.global_batch_size * args.seq_len,
+                    "expected_steps_epoch": data["train"].dataloader.num_batches,
+                    "seen_steps_epoch": batch_count
                 }
 
                 if averagers is not None and args.log_avg_model_training_loss:
