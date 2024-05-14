@@ -873,7 +873,8 @@ def main(args):
             }
 
             if args.dataset_manifest is not None:
-                end_of_epoch_log["next_shard"] = next_shard_per_source[0]
+                for i in range(len(next_shard_per_source)):
+                    end_of_epoch_log[f"next_shard_{i}"] = next_shard_per_source[i]
 
             for name, val in end_of_epoch_log.items():
                 name = "train/" + name
