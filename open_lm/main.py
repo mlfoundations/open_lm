@@ -855,11 +855,6 @@ def main(args):
                     f"Epoch {epoch}, tokens seen: {steps_done_epoch * args.global_batch_size * args.seq_len}, tokens expected: {expected_steps * args.global_batch_size * args.seq_len}, ratio: {steps_done_epoch / expected_steps}"
                 )
 
-        if num_ckpt_too_few_tokens > args.data_tolerate_num_ckpts:
-            raise RuntimeError(
-                f"{num_ckpt_too_few_tokens} checkpoints happened where the number of tokens seen was {1 - args.data_tolerate_error_p} of expected. This is likely due to transient errors e.g. reading from S3."
-            )
-
         epoch = epoch + 1
         evaluation_metrics = []
         if "val_list" in data and (epoch % args.val_frequency == 0 or done_training):
@@ -918,6 +913,11 @@ def main(args):
             averagers=averagers,
             failed=failed_ckpt,
         )
+
+        if num_ckpt_too_few_tokens > args.data_tolerate_num_ckpts:
+            raise RuntimeError(
+                f"{num_ckpt_too_few_tokens} checkpoints happened where the number of tokens seen was {1 - args.data_tolerate_error_p} of expected. This is likely due to transient errors e.g. reading from S3."
+            )
 
         if done_training:
             if is_master(args):
