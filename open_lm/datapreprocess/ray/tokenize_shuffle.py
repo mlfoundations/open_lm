@@ -687,7 +687,7 @@ def main(args):
         ds = ds.repartition(1)
         ds = ds.sort(key="shard")
         jsonl_lines = ds.take_all()
-        token_count_from_manifest = sum([x["num_sequences"][0] for x in jsonl_lines] * seqlen)
+        token_count_from_manifest = sum([x["num_sequences"] for x in jsonl_lines] * seqlen)
         write_manifest(jsonl_lines, args)
     else:
         write_status = ds.map_batches(
@@ -702,7 +702,6 @@ def main(args):
             batch_size=args.wds_chunk_size,
             batch_format="pandas",
         ).take_all()
-
         # after the write is done, grab all actors of class BufferedShardWriter
         buffer_writers_names = set(
             [x.name for x in list_actors(filters=[("class_name", "=", "BufferedShardWriter"), ("state", "=", "ALIVE")])]
