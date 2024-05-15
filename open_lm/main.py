@@ -57,6 +57,7 @@ from open_lm.evaluate import evaluate_loop
 from open_lm.file_utils import (
     pt_load,
     check_exists,
+    download_data_to_local,
     start_sync_process,
     remote_sync_with_expon_backoff,
     get_metadata_file,
@@ -794,6 +795,11 @@ def main(args):
                 multi_epoch=args.multiple_data_passes,
                 shard_shuffle_seed=args.shard_shuffle_seed,
             )
+
+            if args.temp_local_data_dir is not None:
+                train_data_string_per_source = download_data_to_local(
+                    train_data_string_per_source, args.temp_local_data_dir
+                )
 
             # In the distributed case, make sure that all nodes receive the same string
             if args.distributed:

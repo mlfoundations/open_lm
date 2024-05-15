@@ -787,6 +787,12 @@ def parse_args(args):
         default=0,
         help="This is the maximum number of failed checkpoints (due to not having seen enough tokens) that are allowed",
     )
+    parser.add_argument(
+        "--temp-local-data-dir",
+        type=str,
+        default=None,
+        help="If set, move the data to temporary local storage at the start of each epoch, to minimize s3 errors.",
+    )
 
     add_model_args(parser)
 

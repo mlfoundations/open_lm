@@ -13,6 +13,8 @@ import fsspec
 import numpy as np
 import torch
 
+from braceexpand import braceexpand
+from pathlib import Path
 from typing import List, Optional
 from tqdm import tqdm
 
@@ -481,3 +483,35 @@ def _single_epoch_string(
         shard_strings_per_source.append(shard_string_source)
 
     return shard_strings_per_source, num_samples_per_source, next_shard_per_source
+
+
+def download_data_to_local(shard_strings_per_source, temp_dir):
+    if not os.path.exists(temp_dir):
+        os.makedirs(temp_dir, exist_ok=True)
+
+    local_shard_strings_per_source = []
+
+    for shard_string in shard_strings_per_source:
+        if shard_string.startswith("pipe:aws s3 cp "):
+            shard_string = shard_string[len("pipe:aws s3 cp ") : -len(" -")]
+
+        shards = list(braceexpand(shard_string))
+        shard_directory = Path(shards[0]).parent
+        shard_filenames = [Path(s).name for s in shards]
+
+        aws_command = ["aws", "s3", "cp", "--recursive", f"{shard_directory}", f"{temp_dir}", "--exclude", '"*"']
+        for sf in shard_filenames:
+            aws_command.extend(["--include", f"{sf}"])
+
+        result = subprocess.run(
+            aws_command,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        if result.returncode != 0:
+            raise RuntimeError(f"Error: Failed to download data to local storage: {result.stderr.decode('utf-8')}")
+
+        local_shard_string = temp_dir + "{" + ",".join(shard_filenames) + "}.tar"
+        local_shard_strings_per_source.append(local_shard_string)
+
+    return local_shard_strings_per_source
