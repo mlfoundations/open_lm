@@ -581,7 +581,7 @@ def main(args):
     parser.add_argument("--suffixes", nargs="+", default=[".json", ".jsonl", ".zst", ".zstd", ".tar", ".gz"])
     parser.add_argument("--presort", action="store_true")
     parser.add_argument("--max_buffer_seqs", type=int, default=1000)
-    parser.add_argument("--allow-imbalanced-write", action='store_true')
+    parser.add_argument("--allow_imbalanced_write", action="store_true")
 
     args = parser.parse_args(args)
     if args.do_sample:
@@ -695,7 +695,7 @@ def main(args):
         ds = ds.sort(key="shard")
         jsonl_lines = ds.take_all()
         write_manifest(jsonl_lines, args)
-    else:    
+    else:
         write_status = ds.map_batches(
             buffer_write,
             fn_kwargs={
@@ -708,7 +708,7 @@ def main(args):
             batch_size=args.wds_chunk_size,
             batch_format="pandas",
         ).take_all()
- 
+
         # after the write is done, grab all actors of class BufferedShardWriter
         buffer_writers_names = set(
             [x.name for x in list_actors(filters=[("class_name", "=", "BufferedShardWriter"), ("state", "=", "ALIVE")])]
