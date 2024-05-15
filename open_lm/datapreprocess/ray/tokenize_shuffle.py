@@ -581,6 +581,7 @@ def main(args):
     parser.add_argument("--suffixes", nargs="+", default=[".json", ".jsonl", ".zst", ".zstd", ".tar", ".gz"])
     parser.add_argument("--presort", action="store_true")
     parser.add_argument("--max_buffer_seqs", type=int, default=1000)
+    parser.add_argument("--allow-imbalanced-write", action='store_true')
 
     args = parser.parse_args(args)
     if args.do_sample:
@@ -679,30 +680,48 @@ def main(args):
     counter = GlobalCounter.remote()
     out_folder = args.output.rstrip("/")
     # first map buffer_write over rows, it will create an actor (which hopefully will be scheduled locally)
-    write_status = ds.map_batches(
-        buffer_write,
-        fn_kwargs={
-            "folder": out_folder,
-            "counter": counter,
-            "buffer_size": args.wds_chunk_size,
-            "num_writers_per_node": num_writers_per_node,
-        },
-        zero_copy_batch=True,
-        batch_size=args.wds_chunk_size,
-        batch_format="pandas",
-    ).take_all()
-    # after the write is done, grab all actors of class BufferedShardWriter
-    buffer_writers_names = set(
-        [x.name for x in list_actors(filters=[("class_name", "=", "BufferedShardWriter"), ("state", "=", "ALIVE")])]
-    )
-    buffer_writers = [ray.get_actor(x) for x in buffer_writers_names]
-    # flush the remaining buffers, this should be the *only* shards that are less than wds_chunk_size
-    flushed_buffers = [bw._flush_buffer.remote(out_folder, counter) for bw in buffer_writers]
-    tail_write_status = [ray.get(buf) for buf in flushed_buffers]
-    # Grab manifests which are stored in the buffer writers
-    manifests = [manifest_row for bw in buffer_writers for manifest_row in ray.get(bw.get_manifests.remote())]
-    manifests_sorted = sorted(manifests, key=lambda x: x["shard"])
-    write_manifest(manifests_sorted, args)
+    if args.allow_imbalanced_write:
+        ds = ds.map_batches(
+            map_write_wds,
+            batch_size=wds_chunk_size,
+            fn_kwargs={
+                "batch_size": wds_chunk_size,
+                "folder": out_folder,
+                "counter": counter,
+            },
+            batch_format="pandas",
+        )
+        ds = ds.repartition(1)
+        ds = ds.sort(key="shard")
+        jsonl_lines = ds.take_all()
+        write_manifest(jsonl_lines, args)
+    else:    
+        write_status = ds.map_batches(
+            buffer_write,
+            fn_kwargs={
+                "folder": out_folder,
+                "counter": counter,
+                "buffer_size": args.wds_chunk_size,
+                "num_writers_per_node": num_writers_per_node,
+            },
+            zero_copy_batch=True,
+            batch_size=args.wds_chunk_size,
+            batch_format="pandas",
+        ).take_all()
+ 
+        # after the write is done, grab all actors of class BufferedShardWriter
+        buffer_writers_names = set(
+            [x.name for x in list_actors(filters=[("class_name", "=", "BufferedShardWriter"), ("state", "=", "ALIVE")])]
+        )
+        buffer_writers = [ray.get_actor(x) for x in buffer_writers_names]
+        # flush the remaining buffers, this should be the *only* shards that are less than wds_chunk_size
+        flushed_buffers = [bw._flush_buffer.remote(out_folder, counter) for bw in buffer_writers]
+        tail_write_status = [ray.get(buf) for buf in flushed_buffers]
+        # Grab manifests which are stored in the buffer writers
+        manifests = [manifest_row for bw in buffer_writers for manifest_row in ray.get(bw.get_manifests.remote())]
+        manifests_sorted = sorted(manifests, key=lambda x: x["shard"])
+        write_manifest(manifests_sorted, args)
+
     end_time = time.time()
     duration = end_time - start_time
     final_token_count = ray.get(counter.increment_token_count.remote(0))
