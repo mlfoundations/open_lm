@@ -575,6 +575,10 @@ def main(args):
     )  # default is localhost; for slurm jobs do 0.0.0.0
     parser.add_argument("--suffixes", nargs="+", default=[".json", ".jsonl", ".zst", ".zstd", ".tar", ".gz"])
     parser.add_argument("--presort", action="store_true")
+<<<<<<< HEAD
+=======
+    parser.add_argument("--max_buffer_seqs", type=int, default=1000)
+>>>>>>> 9c564b2 (linting)
     parser.add_argument("--allow_imbalanced_write", action="store_true")
 
     args = parser.parse_args(args)
@@ -702,6 +706,7 @@ def main(args):
             batch_size=args.wds_chunk_size,
             batch_format="pandas",
         ).take_all()
+
         # after the write is done, grab all actors of class BufferedShardWriter
         buffer_writers_names = set(
             [x.name for x in list_actors(filters=[("class_name", "=", "BufferedShardWriter"), ("state", "=", "ALIVE")])]
