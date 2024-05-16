@@ -48,23 +48,19 @@ class RotaryEmbedding(torch.nn.Module):
         super().__init__()
         # Generate and save the inverse frequency buffer (non trainable)
         self.dim_model = dim_model
-        self.register_buffer("inv_freq", torch.zeros(self.dim_model // 2))
 
         self._cos_cached = None
         self._sin_cached = None
         self._seq_len_cached = 0
         self.seq_len = seq_len
         self.frequency = frequency
-        self.reset_parameters()
+        self._update_cos_sin_tables(self.seq_len)
 
     def load_state_dict(self, state_dict, strict=True):
         # The state dict is not used, as the parameters are not trainable
-        # We want to avoid loading the inv_freq buffer in case the frequency is different
+        # Previous versions had an inv_freq buffer, we don't need to load it
+        # This is kept for compatibility with the previous version
         pass
-
-    def reset_parameters(self):
-        self.inv_freq = 1.0 / (self.frequency ** (torch.arange(0, self.dim_model, 2).float() / self.dim_model))
-        self._update_cos_sin_tables(self.seq_len)
 
     def _update_cos_sin_tables(self, seq_len: int = None, device: torch.device = None, dtype: torch.dtype = None):
         # If no seq_len is provided, use the cached one
@@ -76,8 +72,9 @@ class RotaryEmbedding(torch.nn.Module):
         # or if we're on a new device (possibly due to tracing for instance)
         if seq_len > self._seq_len_cached or self._cos_cached.device != device or self._cos_cached.dtype != dtype:
             self._seq_len_cached = seq_len
+            inv_freq = 1.0 / (self.frequency ** (torch.arange(0, self.dim_model, 2).float() / self.dim_model))
             t = torch.arange(seq_len, device=device, dtype=torch.float32)
-            freqs = torch.einsum("i,j->ij", t, self.inv_freq.to(device=device, dtype=dtype))
+            freqs = torch.einsum("i,j->ij", t, inv_freq.to(device=device, dtype=dtype))
             emb = torch.cat((freqs, freqs), dim=-1).to(device)
 
             self._cos_cached = emb.cos()[None, :, None, :].to(dtype)
