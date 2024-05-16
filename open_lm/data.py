@@ -18,6 +18,7 @@ import numpy as np
 import pandas as pd
 import torch
 import webdataset as wds
+from pathlib import Path
 from PIL import Image
 
 
@@ -29,7 +30,7 @@ from torch.utils.data import (
     get_worker_info,
 )
 from torch.utils.data.distributed import DistributedSampler
-from webdataset.filters import _shuffle
+from webdataset.filters import _shuffle, pipelinefilter
 from webdataset.tariterators import (
     base_plus_ext,
     url_opener,
@@ -190,6 +191,19 @@ def tarfile_to_samples_nothrow(src, handler=log_and_continue):
     return samples
 
 
+@pipelinefilter
+def shard_fast_forward(src, data_usage_log):
+    skip_per_shard = copy.deepcopy(data_usage_log)
+    for sample in src:
+        shard = Path(sample["__url__"]).with_suffix("").name
+        skip_num = skip_per_shard[shard]
+        if skip_num > 0:
+            skip_num -= 1
+            skip_per_shard[shard] = skip_num
+            continue
+        yield sample
+
+
 def pytorch_worker_seed(increment=0):
     """get dataloader worker seed from pytorch"""
     worker_info = get_worker_info()
@@ -324,7 +338,7 @@ class FiniteDataPipeline(wds.DataPipeline):
             return self.iterator()
 
 
-def get_wds_dataset(args, is_train, epoch=0, floor=True, tokenizer=None, data_key="json", force_num_samples=None):
+def get_wds_dataset(args, is_train, epoch=0, floor=True, tokenizer=None, data_key="json", force_num_samples=None, data_usage_log=None):
     """Create a dataloader for a dataset in webdataset format.
 
     Args:
@@ -410,6 +424,12 @@ def get_wds_dataset(args, is_train, epoch=0, floor=True, tokenizer=None, data_ke
                     ),
                 ]
             )
+            if not resampled:
+                assert data_usage_log is not None, "Data usage log per shard required for no resampling."
+                assert not do_shuffle, "Shuffling is currently not allowed when sampling without replacement."
+                pipeline.extend([
+                    shard_fast_forward(data_usage_log=data_usage_log)
+                ])
         else:
             pipeline.extend(
                 [
