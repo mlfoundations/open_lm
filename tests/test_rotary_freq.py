@@ -2,11 +2,14 @@ import torch
 import pytest
 from open_lm.positional_embedding.rotary import RotaryEmbedding  # replace 'your_module' with the actual module name
 
+
 @pytest.fixture
 def create_rotary_embedding():
     def _create_rotary_embedding(dim_model, seq_len, frequency):
         return RotaryEmbedding(dim_model, seq_len, frequency)
+
     return _create_rotary_embedding
+
 
 def test_frequency_input(create_rotary_embedding):
     dim_model = 32
@@ -45,8 +48,12 @@ def test_frequency_input(create_rotary_embedding):
     q2_loaded, k2_loaded = rotary2_loaded(q, k)
 
     # Ensure the outputs are the same
-    assert torch.allclose(q1, q2_loaded), "The outputs should be the same for the same fequencies before loading the state dict"
-    assert torch.allclose(k2, k1_loaded), "The outputs should be the same for the same fequencies before loading the state dict"
+    assert torch.allclose(
+        q1, q2_loaded
+    ), "The outputs should be the same for the same fequencies before loading the state dict"
+    assert torch.allclose(
+        k2, k1_loaded
+    ), "The outputs should be the same for the same fequencies before loading the state dict"
 
     # Assert old state dict is in the old format
     assert "inv_freq" in state_dict1, "The old state dict should contain the inv_freq buffer"
@@ -58,15 +65,19 @@ def test_frequency_input(create_rotary_embedding):
     # Ensure the frequencies are not overwritten
     assert rotary1_loaded.frequency == freq2, "Frequency should not be overwritten by load_state_dict"
     assert rotary2_loaded.frequency == freq1, "Frequency should not be overwritten by load_state_dict"
-    
+
     # Forward pass with loaded models
     q1_loaded, k1_loaded = rotary1_loaded(q, k)
     q2_loaded, k2_loaded = rotary2_loaded(q, k)
 
     # Ensure the outputs are the same
-    assert torch.allclose(q1, q2_loaded), "The outputs should be the same for the same fequencies after loading the state dict"
-    assert torch.allclose(k2, k1_loaded), "The outputs should be the same for the same fequencies after loading the state dict"
-    
+    assert torch.allclose(
+        q1, q2_loaded
+    ), "The outputs should be the same for the same fequencies after loading the state dict"
+    assert torch.allclose(
+        k2, k1_loaded
+    ), "The outputs should be the same for the same fequencies after loading the state dict"
+
     # Ensure the outputs are still different
     assert not torch.allclose(q1_loaded, q2_loaded), "The outputs for different frequencies should not be close"
     assert not torch.allclose(k1_loaded, k2_loaded), "The outputs for different frequencies should not be close"
