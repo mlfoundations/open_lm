@@ -52,8 +52,8 @@ def test_frequency_input(create_rotary_embedding):
     assert "inv_freq" in state_dict1, "The old state dict should contain the inv_freq buffer"
 
     # Load the state dicts
-    rotary1_loaded.load_state_dict(state_dict1, strict=False)
-    rotary2_loaded.load_state_dict(state_dict2, strict=False)
+    rotary1_loaded.load_state_dict(state_dict1, strict=True)
+    rotary2_loaded.load_state_dict(state_dict2, strict=True)
 
     # Ensure the frequencies are not overwritten
     assert rotary1_loaded.frequency == freq2, "Frequency should not be overwritten by load_state_dict"
