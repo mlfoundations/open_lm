@@ -57,6 +57,11 @@ class RotaryEmbedding(torch.nn.Module):
         self.frequency = frequency
         self.reset_parameters()
 
+    def load_state_dict(self, state_dict, strict=True):
+        # The state dict is not used, as the parameters are not trainable
+        # We want to avoid loading the inv_freq buffer in case the frequency is different
+        pass
+
     def reset_parameters(self):
         self.inv_freq = 1.0 / (self.frequency ** (torch.arange(0, self.dim_model, 2).float() / self.dim_model))
         self._update_cos_sin_tables(self.seq_len)
@@ -72,7 +77,7 @@ class RotaryEmbedding(torch.nn.Module):
         if seq_len > self._seq_len_cached or self._cos_cached.device != device or self._cos_cached.dtype != dtype:
             self._seq_len_cached = seq_len
             t = torch.arange(seq_len, device=device, dtype=torch.float32)
-            freqs = torch.einsum("i,j->ij", t, self.inv_freq.to(dtype))
+            freqs = torch.einsum("i,j->ij", t, self.inv_freq.to(device=device, dtype=dtype))
             emb = torch.cat((freqs, freqs), dim=-1).to(device)
 
             self._cos_cached = emb.cos()[None, :, None, :].to(dtype)
