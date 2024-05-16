@@ -694,6 +694,7 @@ def main(args):
         ds = ds.repartition(1)
         ds = ds.sort(key="shard")
         jsonl_lines = ds.take_all()
+        token_count_from_manifest = sum([x["num_sequences"][0] for x in jsonl_lines] * seqlen)
         write_manifest(jsonl_lines, args)
     else:
         write_status = ds.map_batches(
@@ -720,11 +721,19 @@ def main(args):
         # Grab manifests which are stored in the buffer writers
         manifests = [manifest_row for bw in buffer_writers for manifest_row in ray.get(bw.get_manifests.remote())]
         manifests_sorted = sorted(manifests, key=lambda x: x["shard"])
+        token_count_from_manifest = sum([x["num_sequences"] for x in manifests_sorted] * seqlen)
         write_manifest(manifests_sorted, args)
 
     end_time = time.time()
     duration = end_time - start_time
     final_token_count = ray.get(counter.increment_token_count.remote(0))
+
+    if token_count_from_manifest != final_token_count:
+        logger.warning(
+            f"Token count mismatch: {token_count_from_manifest} from manifest vs {final_token_count} global actor. Please run manifest generation manually via make_wds_manifest.py."
+        )
+        # TODO: Generate manifest automatically from the tokenized data if token count mismatch
+
     print("==== Token count summary ====")
     print(f"Tokenize + Shuffle script Finished in: {duration}")
     print(f"Final Token Count: {final_token_count}")
