@@ -1,6 +1,7 @@
 import atexit
 import logging
 import os
+import shutil
 import re
 import sys
 import random
@@ -48,7 +49,7 @@ from open_lm.model import create_model
 
 from open_lm.utils.transformers.hf_wrapper import create_wrapped_hf_model
 from open_lm.data import get_data, get_wds_dataset
-from open_lm.distributed import is_master, init_distributed_device, broadcast_object
+from open_lm.distributed import is_master, is_local_master, init_distributed_device, broadcast_object
 from open_lm.logger import setup_logging
 from open_lm.params import parse_args
 from open_lm.scheduler import cosine_lr, const_lr
@@ -798,8 +799,9 @@ def main(args):
 
             if args.temp_local_data_dir is not None:
                 train_data_string_per_source = download_data_to_local(
-                    train_data_string_per_source, args.temp_local_data_dir
+                    train_data_string_per_source, args.temp_local_data_dir, only_rename=not is_local_master(args)
                 )
+            dist.barrier()
 
             # In the distributed case, make sure that all nodes receive the same string
             if args.distributed:
@@ -924,6 +926,9 @@ def main(args):
             raise RuntimeError(
                 f"{num_ckpt_too_few_tokens} checkpoints happened where the number of tokens seen was {1 - args.data_tolerate_error_p} of expected. This is likely due to transient errors e.g. reading from S3."
             )
+        if is_local_master(args) and args.temp_local_data_dir is not None:
+            shutil.rmtree(args.temp_local_data_dir)
+        dist.barrier()
 
         if done_training:
             if is_master(args):

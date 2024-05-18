@@ -485,33 +485,37 @@ def _single_epoch_string(
     return shard_strings_per_source, num_samples_per_source, next_shard_per_source
 
 
-def download_data_to_local(shard_strings_per_source, temp_dir):
+def download_data_to_local(shard_strings_per_source, temp_dir, only_rename=False):
     if not os.path.exists(temp_dir):
         os.makedirs(temp_dir, exist_ok=True)
 
     local_shard_strings_per_source = []
 
     for shard_string in shard_strings_per_source:
-        if shard_string.startswith("pipe:aws s3 cp "):
-            shard_string = shard_string[len("pipe:aws s3 cp ") : -len(" -")]
+        if not shard_string.startswith("pipe:aws s3 cp "):
+            local_shard_strings_per_source.append(shard_string)
+            continue
+        
+        shard_string = shard_string[len("pipe:aws s3 cp ") : -len(" -")]
 
         shards = list(braceexpand(shard_string))
-        shard_directory = Path(shards[0]).parent
-        shard_filenames = [Path(s).name for s in shards]
+        shard_directory = Path(shards[0][len("s3://") :]).parent
+        shard_ids = [Path(s).with_suffix("").name for s in shards]
 
-        aws_command = ["aws", "s3", "cp", "--recursive", f"{shard_directory}", f"{temp_dir}", "--exclude", '"*"']
-        for sf in shard_filenames:
-            aws_command.extend(["--include", f"{sf}"])
+        if not only_rename:
+            aws_command = ["aws", "s3", "cp", "--recursive", f"s3://{shard_directory}", f"{temp_dir}", "--exclude", "*"]
+            for sf in shard_ids:
+                aws_command.extend(["--include", f"{sf}.tar"])
 
-        result = subprocess.run(
-            aws_command,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-        )
-        if result.returncode != 0:
-            raise RuntimeError(f"Error: Failed to download data to local storage: {result.stderr.decode('utf-8')}")
+            result = subprocess.run(
+                aws_command,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
+            if result.returncode != 0:
+                raise RuntimeError(f"Error: Failed to download data to local storage: {result.stderr.decode('utf-8')}")
 
-        local_shard_string = temp_dir + "{" + ",".join(shard_filenames) + "}.tar"
+        local_shard_string = temp_dir + "{" + ",".join(shard_ids) + "}.tar"
         local_shard_strings_per_source.append(local_shard_string)
 
     return local_shard_strings_per_source
