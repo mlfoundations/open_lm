@@ -802,7 +802,6 @@ def main(args):
                 train_data_string_per_source = download_data_to_local(
                     train_data_string_per_source, args.temp_local_data_dir, only_rename=not download_rank
                 )
-            dist.barrier()
 
             # In the distributed case, make sure that all nodes receive the same string
             if args.distributed:
@@ -932,7 +931,8 @@ def main(args):
             cleanup_rank = is_master(args) if args.local_dir_shared_across_nodes else is_local_master(args)
             if cleanup_rank:
                 shutil.rmtree(args.temp_local_data_dir)
-        dist.barrier()
+        if args.distributed:
+            dist.barrier()
 
         if done_training:
             if is_master(args):
