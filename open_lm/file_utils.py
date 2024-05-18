@@ -495,7 +495,7 @@ def download_data_to_local(shard_strings_per_source, temp_dir, only_rename=False
         if not shard_string.startswith("pipe:aws s3 cp "):
             local_shard_strings_per_source.append(shard_string)
             continue
-        
+
         shard_string = shard_string[len("pipe:aws s3 cp ") : -len(" -")]
 
         shards = list(braceexpand(shard_string))
