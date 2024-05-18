@@ -793,6 +793,11 @@ def parse_args(args):
         default=None,
         help="If set, move the data to temporary local storage at the start of each epoch, to minimize s3 errors.",
     )
+    parser.add_argument(
+        "--local-dir-shared-across-nodes",
+        action="store_true",
+        help="Whether the --temp-local-data-dir argument refers to a path seen by all nodes or by each node separately."
+    )
 
     add_model_args(parser)
 

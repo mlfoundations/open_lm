@@ -798,8 +798,9 @@ def main(args):
             )
 
             if args.temp_local_data_dir is not None:
+                download_rank = is_master(args) if args.local_dir_shared_across_nodes else is_local_master(args)
                 train_data_string_per_source = download_data_to_local(
-                    train_data_string_per_source, args.temp_local_data_dir, only_rename=not is_local_master(args)
+                    train_data_string_per_source, args.temp_local_data_dir, only_rename=not download_rank
                 )
             dist.barrier()
 
@@ -926,8 +927,11 @@ def main(args):
             raise RuntimeError(
                 f"{num_ckpt_too_few_tokens} checkpoints happened where the number of tokens seen was {1 - args.data_tolerate_error_p} of expected. This is likely due to transient errors e.g. reading from S3."
             )
-        if is_local_master(args) and args.temp_local_data_dir is not None:
-            shutil.rmtree(args.temp_local_data_dir)
+
+        if args.temp_local_data_dir is not None:
+            cleanup_rank = is_master(args) if args.local_dir_shared_across_nodes else is_local_master(args)
+            if cleanup_rank:
+                shutil.rmtree(args.temp_local_data_dir)
         dist.barrier()
 
         if done_training:
