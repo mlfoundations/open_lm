@@ -577,6 +577,7 @@ def main(args):
     parser.add_argument("--presort", action="store_true")
     parser.add_argument("--allow_imbalanced_write", action="store_true")
     parser.add_argument("--tokenization_num_cpus", type=int, default=1)
+    parser.add_argument("--allow_duplicate_inputs", action="store_true")
 
     args = parser.parse_args(args)
     if args.do_sample:
@@ -613,7 +614,7 @@ def main(args):
     input_paths = []
     for inp_folder in input_folders:
         input_paths += glob_files(inp_folder, suffixes=args.suffixes)
-    input_paths = sorted(set(input_paths))
+    input_paths = sorted(input_paths) if args.allow_duplicate_inputs else sorted(set(input_paths))
     rng = random.Random(args.seed)
     rng.shuffle(input_paths)  # shuffle before selecting subsets
     if args.subset is not None:
