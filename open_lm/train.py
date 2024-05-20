@@ -175,7 +175,7 @@ def train_one_epoch(
                             break
                         targets_ii = targets[ii * per_batch : (ii + 1) * per_batch]
                         out, _, _ = model(inputs_ii)
-                        forward_total_time += (time.time() - forward_start)
+                        forward_total_time += time.time() - forward_start
 
                         if args.log_logit_mean:
                             logit_m.update(torch.mean(out).item())
@@ -193,7 +193,7 @@ def train_one_epoch(
 
                     backward_start = time.time()
                     backward(local_loss, scaler)
-                    backward_total_time += (time.time() - backward_start)
+                    backward_total_time += time.time() - backward_start
                     with autocast():
                         if (
                             averagers is not None
@@ -262,7 +262,7 @@ def train_one_epoch(
             # same for the average model loss
             for key, value in total_loss_avg.items():
                 total_loss_avg[key] = value.detach().clone()
-        
+
         sync_start = time.time()
         if args.world_size > 1:
             dist.all_reduce(global_loss_tensor, op=ReduceOp.AVG)
