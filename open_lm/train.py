@@ -71,6 +71,7 @@ def train_one_epoch(
     forward_time_m = AverageMeter()
     backward_time_m = AverageMeter()
     optim_step_time_m = AverageMeter()
+    sync_time_m = AverageMeter()
     if averagers is not None and args.log_avg_model_training_loss:
         losses_avg_m = {key: AverageMeter() for key in averagers.avgs_dict.keys()}
         local_avg_losses = {}
@@ -159,6 +160,8 @@ def train_one_epoch(
 
             inputs, targets = sample_chunk(texts, args)
 
+            forward_total_time = 0
+            backward_total_time = 0
             for ii in range(args.accum_freq):
                 maybe_no_sync = nullcontext
                 # Don't sync gradients until the final batch for FSDP.
@@ -172,7 +175,7 @@ def train_one_epoch(
                             break
                         targets_ii = targets[ii * per_batch : (ii + 1) * per_batch]
                         out, _, _ = model(inputs_ii)
-                        forward_time_m.update(time.time() - forward_start)
+                        forward_total_time += (time.time() - forward_start)
 
                         if args.log_logit_mean:
                             logit_m.update(torch.mean(out).item())
@@ -190,7 +193,7 @@ def train_one_epoch(
 
                     backward_start = time.time()
                     backward(local_loss, scaler)
-                    backward_time_m.update(time.time() - backward_start)
+                    backward_total_time += (time.time() - backward_start)
                     with autocast():
                         if (
                             averagers is not None
@@ -228,6 +231,9 @@ def train_one_epoch(
                         for key, averager in averagers.avgs_dict.items():
                             total_loss_avg[key] += local_avg_losses[key]
 
+            forward_time_m.update(forward_total_time)
+            backward_time_m.update(backward_total_time)
+
             total_loss = total_lm_loss
             if args.moe_freq > 0:
                 total_loss += total_load_balancing_loss
@@ -250,14 +256,14 @@ def train_one_epoch(
 
         if averagers is not None:
             averagers.step()
-        batch_time_m.update(time.time() - end)
-        end = time.time()
 
         global_loss_tensor = total_loss.detach().clone()
         if averagers is not None and args.log_avg_model_training_loss and i % args.log_avg_model_training_loss == 0:
             # same for the average model loss
             for key, value in total_loss_avg.items():
                 total_loss_avg[key] = value.detach().clone()
+        
+        sync_start = time.time()
         if args.world_size > 1:
             dist.all_reduce(global_loss_tensor, op=ReduceOp.AVG)
             if averagers is not None and args.log_avg_model_training_loss and i % args.log_avg_model_training_loss == 0:
@@ -265,6 +271,10 @@ def train_one_epoch(
                     dist.all_reduce(value, op=ReduceOp.AVG)
             if args.moe_freq > 0:
                 dist.all_reduce(total_load_balancing_loss, op=ReduceOp.AVG)
+        sync_time_m.update(time.time() - sync_start)
+
+        batch_time_m.update(time.time() - end)
+        end = time.time()
 
         batch_count = i + 1
         step += 1
@@ -315,6 +325,7 @@ def train_one_epoch(
                     "forward_time": forward_time_m.val,
                     "backward_time": backward_time_m.val,
                     "optim_step_time": optim_step_time_m.val,
+                    "sync_time": sync_time_m.val,
                     "samples_per_second": samples_per_second,
                     "samples_per_second_per_gpu": samples_per_second_per_gpu,
                     "lr": optimizer.param_groups[0]["lr"],
@@ -348,6 +359,7 @@ def train_one_epoch(
                 forward_time_m.reset()
                 backward_time_m.reset()
                 optim_step_time_m.reset()
+                sync_time_m.reset()
 
                 if math.isnan(losses_m.val):
                     # case where loss goes to nan, we see this sometimes with bad nodes.
