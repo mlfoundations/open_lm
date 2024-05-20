@@ -7,6 +7,7 @@ import builtins as __builtin__
 import torch
 
 from composer.utils import dist, get_device
+from open_lm.precision import get_autocast
 from open_lm.utils.transformers.hf_model import OpenLMforCausalLM
 from open_lm.utils.transformers.hf_config import OpenLMConfig
 from open_lm.utils.llm_foundry_wrapper import SimpleComposerOpenLMCausalLM
@@ -38,10 +39,12 @@ def run_model(open_lm: OpenLMforCausalLM, tokenizer, args):
         generate_args["temperature"] = args.temperature
         generate_args["top_p"] = args.top_p
 
-    output = composer_model.generate(
-        input["input_ids"],
-        **generate_args,
-    )
+    autocast = get_autocast(args.precision)
+    with autocast():
+        output = composer_model.generate(
+            input["input_ids"],
+            **generate_args,
+        )
     output = tokenizer.decode(output[0].cpu().numpy())
     print("-" * 50)
     print("\t\t Model output:")
