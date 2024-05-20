@@ -575,11 +575,8 @@ def main(args):
     )  # default is localhost; for slurm jobs do 0.0.0.0
     parser.add_argument("--suffixes", nargs="+", default=[".json", ".jsonl", ".zst", ".zstd", ".tar", ".gz"])
     parser.add_argument("--presort", action="store_true")
-<<<<<<< HEAD
-=======
-    parser.add_argument("--max_buffer_seqs", type=int, default=1000)
->>>>>>> 9c564b2 (linting)
     parser.add_argument("--allow_imbalanced_write", action="store_true")
+    parser.add_argument("--tokenization_num_cpus", type=int, default=1)
 
     args = parser.parse_args(args)
     if args.do_sample:
@@ -665,15 +662,17 @@ def main(args):
             do_sample=args.do_sample,
             sources=Sources,
             source_counters=source_counters,
-        )
+        ),
+        num_cpus=args.tokenization_num_cpus,
     )
-    ds = ds.map(add_hash)
     tokenize_context_end = time.time()
     # sorting by hash is a random shuffle
     if not args.no_shuffle:
+        ds = ds.map(add_hash)
         ds = ds.sort(key="hash")
     else:
-        ds = ds.repartition(num_cores * num_nodes, shuffle=False)
+        ds = ds.materialize()
+
     counter = GlobalCounter.remote()
     out_folder = args.output.rstrip("/")
     # first map buffer_write over rows, it will create an actor (which hopefully will be scheduled locally)
