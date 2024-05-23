@@ -13,6 +13,8 @@ import fsspec
 import numpy as np
 import torch
 
+from braceexpand import braceexpand
+from pathlib import Path
 from typing import List, Optional
 from tqdm import tqdm
 
@@ -481,3 +483,58 @@ def _single_epoch_string(
         shard_strings_per_source.append(shard_string_source)
 
     return shard_strings_per_source, num_samples_per_source, next_shard_per_source
+
+
+def download_data_to_local(shard_strings_per_source, temp_dir, only_rename=False, max_retries=3):
+    if not os.path.exists(temp_dir):
+        os.makedirs(temp_dir, exist_ok=True)
+
+    local_shard_strings_per_source = []
+
+    for shard_string in shard_strings_per_source:
+        if not shard_string.startswith("pipe:aws s3 cp "):
+            local_shard_strings_per_source.append(shard_string)
+            continue
+
+        shard_string = shard_string[len("pipe:aws s3 cp ") : -len(" -")]
+
+        shards = list(braceexpand(shard_string))
+        shard_directory = Path(shards[0][len("s3://") :]).parent
+        shard_ids = [Path(s).with_suffix("").name for s in shards]
+
+        if not only_rename:
+            retries = 0
+
+            while True:
+                aws_command = [
+                    "aws",
+                    "s3",
+                    "cp",
+                    "--recursive",
+                    f"s3://{shard_directory}",
+                    f"{temp_dir}",
+                    "--exclude",
+                    "*",
+                ]
+                for sf in shard_ids:
+                    aws_command.extend(["--include", f"{sf}.tar"])
+
+                result = subprocess.run(
+                    aws_command,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                )
+                if result.returncode != 0:
+                    if retries < max_retries:
+                        retries += 1
+                    else:
+                        raise RuntimeError(
+                            f"Error: Failed to download data to local storage: {result.stderr.decode('utf-8')}"
+                        )
+                else:
+                    break
+
+        local_shard_string = temp_dir + "{" + ",".join(shard_ids) + "}.tar"
+        local_shard_strings_per_source.append(local_shard_string)
+
+    return local_shard_strings_per_source
