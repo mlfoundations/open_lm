@@ -932,6 +932,8 @@ def main(args):
             if is_master(args):
                 logging.warning("Destroying and reconstructing model.")
             del model
+            del optimizer
+            del scaler
             import gc; gc.collect(); gc.collect()
 
             # Recreate model and optimizer
