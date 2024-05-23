@@ -787,6 +787,7 @@ def parse_args(args):
         default=0,
         help="This is the maximum number of failed checkpoints (due to not having seen enough tokens) that are allowed",
     )
+    parser.add_argument("--hack-reconstruct-model-every-checkpoint", action="store_true")
 
     add_model_args(parser)
 
