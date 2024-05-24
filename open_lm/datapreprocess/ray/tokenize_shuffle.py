@@ -47,13 +47,16 @@ import uuid
 
 import logging
 
-
 import yaml
 import pathlib
 
 # Initialize an empty dictionary for sampling frequencies
 
 DIR = pathlib.Path(__file__).parent.absolute()
+
+DEFAULT_SPECIAL_TOKENS = {
+    "EleutherAI/gpt-neox-20b": {"eos_token_id": 0, "pad_token_id": 1},
+}
 
 
 def load_from_yaml(filename):
@@ -447,18 +450,27 @@ def load_tokenizer(tokenizer, eos_overwrite=None, pad_overwrite=None):
             raise ValueError(f"Unknown Tokenizer: {tokenizer}")
 
     eos_token_id, pad_token_id = enc.eos_token_id, enc.pad_token_id
+    if tokenizer in DEFAULT_SPECIAL_TOKENS:
+        eos_token_id = DEFAULT_SPECIAL_TOKENS[tokenizer]["eos_token_id"]
+        pad_token_id = DEFAULT_SPECIAL_TOKENS[tokenizer]["pad_token_id"]
 
     if eos_overwrite is not None:
+        assert eos_overwrite < len(
+            enc.vocab
+        ), f"eos_overwrite {eos_overwrite} is greater than vocab size {len(enc.vocab)}"
         if eos_token_id is not None and eos_overwrite != eos_token_id:
             logger.warning(
-                f"Default EOS id for {tokenizer} is {eos_token_id} and you are overriding it to be {eos_overwrite}. This may cause issues during training."
+                f"Default EOS id for {tokenizer} is {eos_token_id} and you are overriding it to be {eos_overwrite}."
             )
         eos_token_id = eos_overwrite
 
     if pad_overwrite is not None:
-        if pad_overwrite != pad_token_id:
+        assert pad_overwrite < len(
+            enc.vocab
+        ), f"pad_overwrite {pad_overwrite} is greater than vocab size {len(enc.vocab)}"
+        if pad_token_id is not None and pad_overwrite != pad_token_id:
             logger.warning(
-                f"Default PAD id for {tokenizer} is {pad_token_id} and you are overriding it to be {pad_overwrite}. This may cause issues during training."
+                f"Default PAD id for {tokenizer} is {pad_token_id} and you are overriding it to be {pad_overwrite}."
             )
         pad_token_id = pad_overwrite
 
@@ -470,6 +482,9 @@ def load_tokenizer(tokenizer, eos_overwrite=None, pad_overwrite=None):
         raise ValueError(
             "Tokenizer does not have a specified PAD token id. Please manually pass one in via --pad_overwrite"
         )
+
+    logger.info(f'EOS token id has been set to {eos_token_id} which decodes to "{enc.decode([eos_token_id])}".')
+    logger.info(f'PAD token id has been set to {pad_token_id} which decodes to "{enc.decode([pad_token_id])}".')
 
     return (lambda x: enc(x).input_ids, eos_token_id, pad_token_id)
 
