@@ -629,8 +629,6 @@ def main(args):
         )
     num_nodes = len(ray.nodes())
 
-    Sources = enum.Enum("Sources", {item["source"]: index for index, item in enumerate(data["sources"])})
-
     input_folders = args.input.split(",")
     input_paths = []
     for inp_folder in input_folders:
