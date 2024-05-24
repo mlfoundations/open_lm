@@ -382,7 +382,7 @@ def main(args):
     args.failed_checkpoint_path = os.path.join(log_base_path, "checkpoints_failed")
     if is_master(args):
         args.tensorboard_path = os.path.join(log_base_path, "tensorboard") if args.tensorboard else ""
-        for dirname in [args.tensorboard_path, args.checkpoint_path]:
+        for dirname in [args.tensorboard_path, args.checkpoint_path, args.failed_checkpoint_path]:
             if dirname:
                 os.makedirs(dirname, exist_ok=True)
     else:
