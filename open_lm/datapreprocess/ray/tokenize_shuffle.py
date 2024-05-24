@@ -48,13 +48,16 @@ import uuid
 
 import logging
 
-
 import yaml
 import pathlib
 
 # Initialize an empty dictionary for sampling frequencies
 
 DIR = pathlib.Path(__file__).parent.absolute()
+
+DEFAULT_SPECIAL_TOKENS = {
+    "EleutherAI/gpt-neox-20b": {"eos_token_id": 0, "pad_token_id": 1},
+}
 
 
 def load_from_yaml(filename):
@@ -258,10 +261,9 @@ def preprocess(
     sources: enum.Enum = None,
     source_counter: GlobalCounter = None,
 ):
-    tokenizer_fn, vocab_size = tokenizer
+    tokenizer_fn, EOS, PAD = tokenizer
     rng = random.Random(hash(key) + seed)
-    EOT = SpecialTokens.END_OF_TEXT.value % (vocab_size + len(SpecialTokens))
-    PAD = SpecialTokens.PAD.value % (vocab_size + len(SpecialTokens))
+
     if do_sample:
         assert sources is not None
         sample_freq = sources.get_sampling_frequency(key)
@@ -275,7 +277,7 @@ def preprocess(
         pbar.set_description(key)
         for string in pbar:
             tokens = tokenizer_fn(string)
-            tokens.append(EOT)
+            tokens.append(EOS)
             buffer += tokens
             idx = 0
             while idx < len(buffer) - seqlen:
@@ -368,12 +370,6 @@ def process_keys(data, tokenizer, seqlen, seed, content_key, do_sample, sources=
         fh.close()
 
 
-class SpecialTokens(Enum):
-    END_OF_TEXT = 0
-    PAD = -1
-    END_OF_DOCUMENT = -2
-
-
 def parse_s3_path(s3_path):
     """
     Extract the bucket and key from an S3 path.
@@ -458,7 +454,7 @@ def write_to_location(folder, tar_name, bio):
             assert False, f"error is {path} and {e}"
 
 
-def load_tokenizer(tokenizer):
+def load_tokenizer(tokenizer, eos_overwrite=None, pad_overwrite=None):
     enc = None
     if pathlib.Path(tokenizer).exists() and pathlib.Path(tokenizer).is_file():
         enc = PreTrainedTokenizerFast(tokenizer_file=tokenizer)
@@ -469,7 +465,44 @@ def load_tokenizer(tokenizer):
             print(str(e))
             raise ValueError(f"Unknown Tokenizer: {tokenizer}")
 
-    return (lambda x: enc(x).input_ids, enc.vocab_size)
+    eos_token_id, pad_token_id = enc.eos_token_id, enc.pad_token_id
+    if tokenizer in DEFAULT_SPECIAL_TOKENS:
+        eos_token_id = DEFAULT_SPECIAL_TOKENS[tokenizer]["eos_token_id"]
+        pad_token_id = DEFAULT_SPECIAL_TOKENS[tokenizer]["pad_token_id"]
+
+    if eos_overwrite is not None:
+        assert eos_overwrite < len(
+            enc.vocab
+        ), f"eos_overwrite {eos_overwrite} is greater than vocab size {len(enc.vocab)}"
+        if eos_token_id is not None and eos_overwrite != eos_token_id:
+            logger.warning(
+                f"Default EOS id for {tokenizer} is {eos_token_id} and you are overriding it to be {eos_overwrite}."
+            )
+        eos_token_id = eos_overwrite
+
+    if pad_overwrite is not None:
+        assert pad_overwrite < len(
+            enc.vocab
+        ), f"pad_overwrite {pad_overwrite} is greater than vocab size {len(enc.vocab)}"
+        if pad_token_id is not None and pad_overwrite != pad_token_id:
+            logger.warning(
+                f"Default PAD id for {tokenizer} is {pad_token_id} and you are overriding it to be {pad_overwrite}."
+            )
+        pad_token_id = pad_overwrite
+
+    if eos_token_id is None:
+        raise ValueError(
+            "Tokenizer does not have a specified EOS token id. Please manually pass one in via --eos_overwrite"
+        )
+    if pad_token_id is None:
+        raise ValueError(
+            "Tokenizer does not have a specified PAD token id. Please manually pass one in via --pad_overwrite"
+        )
+
+    logger.info(f'EOS token id has been set to {eos_token_id} which decodes to "{enc.decode([eos_token_id])}".')
+    logger.info(f'PAD token id has been set to {pad_token_id} which decodes to "{enc.decode([pad_token_id])}".')
+
+    return (lambda x: enc(x).input_ids, eos_token_id, pad_token_id)
 
 
 def glob_files(path, suffixes):
@@ -573,7 +606,7 @@ def main(args):
     parser.add_argument("--content_key", type=str, default="text")
     parser.add_argument("--seqlen", type=int, default=2048)
     parser.add_argument("--tokenizer", type=str, default="EleutherAI/gpt-neox-20b")
-    parser.add_argument("--vocab_size", type=int, default=None)  # for pre-tokenized data, don't load tokenizer
+    parser.add_argument("--pretokenized", action="store_true")  # For pre-tokenized data, don't load tokenizer
     parser.add_argument("--wds_chunk_size", type=int, default=8192)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--subset", type=int, default=None)
@@ -591,6 +624,11 @@ def main(args):
     )  # default is localhost; for slurm jobs do 0.0.0.0
     parser.add_argument("--suffixes", nargs="+", default=[".json", ".jsonl", ".zst", ".zstd", ".tar", ".gz"])
     parser.add_argument("--presort", action="store_true")
+    parser.add_argument("--allow_imbalanced_write", action="store_true")
+    parser.add_argument("--tokenization_num_cpus", type=int, default=1)
+    parser.add_argument("--allow_duplicate_inputs", action="store_true")
+    parser.add_argument("--eos_overwrite", type=int, default=None)
+    parser.add_argument("--pad_overwrite", type=int, default=None)
 
     args = parser.parse_args(args)
     if args.do_sample:
@@ -623,11 +661,12 @@ def main(args):
             dashboard_host=args.ray_dashboard_host,
         )
     num_nodes = len(ray.nodes())
+
     input_folders = args.input.split(",")
     input_paths = []
     for inp_folder in input_folders:
         input_paths += glob_files(inp_folder, suffixes=args.suffixes)
-    input_paths = sorted(set(input_paths))
+    input_paths = sorted(input_paths) if args.allow_duplicate_inputs else sorted(set(input_paths))
     rng = random.Random(args.seed)
     rng.shuffle(input_paths)  # shuffle before selecting subsets
     if args.subset is not None:
@@ -652,7 +691,12 @@ def main(args):
     ctx.execution_options.resource_limits.object_store_memory = float("inf")
     ray.data.DataContext.get_current().execution_options.verbose_progress = True
     start_time = time.time()
-    tokenizer = load_tokenizer(args.tokenizer) if args.vocab_size is None else (lambda x: x, args.vocab_size)
+
+    if args.pretokenized:
+        tokenizer = (lambda x: x, args.eos_overwrite, args.pad_overwrite)
+    else:
+        tokenizer = load_tokenizer(args.tokenizer, args.eos_overwrite, args.pad_overwrite)
+
     logger.info(f"Total number of keys = {len(input_paths)}")
     df = pd.DataFrame(input_paths, columns=["path"])
     ds = ray.data.from_pandas(pd.DataFrame(input_paths, columns=["path"])).repartition(parallelism)
@@ -676,45 +720,74 @@ def main(args):
             do_sample=args.do_sample,
             sources=Sources,
             source_counters=source_counters,
-        )
+        ),
+        num_cpus=args.tokenization_num_cpus,
     )
-    ds = ds.map(add_hash)
     tokenize_context_end = time.time()
     # sorting by hash is a random shuffle
     if not args.no_shuffle:
+        ds = ds.map(add_hash)
         ds = ds.sort(key="hash")
     else:
-        ds = ds.repartition(num_cores * num_nodes, shuffle=False)
+        ds = ds.materialize()
+
     counter = GlobalCounter.remote()
     out_folder = args.output.rstrip("/")
     # first map buffer_write over rows, it will create an actor (which hopefully will be scheduled locally)
-    write_status = ds.map_batches(
-        buffer_write,
-        fn_kwargs={
-            "folder": out_folder,
-            "counter": counter,
-            "buffer_size": args.wds_chunk_size,
-            "num_writers_per_node": num_writers_per_node,
-        },
-        zero_copy_batch=True,
-        batch_size=args.wds_chunk_size,
-        batch_format="pandas",
-    ).take_all()
-    # after the write is done, grab all actors of class BufferedShardWriter
-    buffer_writers_names = set(
-        [x.name for x in list_actors(filters=[("class_name", "=", "BufferedShardWriter"), ("state", "=", "ALIVE")])]
-    )
-    buffer_writers = [ray.get_actor(x) for x in buffer_writers_names]
-    # flush the remaining buffers, this should be the *only* shards that are less than wds_chunk_size
-    flushed_buffers = [bw._flush_buffer.remote(out_folder, counter) for bw in buffer_writers]
-    tail_write_status = [ray.get(buf) for buf in flushed_buffers]
-    # Grab manifests which are stored in the buffer writers
-    manifests = [manifest_row for bw in buffer_writers for manifest_row in ray.get(bw.get_manifests.remote())]
-    manifests_sorted = sorted(manifests, key=lambda x: x["shard"])
-    write_manifest(manifests_sorted, args)
+    if args.allow_imbalanced_write:
+        ds = ds.map_batches(
+            map_write_wds,
+            batch_size=wds_chunk_size,
+            fn_kwargs={
+                "batch_size": wds_chunk_size,
+                "folder": out_folder,
+                "counter": counter,
+            },
+            batch_format="pandas",
+        )
+        ds = ds.repartition(1)
+        ds = ds.sort(key="shard")
+        jsonl_lines = ds.take_all()
+        token_count_from_manifest = sum([x["num_sequences"] for x in jsonl_lines] * seqlen)
+        write_manifest(jsonl_lines, args)
+    else:
+        write_status = ds.map_batches(
+            buffer_write,
+            fn_kwargs={
+                "folder": out_folder,
+                "counter": counter,
+                "buffer_size": args.wds_chunk_size,
+                "num_writers_per_node": num_writers_per_node,
+            },
+            zero_copy_batch=True,
+            batch_size=args.wds_chunk_size,
+            batch_format="pandas",
+        ).take_all()
+
+        # after the write is done, grab all actors of class BufferedShardWriter
+        buffer_writers_names = set(
+            [x.name for x in list_actors(filters=[("class_name", "=", "BufferedShardWriter"), ("state", "=", "ALIVE")])]
+        )
+        buffer_writers = [ray.get_actor(x) for x in buffer_writers_names]
+        # flush the remaining buffers, this should be the *only* shards that are less than wds_chunk_size
+        flushed_buffers = [bw._flush_buffer.remote(out_folder, counter) for bw in buffer_writers]
+        tail_write_status = [ray.get(buf) for buf in flushed_buffers]
+        # Grab manifests which are stored in the buffer writers
+        manifests = [manifest_row for bw in buffer_writers for manifest_row in ray.get(bw.get_manifests.remote())]
+        manifests_sorted = sorted(manifests, key=lambda x: x["shard"])
+        token_count_from_manifest = sum([x["num_sequences"] for x in manifests_sorted] * seqlen)
+        write_manifest(manifests_sorted, args)
+
     end_time = time.time()
     duration = end_time - start_time
     final_token_count = ray.get(counter.increment_token_count.remote(0))
+
+    if token_count_from_manifest != final_token_count:
+        logger.warning(
+            f"Token count mismatch: {token_count_from_manifest} from manifest vs {final_token_count} global actor. Please run manifest generation manually via make_wds_manifest.py."
+        )
+        # TODO: Generate manifest automatically from the tokenized data if token count mismatch
+
     print("==== Token count summary ====")
     print(f"Tokenize + Shuffle script Finished in: {duration}")
     print(f"Final Token Count: {final_token_count}")
