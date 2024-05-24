@@ -351,12 +351,6 @@ def process_keys(data, tokenizer, seqlen, seed, content_key, do_sample, sources=
         fh.close()
 
 
-class SpecialTokens(Enum):
-    END_OF_TEXT = 0
-    PAD = -1
-    END_OF_DOCUMENT = -2
-
-
 def parse_s3_path(s3_path):
     """
     Extract the bucket and key from an S3 path.
@@ -635,7 +629,6 @@ def main(args):
         )
     num_nodes = len(ray.nodes())
 
-    SpecialTokens = enum.Enum
     Sources = enum.Enum("Sources", {item["source"]: index for index, item in enumerate(data["sources"])})
 
     input_folders = args.input.split(",")
