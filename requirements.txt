@@ -7,7 +7,7 @@ pandas==2.1.4
 fsspec
 tqdm
 jsonlines
-boto3==1.26.90
+boto3
 Pillow
 zstandard
 pysimdjson
