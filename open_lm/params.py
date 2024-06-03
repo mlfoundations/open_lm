@@ -65,6 +65,12 @@ def add_model_args(parser):
         help="if set > 0, we will add MoE layer to every moe_freq layer.",
     )
     parser.add_argument(
+        "--moe-dropless",
+        action="store_true",
+        default=False,
+        help="Use dropless MoE (dMoE)",
+    )    
+    parser.add_argument(
         "--moe-num-experts",
         type=int,
         default=None,
