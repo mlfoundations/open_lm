@@ -17,7 +17,7 @@ SOURCE_MANIFEST = ["tests/assets/source_3/manifest.jsonl"]
         (100, 2, 1000, 4, [20, 40]),  # Easy case.
         (100, 2, 1200, 4, [20, 40, 48]),  # End before consuming all in a shard.
         (100, 2, 1500, 4, [20, 40, 54, 60]),  # One of the shards here is smaller. 54 instead of 56 because of workers.
-        (85, 2, 1000, 4, [22, 44, 47])  # Batch weirdness, total_steps = 1000 * 4 // 85 = 47,
+        (85, 2, 1000, 4, [22, 44, 47]),  # Batch weirdness, total_steps = 1000 * 4 // 85 = 47,
         # steps_epoch = 2000 // (85 * 2) * 2 = 22
     ],
 )

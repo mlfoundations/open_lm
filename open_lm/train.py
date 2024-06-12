@@ -92,6 +92,10 @@ def train_one_epoch(
     load_balancing_losses_m = AverageMeter()
     batch_time_m = AverageMeter()
     data_time_m = AverageMeter()
+    forward_time_m = AverageMeter()
+    backward_time_m = AverageMeter()
+    optim_step_time_m = AverageMeter()
+    sync_time_m = AverageMeter()
     if averagers is not None and args.log_avg_model_training_loss:
         losses_avg_m = {key: AverageMeter() for key in averagers.avgs_dict.keys()}
         local_avg_losses = {}
@@ -148,9 +152,11 @@ def train_one_epoch(
             with te.fp8_autocast(enabled=True, fp8_recipe=fp8_recipe, fp8_group=data_parallel_group) if (
                 using_te and args.use_fp8
             ) else autocast():
+                forward_start = time.time()
                 inputs, targets = sample_chunk(texts, args)
 
                 out, _, _ = model(inputs)
+                forward_time_m.update(time.time() - forward_start)
 
                 if args.log_logit_mean:
                     logit_m.update(torch.mean(out).item())
@@ -162,7 +168,10 @@ def train_one_epoch(
                     clear_load_balancing_loss()
                     total_loss += total_load_balancing_loss
 
+            backward_start = time.time()
             backward(total_loss, scaler)
+            backward_time_m.update(time.time() - backward_start)
+
             if averagers is not None and args.log_avg_model_training_loss and i % args.log_avg_model_training_loss == 0:
                 with te.fp8_autocast(enabled=True, fp8_recipe=fp8_recipe, fp8_group=data_parallel_group) if (
                     using_te and args.use_fp8
@@ -180,6 +189,8 @@ def train_one_epoch(
 
             inputs, targets = sample_chunk(texts, args)
 
+            forward_total_time = 0
+            backward_total_time = 0
             for ii in range(args.accum_freq):
                 maybe_no_sync = nullcontext
                 # Don't sync gradients until the final batch for FSDP.
@@ -189,12 +200,14 @@ def train_one_epoch(
                     with te.fp8_autocast(enabled=True, fp8_recipe=fp8_recipe, fp8_group=data_parallel_group) if (
                         using_te and args.use_fp8
                     ) else autocast():
+                        forward_start = time.time()
                         inputs_ii = inputs[ii * per_batch : (ii + 1) * per_batch]
                         if inputs_ii.shape[0] == 0:
                             break
                         targets_ii = targets[ii * per_batch : (ii + 1) * per_batch]
 
                         out, _, _ = model(inputs_ii)
+                        forward_total_time += time.time() - forward_start
 
                         if args.log_logit_mean:
                             logit_m.update(torch.mean(out).item())
@@ -210,7 +223,9 @@ def train_one_epoch(
                         clear_load_balancing_loss()
                         local_loss += local_load_balancing_loss
 
+                    backward_start = time.time()
                     backward(local_loss, scaler)
+                    backward_total_time += time.time() - backward_start
                     with te.fp8_autocast(enabled=True, fp8_recipe=fp8_recipe, fp8_group=data_parallel_group) if (
                         using_te and args.use_fp8
                     ) else autocast():
@@ -250,10 +265,14 @@ def train_one_epoch(
                         for key, averager in averagers.avgs_dict.items():
                             total_loss_avg[key] += local_avg_losses[key]
 
+            forward_time_m.update(forward_total_time)
+            backward_time_m.update(backward_total_time)
+
             total_loss = total_lm_loss
             if args.moe_freq > 0:
                 total_loss += total_load_balancing_loss
 
+        optim_step_start = time.time()
         if scaler is not None:
             if args.grad_clip_norm is not None:
                 scaler.unscale_(optimizer)
@@ -267,17 +286,18 @@ def train_one_epoch(
                 else:
                     torch.nn.utils.clip_grad_norm_(model.parameters(), args.grad_clip_norm, norm_type=2.0)
             optimizer.step()
+        optim_step_time_m.update(time.time() - optim_step_start)
 
         if averagers is not None:
             averagers.step()
-        batch_time_m.update(time.time() - end)
-        end = time.time()
 
         global_loss_tensor = total_loss.detach().clone()
         if averagers is not None and args.log_avg_model_training_loss and i % args.log_avg_model_training_loss == 0:
             # same for the average model loss
             for key, value in total_loss_avg.items():
                 total_loss_avg[key] = value.detach().clone()
+
+        sync_start = time.time()
         if args.world_size > 1:
             dist.all_reduce(global_loss_tensor, op=ReduceOp.AVG)
             if averagers is not None and args.log_avg_model_training_loss and i % args.log_avg_model_training_loss == 0:
@@ -285,6 +305,10 @@ def train_one_epoch(
                     dist.all_reduce(value, op=ReduceOp.AVG)
             if args.moe_freq > 0:
                 dist.all_reduce(total_load_balancing_loss, op=ReduceOp.AVG)
+        sync_time_m.update(time.time() - sync_start)
+
+        batch_time_m.update(time.time() - end)
+        end = time.time()
 
         batch_count = i + 1
         step += 1
@@ -332,10 +356,16 @@ def train_one_epoch(
                     "load_balancing_loss": load_balancing_losses_m.val,
                     "data_time": data_time_m.val,
                     "batch_time": batch_time_m.val,
+                    "forward_time": forward_time_m.val,
+                    "backward_time": backward_time_m.val,
+                    "optim_step_time": optim_step_time_m.val,
+                    "sync_time": sync_time_m.val,
                     "samples_per_second": samples_per_second,
                     "samples_per_second_per_gpu": samples_per_second_per_gpu,
                     "lr": optimizer.param_groups[0]["lr"],
                     "tokens": (step + 1) * args.global_batch_size * args.seq_len,
+                    "expected_steps_epoch": data["train"].dataloader.num_batches,
+                    "seen_steps_epoch": batch_count,
                 }
 
                 if averagers is not None and args.log_avg_model_training_loss:
@@ -360,11 +390,10 @@ def train_one_epoch(
                 # resetting batch / data time meters per log window
                 batch_time_m.reset()
                 data_time_m.reset()
-                # reset all average meters
-                losses_m.reset()
-                if averagers is not None and args.log_avg_model_training_loss:
-                    for k in averagers.avgs_dict.keys():
-                        losses_avg_m[k].reset()
+                forward_time_m.reset()
+                backward_time_m.reset()
+                optim_step_time_m.reset()
+                sync_time_m.reset()
 
                 if math.isnan(losses_m.val):
                     # case where loss goes to nan, we see this sometimes with bad nodes.
@@ -372,6 +401,12 @@ def train_one_epoch(
                     # e.g., saving checkpoints and optmization states that may lead to skipped
                     # training on restarts.
                     return False, step
+
+                # reset all average meters
+                losses_m.reset()
+                if averagers is not None and args.log_avg_model_training_loss:
+                    for k in averagers.avgs_dict.keys():
+                        losses_avg_m[k].reset()
 
     # end for
     if tb_writer is not None:
