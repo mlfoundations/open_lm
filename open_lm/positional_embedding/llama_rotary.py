@@ -112,7 +112,7 @@ class LLaMARotaryEmbedding(torch.nn.Module):
         (it does not create the embedding dimension) and will likely be picked up (imported) on a ad-hoc basis
     """
 
-    def __init__(self, head_dim: int, num_heads: int, seq_len: int, *_, **__):
+    def __init__(self, head_dim: int, num_heads: int, seq_len: int, frequency: float = 10000, *_, **__):
         super().__init__()
         # Generate and save the inverse frequency buffer (non trainable)
         self.freqs_cis = precompute_freqs_cis(
@@ -120,6 +120,7 @@ class LLaMARotaryEmbedding(torch.nn.Module):
             # Adding this multiplier instead of using 4096 directly allows for dynamism of token lengths while training or fine-tuning.
             head_dim,
             seq_len * 2,
+            theta=frequency,
         )
 
     def reset_parameters(self):
