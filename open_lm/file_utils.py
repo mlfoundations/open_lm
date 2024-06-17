@@ -70,10 +70,19 @@ def remote_sync(local_dir, remote_dir, protocol):
         return False
 
 
+def remote_sync_with_expon_backoff(sync_every, local_dir, remote_dir, protocol, max_retries=6):
+    for i in range(max_retries):
+        time.sleep(sync_every * 2**i)
+        success = remote_sync(local_dir, remote_dir, protocol)
+        if success:
+            return True
+
+    return False
+
+
 def keep_running_remote_sync(sync_every, local_dir, remote_dir, protocol):
     while True:
-        time.sleep(sync_every)
-        remote_sync(local_dir, remote_dir, protocol)
+        remote_sync_with_expon_backoff(sync_every, local_dir, remote_dir, protocol)
 
 
 def start_sync_process(sync_every, local_dir, remote_dir, protocol):

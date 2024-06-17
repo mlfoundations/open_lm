@@ -202,6 +202,10 @@ def check_args(args):
         # Make sure that val batch size is set to micro batch size
         args.global_val_batch_size = args.global_batch_size // args.accum_freq
 
+    assert (
+        args.train_data is None or args.dataset_manifest is None
+    ), "--dataset-manifest and --train-data cannot both be set"
+
     # custom_attn checks
     if args.attn_name == "custom_attn":
         assert (
@@ -250,6 +254,16 @@ def check_args(args):
 
     if args.experimental_meta_device:
         print("WARNING: Meta device initialization requested, but this is not currently fully tested.")
+
+    if args.moe_freq != 0 or args.moe_num_experts is not None:
+        assert (
+            args.moe_freq != 0 and args.moe_num_experts is not None
+        ), "For MoE training, pass --moe-freq and --moe-num-experts"
+
+        try:
+            import megablocks
+        except ImportError:
+            raise ValueError("Megablocks not installed. To train MoE, install with pip install megablocks.")
 
 
 def parse_args(args):
@@ -767,6 +781,19 @@ def parse_args(args):
         default=0,
         help="Whether to log the average model training loss. if not 0, it will log the average loss over the specified number of steps.",
     )
+    parser.add_argument(
+        "--data-tolerate-error-p",
+        type=float,
+        default=0.09,  # Roughly the number required to not repeat more than 10% of data.
+        help="This is the percentage of expected tokens above which the checkpoint is considered failed because of not having seen enough data.",
+    )
+    parser.add_argument(
+        "--data-tolerate-num-ckpts",
+        type=int,
+        default=0,
+        help="This is the maximum number of failed checkpoints (due to not having seen enough tokens) that are allowed",
+    )
+
     add_model_args(parser)
 
     config = maybe_load_config(parser, args)
