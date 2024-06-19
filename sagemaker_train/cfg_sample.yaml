@@ -1,11 +1,11 @@
 accum-freq: 4
 beta1: 0.9
 beta2: 0.95
-data-key: "json"
-dataset-resampled: True
+data-key: "json.gz"
+dataset-resampled: False
 # delete-previous-checkpoint: False
 # Total 25B * 40 = 1T tokens
-epochs: 2
+epochs: 1
 fsdp: True
 fsdp-limit-all-gathers: True
 # grad-checkpointing: False
@@ -13,26 +13,30 @@ grad-clip-norm: 1
 log-every-n-steps: 20
 model: "open_lm_7b"
 name: "sample_7b"
-precision: "amp_fp8"
+precision: "amp_bfloat16"
 report-to: "wandb"
 seed: 124
-train-data-mix-weights: [0.725, 0.275]
-train-data: ["TODO"]
+# train-data-mix-weights: [0.725, 0.275]
+dataset-manifest: ["TODO"]
 train-num-samples: 28_000_000_000
-wandb-project-name: "lm1"
+wandb-project-name: "lm7"
 workers: 4
 logs: /opt/ml/checkpoints/
 
 # Some important parameters, double checked with Mitchell:
-batch-size: 128
-ffn-type: gemma_geglu
+global-batch-size: 32
+ffn-type: swiglu_torch
 # fsdp-amp: False
 fsdp-pure-bf16: True
 fsdp-backward-prefetch: True
-lr: 3.e-4
+fsdp-use-orig-params: True
+lr: 3.e-3
 lr-cooldown-end: 3.e-5
 model-norm: "gain_only_lp_layer_norm"
 qk-norm: True
-warmup: 5000
+warmup: 2000
 wd: 0.1
 z-loss-coefficient: 1.e-4
+attn-name: torch_attn
+torchcompile: True
+use_fp8: False
