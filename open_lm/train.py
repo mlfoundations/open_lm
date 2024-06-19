@@ -28,6 +28,18 @@ from open_lm.distributed import is_master
 from open_lm.precision import get_autocast
 from open_lm.meters import AverageMeter
 
+# Adding flag if using TE FP8
+using_te = False
+try:
+    import transformer_engine.pytorch as te
+    from transformer_engine.common import recipe
+
+    fp8_format = recipe.Format.HYBRID
+    fp8_recipe = recipe.DelayedScaling(fp8_format=fp8_format, amax_history_len=16, amax_compute_algo="max")
+    using_te = True
+except ImportError as ie:
+    using_te = False
+
 
 def unwrap_model(model):
     if hasattr(model, "module"):
@@ -44,7 +56,19 @@ def backward(total_loss, scaler):
 
 
 def train_one_epoch(
-    model, data, loss, epoch, step, optimizer, scaler, scheduler, total_steps, args, tb_writer=None, averagers=None
+    model,
+    data,
+    loss,
+    epoch,
+    step,
+    optimizer,
+    scaler,
+    scheduler,
+    total_steps,
+    args,
+    tb_writer=None,
+    averagers=None,
+    data_parallel_group=None,
 ):
     """Trains model for one epoch on the provided data.
 
@@ -125,9 +149,12 @@ def train_one_epoch(
         optimizer.zero_grad()
 
         if args.accum_freq == 1:
-            with autocast():
+            with te.fp8_autocast(enabled=True, fp8_recipe=fp8_recipe, fp8_group=data_parallel_group) if (
+                using_te and args.use_fp8
+            ) else autocast():
                 forward_start = time.time()
                 inputs, targets = sample_chunk(texts, args)
+
                 out, _, _ = model(inputs)
                 forward_time_m.update(time.time() - forward_start)
 
@@ -146,7 +173,9 @@ def train_one_epoch(
             backward_time_m.update(time.time() - backward_start)
 
             if averagers is not None and args.log_avg_model_training_loss and i % args.log_avg_model_training_loss == 0:
-                with autocast():
+                with te.fp8_autocast(enabled=True, fp8_recipe=fp8_recipe, fp8_group=data_parallel_group) if (
+                    using_te and args.use_fp8
+                ) else autocast():
                     for key, averager in averagers.avgs_dict.items():
                         with torch.no_grad():
                             out_avg, _, _ = averager.av_model(inputs)
@@ -168,12 +197,15 @@ def train_one_epoch(
                 if isinstance(model, FSDP) and ii != args.accum_freq - 1:
                     maybe_no_sync = model.no_sync
                 with maybe_no_sync():
-                    with autocast():
+                    with te.fp8_autocast(enabled=True, fp8_recipe=fp8_recipe, fp8_group=data_parallel_group) if (
+                        using_te and args.use_fp8
+                    ) else autocast():
                         forward_start = time.time()
                         inputs_ii = inputs[ii * per_batch : (ii + 1) * per_batch]
                         if inputs_ii.shape[0] == 0:
                             break
                         targets_ii = targets[ii * per_batch : (ii + 1) * per_batch]
+
                         out, _, _ = model(inputs_ii)
                         forward_total_time += time.time() - forward_start
 
@@ -194,7 +226,9 @@ def train_one_epoch(
                     backward_start = time.time()
                     backward(local_loss, scaler)
                     backward_total_time += time.time() - backward_start
-                    with autocast():
+                    with te.fp8_autocast(enabled=True, fp8_recipe=fp8_recipe, fp8_group=data_parallel_group) if (
+                        using_te and args.use_fp8
+                    ) else autocast():
                         if (
                             averagers is not None
                             and args.log_avg_model_training_loss
