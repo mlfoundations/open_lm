@@ -58,6 +58,11 @@ def init_distributed_device(args):
     args.rank = 0  # global rank
     args.local_rank = 0
     args.world_group = None
+    if args.dist_backend=="xla":
+        import torch_xla.core.xla_model as xm
+        import torch_xla.distributed.parallel_loader as pl
+        import torch_xla.distributed.xla_backend
+        os.environ['XLA_USE_BF16'] = '1' 
     # For testing, allow forcing distributed mode to test distributed code path even on one gpu.
     if is_using_distributed() or args.force_distributed:
         if "SLURM_PROCID" in os.environ:
@@ -99,6 +104,8 @@ def init_distributed_device(args):
         else:
             device = "cuda:0"
         torch.cuda.set_device(device)
+    elif args.dist_backend=="xla":
+        device = xm.xla_device()
     else:
         device = "cpu"
     args.device = device

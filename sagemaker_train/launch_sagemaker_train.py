@@ -15,6 +15,7 @@ INSTANCE_MAPPER = {
     "p4": "ml.p4d.24xlarge",
     "p4de": "ml.p4de.24xlarge",
     "p5": "ml.p5.48xlarge",
+    "trn1": "ml.trn1.32xlarge"
 }
 
 
@@ -36,6 +37,10 @@ def get_image(user, instance_type, build_type=None, profile="default", region="u
     elif instance_type == "p5":
         algorithm_name = f"{user}-{NAME}-p5"
         dockerfile_base = docker_dir / "Dockerfile"
+        dockerfile_update = docker_dir / "Dockerfile_update"
+    elif instance_type == "trn1":
+        algorithm_name = f"{user}-{NAME}-trn1"
+        dockerfile_base = docker_dir / "Dockerfile.trn1"
         dockerfile_update = docker_dir / "Dockerfile_update"
     else:
         raise ValueError(f"Unknown instance_type: {instance_type}")

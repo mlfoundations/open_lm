@@ -7,6 +7,7 @@ from contextlib import nullcontext
 import numpy as np
 import torch
 import torch.distributed as dist
+from torch.utils.data import DataLoader
 from torch.distributed.distributed_c10d import ReduceOp
 from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
 
@@ -69,6 +70,7 @@ def train_one_epoch(
     tb_writer=None,
     averagers=None,
     data_parallel_group=None,
+    num_workers=1,
 ):
     """Trains model for one epoch on the provided data.
 
@@ -85,6 +87,13 @@ def train_one_epoch(
 
     data["train"].set_epoch(epoch)  # set epoch in process safe manner via sampler or shared_epoch
     dataloader = data["train"].dataloader
+    if args.dist_backend=="xla":
+        import torch_xla.distributed.parallel_loader as pl
+        dataloader = DataLoader(dataloader,
+                            num_workers=num_workers,
+                            batch_size=None,
+                            collate_fn=None)
+        dataloader = pl.MpDeviceLoader(dataloader, device)
     num_batches_per_epoch = dataloader.num_batches
     sample_digits = math.ceil(math.log(dataloader.num_samples + 1, 10))
 
@@ -285,7 +294,12 @@ def train_one_epoch(
                     model.clip_grad_norm_(args.grad_clip_norm, norm_type=2.0)
                 else:
                     torch.nn.utils.clip_grad_norm_(model.parameters(), args.grad_clip_norm, norm_type=2.0)
-            optimizer.step()
+            
+            if args.dist_backend=="xla":
+                import torch_xla.core.xla_model as xm
+                xm.optimizer_step(optimizer)
+            else:
+                optimizer.step()
         optim_step_time_m.update(time.time() - optim_step_start)
 
         if averagers is not None:
@@ -407,6 +421,9 @@ def train_one_epoch(
                 if averagers is not None and args.log_avg_model_training_loss:
                     for k in averagers.avgs_dict.keys():
                         losses_avg_m[k].reset()
+
+    if args.dist_backend=="xla":
+        xm.mark_step()
 
     # end for
     if tb_writer is not None:

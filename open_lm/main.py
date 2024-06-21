@@ -477,6 +477,8 @@ def main(args):
         # Optional: Use meta device
         with torch.device("meta" if args.experimental_meta_device and args.fsdp else args.device):
             model = create_model(args, tensor_parallel_group)
+    
+    model = model.to(args.device)
 
     args.vocab_size = model.vocab_size
     args.seq_len = model.seq_len
@@ -839,6 +841,7 @@ def main(args):
             args=args,
             tb_writer=writer,
             data_parallel_group=args.world_group,
+            num_workers=args.workers
         )
 
         if args.distributed:
