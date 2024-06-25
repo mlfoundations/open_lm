@@ -6,8 +6,8 @@ dataset-resampled: False
 # delete-previous-checkpoint: False
 # Total 25B * 40 = 1T tokens
 epochs: 1
-fsdp: True
-fsdp-limit-all-gathers: True
+fsdp: False
+fsdp-limit-all-gathers: False
 # grad-checkpointing: False
 grad-clip-norm: 1
 log-every-n-steps: 20
@@ -27,9 +27,9 @@ logs: /opt/ml/checkpoints/
 global-batch-size: 32
 ffn-type: swiglu_torch
 # fsdp-amp: False
-fsdp-pure-bf16: True
-fsdp-backward-prefetch: True
-fsdp-use-orig-params: True
+fsdp-pure-bf16: False
+fsdp-backward-prefetch: False
+fsdp-use-orig-params: False
 lr: 3.e-3
 lr-cooldown-end: 3.e-5
 model-norm: "gain_only_lp_layer_norm"
@@ -38,5 +38,6 @@ warmup: 2000
 wd: 0.1
 z-loss-coefficient: 1.e-4
 attn-name: torch_attn
-torchcompile: True
-use_fp8: False
+torchcompile: False
+use-fp8: False
+dist-backend: "xla"

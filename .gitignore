@@ -143,3 +143,5 @@ tests/assets/source_*/*
 secrets.env
 checkpoints/
 experiments/
+
+neuronxcc-*

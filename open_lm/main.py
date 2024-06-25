@@ -475,10 +475,12 @@ def main(args):
         model = create_wrapped_hf_model(args)
     else:
         # Optional: Use meta device
-        with torch.device("meta" if args.experimental_meta_device and args.fsdp else args.device):
-            model = create_model(args, tensor_parallel_group)
-    
-    model = model.to(args.device)
+        if args.dist_backend=="xla":
+            model = create_model(args, None)
+            model = model.to(args.device)
+        else:
+            with torch.device("meta" if args.experimental_meta_device and args.fsdp else args.device):
+                model = create_model(args, tensor_parallel_group)
 
     args.vocab_size = model.vocab_size
     args.seq_len = model.seq_len
@@ -804,7 +806,7 @@ def main(args):
             )
 
             # In the distributed case, make sure that all nodes receive the same string
-            if args.distributed:
+            if args.distributed and args.dist_backend!="xla":
                 all_source_strings = ["" for _ in range(args.world_size)]
                 dist.all_gather_object(all_source_strings, train_data_string_per_source)
                 assert all(

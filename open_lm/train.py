@@ -88,14 +88,17 @@ def train_one_epoch(
     data["train"].set_epoch(epoch)  # set epoch in process safe manner via sampler or shared_epoch
     dataloader = data["train"].dataloader
     if args.dist_backend=="xla":
+        import torch_xla.core.xla_model as xm
         import torch_xla.distributed.parallel_loader as pl
-        dataloader = DataLoader(dataloader,
-                            num_workers=num_workers,
-                            batch_size=None,
-                            collate_fn=None)
-        dataloader = pl.MpDeviceLoader(dataloader, device)
-    num_batches_per_epoch = dataloader.num_batches
-    sample_digits = math.ceil(math.log(dataloader.num_samples + 1, 10))
+        class MpDeviceLoader(pl.MpDeviceLoader):
+            def num_batches(self):
+                return self._loader.num_batches
+            def num_samples(self):
+                return self._loader.num_samples
+        dataloader = MpDeviceLoader(dataloader, device)
+        xm.rendezvous("wait_for_everyone_to_reach")
+    num_batches_per_epoch = dataloader.num_batches()
+    sample_digits = math.ceil(math.log(dataloader.num_samples() + 1, 10))
 
     losses_m = AverageMeter()
     load_balancing_losses_m = AverageMeter()
@@ -340,7 +343,7 @@ def train_one_epoch(
                     losses_avg_m[key].update(value.item(), batch_size)
             if i % args.log_every_n_steps == 0 or batch_count == num_batches_per_epoch or step == total_steps - 1:
                 num_samples = batch_count * batch_size * args.world_size
-                samples_per_epoch = dataloader.num_samples
+                samples_per_epoch = dataloader.num_samples()
                 percent_complete = 100.0 * batch_count / num_batches_per_epoch
 
                 # gathered_loss = [torch.zeros_like(total_loss) for _ in range(args.world_size)]
@@ -378,7 +381,7 @@ def train_one_epoch(
                     "samples_per_second_per_gpu": samples_per_second_per_gpu,
                     "lr": optimizer.param_groups[0]["lr"],
                     "tokens": (step + 1) * args.global_batch_size * args.seq_len,
-                    "expected_steps_epoch": data["train"].dataloader.num_batches,
+                    "expected_steps_epoch": data["train"].dataloader.num_batches(),
                     "seen_steps_epoch": batch_count,
                 }
 
