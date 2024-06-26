@@ -102,7 +102,7 @@ def get_state_dict(name):
     return sd
 
 
-def load_model(args, model, different_seed=False):
+def load_model(args, model, different_seed=False, filter_keys=None):
     checkpoint = pt_load(args.resume, map_location="cpu")
     if "epoch" in checkpoint:
         if not different_seed and "shard_shuffle_seed" in checkpoint:
@@ -121,11 +121,15 @@ def load_model(args, model, different_seed=False):
         # resuming a train checkpoint w/ epoch and optimizer state
         start_epoch = checkpoint["epoch"]
         sd = checkpoint["state_dict"]
+        # remove inv_freq from the state dict if it exists
+        sd = {k: v for k, v in sd.items() if "inv_freq" not in k}
         global_step = checkpoint.get("step", None)
         if next(iter(sd.items()))[0].startswith("module"):
             sd = {k[len("module.") :]: v for k, v in sd.items()}
         if "_orig_mod" in next(iter(sd.items()))[0]:
             sd = {k.replace("_orig_mod.", ""): v for k, v in sd.items()}
+        if filter_keys is not None:
+            sd = {k: v for k, v in sd.items() if not any([x in k for x in filter_keys])}
         if args.fsdp:
             model.load_state_dict(sd)
         elif args.distributed:
@@ -137,6 +141,9 @@ def load_model(args, model, different_seed=False):
         # loading a bare (model only) checkpoint for fine-tune or evaluation
         start_epoch, global_step = 0, 0
         pretrained_seed = None
+        if "state_dict" in checkpoint:
+            checkpoint = checkpoint["state_dict"]
+        checkpoint = {k: v for k, v in checkpoint.items() if "inv_freq" not in k}
         model.load_state_dict(checkpoint)
         logging.info(f"=> loaded checkpoint '{args.resume}' (epoch {start_epoch})")
     return start_epoch, global_step, pretrained_seed

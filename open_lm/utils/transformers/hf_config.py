@@ -40,5 +40,5 @@ class OpenLMConfig(PretrainedConfig):
 
     def set_params(self, params: Params):
         self.tie_word_embeddings = params.weight_tying
-        for field in fields(Params):
+        for field in fields(params.__class__):
             setattr(self, field.name, getattr(params, field.name))

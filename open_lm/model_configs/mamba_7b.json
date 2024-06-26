@@ -2,5 +2,10 @@
     "d_model": 4096,
     "n_layer": 64,
     "vocab_size": 50432,
-    "seq_len": 2048
+    "seq_len": 2048,
+    "ssm_cfg": {},
+    "rms_norm": true,
+    "residual_in_fp32": true,
+    "fused_add_norm": true,
+    "pad_vocab_size_multiple": 8
 }
