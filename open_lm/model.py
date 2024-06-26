@@ -106,7 +106,7 @@ class Params:
     weight_tying: bool = False
     norm_type: nn.Module = te.LayerNorm if using_te else nn.LayerNorm
     linear_type: nn.Module = LinearTE if using_te else nn.Linear
-    te_device: str = "cuda" if using_te else None
+    te_device: str = "cuda" if using_te else "xla"
     attn_func: Callable = xformers_attn if torch.cuda.is_available() else torch_attn
     apply_qk_norm: bool = False
     moe_loss_weight: float = 0.1
@@ -481,7 +481,7 @@ def create_params(args):
             weight_tying=cfg["weight_tying"],
             norm_type=get_norm_class(cfg.get("model_norm", args.model_norm), args.use_fp8),
             linear_type=LinearTE if (using_te and args.use_fp8) else nn.Linear,
-            te_device="cuda" if (using_te and args.use_fp8) else None,
+            te_device="cuda" if (using_te and args.use_fp8) else "xla" if args.dist_backend=="xla" else None,
             attn_func=get_attn_func(
                 args.attn_name,
                 args.attn_activation,
