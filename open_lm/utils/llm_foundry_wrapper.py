@@ -9,8 +9,7 @@ from llmfoundry.eval.metrics.nlp import (
     InContextLearningLMExpectedCalibrationError,
     InContextLearningMCExpectedCalibrationError,
     InContextLearningMultipleChoiceAccuracy,
-    #InContextLearningQAAccuracy,
-    #InContextLearningCodeEvalAccuracy,
+    InContextLearningGenerationExactMatchAccuracy,
 )
 from composer.metrics.nlp import (
     LanguageCrossEntropy,
@@ -34,10 +33,9 @@ EVAL_METRICS = [
     LanguagePerplexity(),
     InContextLearningLMAccuracy(),
     InContextLearningMultipleChoiceAccuracy(),
-    #InContextLearningQAAccuracy(),
+    InContextLearningGenerationExactMatchAccuracy(),
     InContextLearningLMExpectedCalibrationError(),
     InContextLearningMCExpectedCalibrationError(),
-    #InContextLearningCodeEvalAccuracy(),
 ]
 
 
