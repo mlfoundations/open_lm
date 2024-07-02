@@ -3,6 +3,7 @@ import os
 import logging
 import torch
 import torch.distributed as dist
+import datetime
 
 
 def is_global_master(args):
@@ -79,6 +80,7 @@ def init_distributed_device(args):
                 init_method=args.dist_url,
                 world_size=args.world_size,
                 rank=args.rank,
+                timeout=datetime.timedelta(seconds=args.backend_timeout)
             )
         else:
             # DDP via torchrun, torch.distributed.launch
