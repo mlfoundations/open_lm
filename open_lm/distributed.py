@@ -61,7 +61,7 @@ def init_distributed_device(args):
     # For testing, allow forcing distributed mode to test distributed code path even on one gpu.
     if is_using_distributed() or args.force_distributed:
 
-        timeout = datetime.timedelta(seconds=args.timeout) if args.timeout else None
+        timeout = datetime.timedelta(seconds=args.backend_timeout) if args.timeout else None
 
         if "SLURM_PROCID" in os.environ:
             # DDP via SLURM
