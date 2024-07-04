@@ -572,7 +572,7 @@ def main(args):
     if args.resume is not None and averagers is not None:
         load_avg_models(args, averagers)
 
-    if is_master(args):
+    if is_master(args, local=args.log_local):
         logging.info(f"Model (has {sum(p.numel() for p in model.parameters() if p.requires_grad)} parameters):")
         logging.info(f"{str(model)}")
         logging.info("Params:")
@@ -717,7 +717,7 @@ def main(args):
             raise ValueError(f"Unknown scheduler, {args.lr_scheduler}. Available options are: cosine, const.")
 
     # determine if this worker should save logs and checkpoints. only do so if it is rank == 0
-    args.save_logs = args.logs and args.logs.lower() != "none" and is_master(args)
+    args.save_logs = args.logs and args.logs.lower() != "none" and is_master(args, local=args.log_local)
     writer = None
     if args.save_logs and args.tensorboard:
         assert tensorboard is not None, "Please install tensorboard."
