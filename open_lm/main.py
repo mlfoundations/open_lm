@@ -381,7 +381,7 @@ def main(args):
     args.tensorboard = "tensorboard" in args.report_to or "all" in args.report_to
     args.checkpoint_path = os.path.join(log_base_path, "checkpoints")
     args.failed_checkpoint_path = os.path.join(log_base_path, "checkpoints_failed")
-    if is_master(args):
+    if is_master(args, local=args.log_local):
         args.tensorboard_path = os.path.join(log_base_path, "tensorboard") if args.tensorboard else ""
         for dirname in [args.tensorboard_path, args.checkpoint_path, args.failed_checkpoint_path]:
             if dirname:
@@ -932,8 +932,9 @@ def main(args):
     if remote_sync_process is not None:
         logging.info("Final remote sync.")
         terminate_sync_process(remote_sync_process)
+        # Can just pass in sync_every=0 for last sync, otherwise will unecessarily sleep.
         result = remote_sync_with_expon_backoff(
-            args.remote_sync_frequency,
+            0,
             os.path.join(args.logs, args.name),
             os.path.join(args.remote_sync, args.name),
             args.remote_sync_protocol,
