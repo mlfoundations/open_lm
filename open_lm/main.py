@@ -211,7 +211,8 @@ def save_checkpoint(
 ):
     cpu_state, optim_state = None, None
     if args.logs and args.logs.lower() != "none" and args.fsdp:
-        save_policy = FullStateDictConfig(offload_to_cpu=True, rank0_only=True)
+        rank0_only = not args.log_local
+        save_policy = FullStateDictConfig(offload_to_cpu=True, rank0_only=rank0_only)
         with FSDP.state_dict_type(model, StateDictType.FULL_STATE_DICT, save_policy):
             cpu_state = model.state_dict()
             optim_state = FSDP.optim_state_dict(model, optimizer)
