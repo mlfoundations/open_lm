@@ -791,7 +791,7 @@ def parse_args(args):
         "--backend-timeout",
         type=int,
         default=None,
-        help="This the number of seconds passed into the timeout arg for torch.distributed.init_process_group."
+        help="This the number of seconds passed into the timeout arg for torch.distributed.init_process_group.",
     )
 
     add_model_args(parser)
