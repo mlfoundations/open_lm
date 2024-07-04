@@ -425,9 +425,9 @@ def main(args):
     # start the sync proces if remote-sync is not None
     remote_sync_process = None
     if is_master(args) and args.remote_sync is not None:
-        # first make sure it works
+        # first make sure it works: here, remote_sync_frequency is set to 0 for this initial test
         result = remote_sync_with_expon_backoff(
-            args.remote_sync_frequency,
+            0,
             os.path.join(args.logs, args.name),
             os.path.join(args.remote_sync, args.name),
             args.remote_sync_protocol,
