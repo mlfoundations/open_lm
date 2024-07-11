@@ -11,7 +11,10 @@ import torch.nn.functional as F
 from torch import nn
 from torch.utils.checkpoint import checkpoint
 
-import xformers.ops as xops
+try:
+    import xformers.ops as xops
+except ImportError:
+    print("xops not installed. Will error when using xformers_attn or swiglu (vs swiglu_torch)")
 
 from huggingface_hub import PyTorchModelHubMixin
 
