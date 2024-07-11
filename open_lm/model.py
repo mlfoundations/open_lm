@@ -11,14 +11,9 @@ import torch.nn.functional as F
 from torch import nn
 from torch.utils.checkpoint import checkpoint
 
-try:
-    import xformers.ops as xops
-except ImportError:
-    print("xops not installed. Will error when using xformers_attn or swiglu (vs swiglu_torch)")
-
 from huggingface_hub import PyTorchModelHubMixin
 
-from open_lm.attention import get_attn_func, xformers_attn, torch_attn
+from open_lm.attention import get_attn_func, torch_attn
 from open_lm.norms import get_norm_class
 from open_lm.positional_embedding.head_rotary import HeadRotaryWithCast
 from open_lm.positional_embedding.rotary import RotaryWithCast
@@ -94,7 +89,7 @@ class Params:
     post_embed_norm: bool = False
     weight_tying: bool = False
     norm_type: nn.Module = nn.LayerNorm
-    attn_func: Callable = xformers_attn if torch.cuda.is_available() else torch_attn
+    attn_func: Callable = torch_attn
     apply_qk_norm: bool = False
     moe_loss_weight: float = 0.1
     moe_capacity_factor: float = 1.25
@@ -270,7 +265,7 @@ class Block(nn.Module):
         if args.ffn_type == "swiglu":
             # this follows llama / lit llama -- go to multiple of 256
             self.hidden_dim = 256 * ((int(2 * 4 * args.dim / 3) + 256 - 1) // 256)
-            self.feed_forward = xops.SwiGLU(args.dim, self.hidden_dim, args.dim, bias=False)
+            self.feed_forward = SwiGLUTorch(args.dim, self.hidden_dim, args.dim, bias=False)
         elif args.ffn_type == "swiglu_torch":
             # this follows llama / lit llama -- go to multiple of 256
             self.hidden_dim = 256 * ((int(2 * 4 * args.dim / 3) + 256 - 1) // 256)
