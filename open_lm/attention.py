@@ -111,7 +111,7 @@ def torch_attn(queries, keys, values, is_causal, attention_mask=None):
         if attention_mask is None:
             bias = None
             # If we only have one query, assume we don't need to be in causal mode (can attend to all keys).
-            if queries.shape == 1:
+            if queries.shape[1] == 1:
                 is_causal = False
         else:
             if not is_causal:
