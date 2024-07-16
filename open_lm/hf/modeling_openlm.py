@@ -12,6 +12,7 @@ from transformers.models.auto import AutoModelForCausalLM
 
 from open_lm.model import Params, Transformer
 from open_lm.norms import get_norm_class
+from open_lm.attention import get_attn_func
 
 from .configuration_openlm import OpenLMConfig
 
@@ -32,6 +33,9 @@ def create_model_config_from_pretrained_config(config: OpenLMConfig):
 
     if hasattr(config, "norm_type"):
         model_config.norm_type = get_norm_class(config.norm_type)
+    
+    if hasattr(config, "attn_name"):
+        model_config.attn_name = get_attn_func(config.attn_name)
 
     return model_config
 
