@@ -2,7 +2,7 @@
 
 from transformers import AutoTokenizer, PreTrainedTokenizerFast
 
-from open_lm.open_lm_hf.configuration_openlm import OpenLMConfig
+from open_lm.hf.configuration_openlm import OpenLMConfig
 
 
 class OpenLMTokenizerFast(PreTrainedTokenizerFast):
