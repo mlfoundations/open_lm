@@ -76,7 +76,6 @@ class OpenLMForCausalLM(PreTrainedModel):
             Cache
         ] = None,  # This is a hack mitigation of an issue in transformers `4.39.x` https://github.com/huggingface/transformers/issues/29426
     ) -> Union[Tuple, CausalLMOutputWithPast]:
-
         if inputs_embeds is not None:
             log.warning("inputs_embeds is set but OpenLM does not support it yet")
         if attention_bias is not None:
