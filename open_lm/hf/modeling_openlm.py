@@ -33,7 +33,7 @@ def create_model_config_from_pretrained_config(config: OpenLMConfig):
 
     if hasattr(config, "norm_type"):
         model_config.norm_type = get_norm_class(config.norm_type)
-    
+
     if hasattr(config, "attn_name"):
         model_config.attn_func = get_attn_func(config.attn_name)
 
@@ -134,7 +134,7 @@ class OpenLMForCausalLM(PreTrainedModel):
                 # This assumes that the second item of past key values is the length of the past (this is the case for linear attention)
                 past_length = past_key_values[0][1]
             else:
-                # This assumes that the first item of past key values is a list of all the past keys, thus the 
+                # This assumes that the first item of past key values is a list of all the past keys, thus the
                 # shape 1 is the length of the past (this is the case for attention without window)
                 past_length = past_key_values[0][0].shape[1]
 
