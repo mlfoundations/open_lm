@@ -1,3 +1,14 @@
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "open_lm"
+dynamic = ["version", "description", "readme", "license", "authors", "classifiers", "dependencies"]
+
+[tool.setuptools]
+py-modules = []
+
 [tool.black]
 line-length = 120
 
