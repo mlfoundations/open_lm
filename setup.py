@@ -1,5 +1,4 @@
-import setuptools
-from setuptools import find_packages
+from setuptools import setup, find_packages
 from os import path
 
 here = path.abspath(path.dirname(__file__))
@@ -17,7 +16,7 @@ def _read_reqs(relpath):
 
 REQUIREMENTS = _read_reqs("requirements.txt")
 
-setuptools.setup(
+setup(
     name="open_lm",
     version="0.0.34",
     author=[
