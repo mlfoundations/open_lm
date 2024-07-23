@@ -241,9 +241,9 @@ def check_args(args):
             if args.remote_sync_protocol != "s3":
                 raise ValueError("Sync protocol not supported when using resume latest.")
 
-    if args.lr_scheduler not in {"cosine", "const", "const-cooldown"}:
+    if args.lr_scheduler not in {"cosine", "const", "cosine-rewarmed"}:
         raise ValueError(
-            f"Unknown scheduler, {args.lr_scheduler}. Available options are: cosine, const, const-cooldown."
+            f"Unknown scheduler, {args.lr_scheduler}. Available options are: cosine, const, cosine-rewarmed."
         )
 
     if args.experimental_meta_device:
@@ -405,7 +405,19 @@ def parse_args(args):
         "--lr-scheduler",
         type=str,
         default="cosine",
-        help="LR scheduler. One of: 'cosine', 'const' (constant), 'const-cooldown' (constant w/ cooldown). Default: cosine",
+        help="LR scheduler. One of: 'cosine', 'const' (constant), 'const-cooldown' (constant w/ cooldown), 'cosine-rewarmed'. Default: cosine",
+    )
+    parser.add_argument(
+        "--cosine-rewarmed-target-steps",
+        type=int,
+        default=None,
+        help="for cosine rewarmed, the target steps for the cosine schedule. Default: cosine",
+    )
+    parser.add_argument(
+        "--cosine-rewarmed-original-warmup",
+        type=int,
+        default=1000,
+        help="for cosine rewarmed, the original warmup steps. Default: 1000",
     )
     parser.add_argument(
         "--lr-cooldown-end",
