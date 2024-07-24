@@ -13,7 +13,7 @@ from contextlib import contextmanager
 import argparse
 from pathlib import Path
 from transformers import GPTNeoXTokenizerFast
-
+import smart_open
 
 # ========================================
 # =           Global variables           =
@@ -52,10 +52,17 @@ def upload_to_s3_and_remove(fname):
 
 @contextmanager
 def get_item_reader(file_name):
-    """Creates iterator for reading .jsonl files or Zstd compressed .jsonl files"""
+    """
+    Creates iterator for reading .jsonl files, gzip compressed,
+    or Zstd compressed .jsonl files
+    """
     if file_name.endswith(".jsonl"):
         with jsonlines.open(file_name) as reader:
             yield reader
+    elif file_name.endswith((".jsonl.gz", ".json.gz")):
+        with smart_open.open(file_name, "r") as f:
+            with jsonlines.Reader(f) as reader:
+                yield reader
     else:
         dctx = zstd.ZstdDecompressor()
         with open(file_name, "rb") as compressed_file:
