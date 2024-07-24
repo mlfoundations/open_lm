@@ -2,7 +2,6 @@ from functools import partial
 
 import torch
 from torch.nn import functional as F
-import xformers.ops as xops
 
 
 def get_rectangular_causal_mask(shape, q_seq_len, k_seq_len, device, dtype):
@@ -61,31 +60,6 @@ def apply_attention_mask_(bias, attention_mask, queries_dtype):
     # See https://github.com/huggingface/transformers/blob/f738ab3b5d30e30c43a4c3d00ca8939f8a4d4427/src/transformers/modeling_attn_mask_utils.py#L189
     # for details.
     bias.mul_(~torch.all(bias == min_dtype, dim=-1, keepdim=True))
-
-
-def xformers_attn(queries, keys, values, is_causal, attention_mask=None):
-    # xformers assumes q, k, v are [batch, seq_len, heads, embed_dim]
-    # We assume that queries match the last part of the key / value sequences
-    # see (https://facebookresearch.github.io/xformers/components/ops.html#xformers.ops.fmha.attn_bias.LowerTriangularFromBottomRightMask)
-    # we would like to replace the mask generation with: mask = xops.fmha.attn_bias.LowerTriangularFromBottomRightMask()
-    # sadly we cannot us this because it needs xformers>=0.0.23 and this is not compatible with torch<2.1.1 while llm-foundry requires torch<2.1.1
-
-    # If queries have shape [batch, 1, heads, dim] it means there is only one query in the sequence.
-    # In this case, there is no notion of causal masking, so we can just set the mask to None.
-    # This is actually needed to get the desired behavior with seq_len=1.
-    bias = None
-    if is_causal and queries.shape[1] == keys.shape[1] and attention_mask is None:
-        bias = xops.LowerTriangularMask()
-    elif is_causal and (queries.shape[1] > 1 or attention_mask is not None):
-        # Build causal mask that assumes queries are in the end of the sequence.
-        batch, q_seq_len, heads, _ = queries.shape
-        k_seq_len = keys.shape[1]
-        bias = get_rectangular_causal_mask((batch, heads), q_seq_len, k_seq_len, queries.device, queries.dtype)
-        if attention_mask is not None:
-            apply_attention_mask_(bias, attention_mask, queries_dtype=queries.dtype)
-    elif not is_causal and attention_mask is not None:
-        raise NotImplementedError("attention_mask with is_causal=False is not yet implemented.")
-    return xops.memory_efficient_attention(queries, keys, values, attn_bias=bias)
 
 
 def torch_attn(queries, keys, values, is_causal, attention_mask=None):
@@ -196,15 +170,7 @@ def get_attn_func(
     alpha=None,
 ):
     if attn_name == "auto":
-        return xformers_attn if torch.cuda.is_available() else torch_attn
-    elif attn_name == "xformers_attn":
-        return xformers_attn
-    elif attn_name == "xformers_attn_variable_length":
-        # Upon changing the input sequence length, xformers attention changes
-        # the stride dimension of the output tensor. This makes future calls to
-        # .view() that collapses last two dimensions fail. One thus needs to
-        # call .contiguous() on the output tensor. [#188]
-        return lambda *args, **kwargs: xformers_attn(*args, **kwargs).contiguous()
+        return torch_attn
     elif attn_name == "torch_attn":
         return torch_attn
     elif attn_name == "custom_attn":

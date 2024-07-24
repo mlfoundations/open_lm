@@ -11,11 +11,9 @@ import torch.nn.functional as F
 from torch import nn
 from torch.utils.checkpoint import checkpoint
 
-import xformers.ops as xops
-
 from huggingface_hub import PyTorchModelHubMixin
 
-from open_lm.attention import get_attn_func, xformers_attn, torch_attn
+from open_lm.attention import get_attn_func, torch_attn
 from open_lm.norms import get_norm_class
 from open_lm.positional_embedding.head_rotary import HeadRotaryWithCast
 from open_lm.positional_embedding.rotary import RotaryWithCast
@@ -91,7 +89,7 @@ class Params:
     post_embed_norm: bool = False
     weight_tying: bool = False
     norm_type: nn.Module = nn.LayerNorm
-    attn_func: Callable = xformers_attn if torch.cuda.is_available() else torch_attn
+    attn_func: Callable = torch_attn
     apply_qk_norm: bool = False
     moe_loss_weight: float = 0.1
     moe_capacity_factor: float = 1.25
@@ -267,7 +265,7 @@ class Block(nn.Module):
         if args.ffn_type == "swiglu":
             # this follows llama / lit llama -- go to multiple of 256
             self.hidden_dim = 256 * ((int(2 * 4 * args.dim / 3) + 256 - 1) // 256)
-            self.feed_forward = xops.SwiGLU(args.dim, self.hidden_dim, args.dim, bias=False)
+            self.feed_forward = SwiGLUTorch(args.dim, self.hidden_dim, args.dim, bias=False)
         elif args.ffn_type == "swiglu_torch":
             # this follows llama / lit llama -- go to multiple of 256
             self.hidden_dim = 256 * ((int(2 * 4 * args.dim / 3) + 256 - 1) // 256)
@@ -496,6 +494,33 @@ def create_params(args):
             moe_top_k=cfg.get("moe_top_k", args.moe_top_k),
         )
 
+if MambaLMHeadModel is not None:
+    # This is a copy-paste of the Mamba SSM code with the addition of inputs_embeds
+    class MixerModelOpenLM(MixerModel):
+        def forward(self, input_ids=None, inputs_embeds=None, inference_params=None, **kwargs):
+            assert input_ids is not None or inputs_embeds is not None
+            hidden_states = self.embedding(input_ids) if inputs_embeds is None else inputs_embeds
+            residual = None
+            for layer in self.layers:
+                hidden_states, residual = layer(
+                    hidden_states, residual, inference_params=inference_params
+                )
+            if not self.fused_add_norm:
+                residual = (hidden_states + residual) if residual is not None else hidden_states
+                hidden_states = self.norm_f(residual.to(dtype=self.norm_f.weight.dtype))
+            else:
+                # Set prenorm=False here since we don't need the residual
+                fused_add_norm_fn = rms_norm_fn if isinstance(self.norm_f, RMSNorm) else layer_norm_fn
+                hidden_states = fused_add_norm_fn(
+                    hidden_states,
+                    self.norm_f.weight,
+                    self.norm_f.bias,
+                    eps=self.norm_f.eps,
+                    residual=residual,
+                    prenorm=False,
+                    residual_in_fp32=self.residual_in_fp32,
+                )
+            return hidden_states
 
 if MambaLMHeadModel is not None:
     # This is a copy-paste of the Mamba SSM code with the addition of inputs_embeds
@@ -552,7 +577,6 @@ if MambaLMHeadModel is not None:
                 residual_in_fp32=residual_in_fp32,
                 **factory_kwargs,
             )
-
         def forward(self, input_ids=None, inputs_embeds=None, inference_params=None, **kwargs):
             hidden_state = self.backbone(input_ids, inputs_embeds, inference_params)
             lm_logits = self.lm_head(hidden_state)

@@ -17,7 +17,6 @@ def is_attention_mask_right(attention_mask):
     sum_values = torch.sum(attention_mask, dim=1)
     # Check if the sum of the mask is equal to the first zero index (meaning that the rest of the sequence after the first 0 is also 0)
     is_valid_sequence = (sum_values % attention_mask.shape[1] == first_zero_index).all()
-
     return is_valid_sequence
 
 
