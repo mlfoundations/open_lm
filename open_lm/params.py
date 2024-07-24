@@ -26,7 +26,7 @@ def add_model_args(parser):
     These arguments need to be added to the eval code. Ideally, these should be moved to our model configs when we make
     a backward-incompatible release."""
     parser.add_argument(
-        "--model-norm",
+        "--norm-type",
         type=str,
         default="default_layer_norm",
         choices=[
@@ -49,7 +49,7 @@ def add_model_args(parser):
         "--qk-norm",
         action="store_true",
         default=False,
-        help="apply --model-norm to qk as in: https://arxiv.org/abs/2302.05442. This might be overridden by the model config.",
+        help="apply --norm-type to qk as in: https://arxiv.org/abs/2302.05442. This might be overridden by the model config.",
     )
     parser.add_argument(
         "--positional-embedding-type",
@@ -106,7 +106,7 @@ def add_model_args(parser):
         "--attn-name",
         type=str,
         default="auto",
-        choices=["auto", "xformers_attn", "xformers_attn_variable_length", "torch_attn", "custom_attn"],
+        choices=["auto", "torch_attn", "custom_attn"],
         help="type of attention to use",
     )
     parser.add_argument(

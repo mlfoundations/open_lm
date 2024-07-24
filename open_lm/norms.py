@@ -150,4 +150,4 @@ def get_norm_class(model_norm):
         return RmsNorm
 
     else:
-        raise ValueError(f"Unsupported model-norm: {model_norm}")
+        raise ValueError(f"Unsupported norm-type: {model_norm}")

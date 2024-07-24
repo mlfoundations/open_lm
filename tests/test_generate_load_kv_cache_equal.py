@@ -38,7 +38,7 @@ def args():
             "use_cache": False,
             "checkpoint": "checkpoints/open_lm_1b_old.pt",
             # Model params that might not be in config:
-            "model_norm": "default_layer_norm",
+            "norm_type": "default_layer_norm",
             "qk_norm": False,
             "positional_embedding_type": "head_rotary",
             "ffn_type": "swiglu",

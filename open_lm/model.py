@@ -3,7 +3,7 @@ import json
 import re
 from copy import deepcopy
 from pathlib import Path
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Callable
 
 import torch
@@ -11,11 +11,9 @@ import torch.nn.functional as F
 from torch import nn
 from torch.utils.checkpoint import checkpoint
 
-import xformers.ops as xops
-
 from huggingface_hub import PyTorchModelHubMixin
 
-from open_lm.attention import get_attn_func, xformers_attn, torch_attn
+from open_lm.attention import get_attn_func, torch_attn
 from open_lm.norms import get_norm_class
 from open_lm.positional_embedding.head_rotary import HeadRotaryWithCast
 from open_lm.positional_embedding.rotary import RotaryWithCast
@@ -31,7 +29,8 @@ except ImportError:
     MoEArgs = None
 
 try:  # optional import
-    from mamba_ssm import MambaLMHeadModel
+    from mamba_ssm.models.mixer_seq_simple import MambaLMHeadModel, MixerModel
+    from mamba_ssm.ops.triton.layernorm import RMSNorm, layer_norm_fn, rms_norm_fn
 except ImportError:
     MambaLMHeadModel = None
 
@@ -66,8 +65,11 @@ def _rescan_model_configs(model_config_paths=None):
 
     for cf in config_files:
         with open(cf, "r") as f:
-            model_cfg = json.load(f)
-            _MODEL_CONFIGS[cf.stem] = model_cfg
+            try:
+                model_cfg = json.load(f)
+                _MODEL_CONFIGS[cf.stem] = model_cfg
+            except json.JSONDecodeError:
+                print(f"Error loading model config {cf}")
 
     _MODEL_CONFIGS = {k: v for k, v in sorted(_MODEL_CONFIGS.items(), key=lambda x: _natural_key(x[0]))}
 
@@ -87,7 +89,7 @@ class Params:
     post_embed_norm: bool = False
     weight_tying: bool = False
     norm_type: nn.Module = nn.LayerNorm
-    attn_func: Callable = xformers_attn if torch.cuda.is_available() else torch_attn
+    attn_func: Callable = torch_attn
     apply_qk_norm: bool = False
     moe_loss_weight: float = 0.1
     moe_capacity_factor: float = 1.25
@@ -98,6 +100,21 @@ class Params:
     moe_freq: int = 0
     positional_embedding_type: str = "rotary"
     ffn_type: str = "swiglu"
+
+
+@dataclass
+class MambaParams:
+    d_model: int = 2560
+    n_layer: int = 64
+    vocab_size: int = 50277
+    seq_len: int = 2048
+    ssm_cfg: dict = field(default_factory=dict)
+    rms_norm: bool = True
+    residual_in_fp32: bool = True
+    fused_add_norm: bool = True
+    pad_vocab_size_multiple: int = 8
+    tie_embeddings: bool = True
+    weight_tying: bool = False
 
 
 def get_pos_embed(args: Params):
@@ -248,7 +265,7 @@ class Block(nn.Module):
         if args.ffn_type == "swiglu":
             # this follows llama / lit llama -- go to multiple of 256
             self.hidden_dim = 256 * ((int(2 * 4 * args.dim / 3) + 256 - 1) // 256)
-            self.feed_forward = xops.SwiGLU(args.dim, self.hidden_dim, args.dim, bias=False)
+            self.feed_forward = SwiGLUTorch(args.dim, self.hidden_dim, args.dim, bias=False)
         elif args.ffn_type == "swiglu_torch":
             # this follows llama / lit llama -- go to multiple of 256
             self.hidden_dim = 256 * ((int(2 * 4 * args.dim / 3) + 256 - 1) // 256)
@@ -395,7 +412,6 @@ class Transformer(nn.Module, PyTorchModelHubMixin):
             x = inputs_embeds
         else:
             raise ValueError("Either input_ids or inputs_embeds must be provided.")
-
         x = self.post_embed_norm(x)
 
         if past_key_values is None:
@@ -440,12 +456,19 @@ def create_params(args):
     # If a parameter is not in the model config, we use the args parameter
 
     if "mamba" in args.model:
-        return {
-            "d_model": cfg["d_model"],
-            "n_layer": cfg["n_layer"],
-            "vocab_size": cfg["vocab_size"],
-            "seq_len": cfg["seq_len"],
-        }
+        return MambaParams(
+            d_model=cfg["d_model"],
+            n_layer=cfg["n_layer"],
+            vocab_size=cfg["vocab_size"],
+            seq_len=cfg["seq_len"],
+            ssm_cfg={},
+            rms_norm=cfg["rms_norm"],
+            residual_in_fp32=cfg["residual_in_fp32"],
+            fused_add_norm=cfg["fused_add_norm"],
+            pad_vocab_size_multiple=cfg["pad_vocab_size_multiple"],
+            tie_embeddings=cfg.get("weight_tying", False),
+            weight_tying=cfg.get("weight_tying", False),
+        )
     else:
         return Params(
             dim=cfg["hidden_dim"],
@@ -455,7 +478,7 @@ def create_params(args):
             vocab_size=cfg["vocab_size"],
             post_embed_norm=cfg["post_embed_norm"],
             weight_tying=cfg["weight_tying"],
-            norm_type=get_norm_class(cfg.get("model_norm", args.model_norm)),
+            norm_type=get_norm_class(cfg.get("norm_type", args.norm_type)),
             attn_func=get_attn_func(
                 args.attn_name, args.attn_activation, args.attn_seq_scalar, args.attn_seq_scalar_alpha
             ),
@@ -471,28 +494,134 @@ def create_params(args):
             moe_top_k=cfg.get("moe_top_k", args.moe_top_k),
         )
 
+if MambaLMHeadModel is not None:
+    # This is a copy-paste of the Mamba SSM code with the addition of inputs_embeds
+    class MixerModelOpenLM(MixerModel):
+        def forward(self, input_ids=None, inputs_embeds=None, inference_params=None, **kwargs):
+            assert input_ids is not None or inputs_embeds is not None
+            hidden_states = self.embedding(input_ids) if inputs_embeds is None else inputs_embeds
+            residual = None
+            for layer in self.layers:
+                hidden_states, residual = layer(
+                    hidden_states, residual, inference_params=inference_params
+                )
+            if not self.fused_add_norm:
+                residual = (hidden_states + residual) if residual is not None else hidden_states
+                hidden_states = self.norm_f(residual.to(dtype=self.norm_f.weight.dtype))
+            else:
+                # Set prenorm=False here since we don't need the residual
+                fused_add_norm_fn = rms_norm_fn if isinstance(self.norm_f, RMSNorm) else layer_norm_fn
+                hidden_states = fused_add_norm_fn(
+                    hidden_states,
+                    self.norm_f.weight,
+                    self.norm_f.bias,
+                    eps=self.norm_f.eps,
+                    residual=residual,
+                    prenorm=False,
+                    residual_in_fp32=self.residual_in_fp32,
+                )
+            return hidden_states
 
-class Mamba(nn.Module):
-    # Experimental architecture, please "pip install mamba-ssm"
-    # https://arxiv.org/abs/2312.00752
-    def __init__(self, params):
-        if MambaLMHeadModel is None:
+if MambaLMHeadModel is not None:
+    # This is a copy-paste of the Mamba SSM code with the addition of inputs_embeds
+    class MixerModelOpenLM(MixerModel):
+        def forward(self, input_ids=None, inputs_embeds=None, inference_params=None, **kwargs):
+            assert input_ids is not None or inputs_embeds is not None
+            hidden_states = self.embedding(input_ids) if inputs_embeds is None else inputs_embeds
+            residual = None
+            for layer in self.layers:
+                hidden_states, residual = layer(hidden_states, residual, inference_params=inference_params)
+            if not self.fused_add_norm:
+                residual = (hidden_states + residual) if residual is not None else hidden_states
+                hidden_states = self.norm_f(residual.to(dtype=self.norm_f.weight.dtype))
+            else:
+                # Set prenorm=False here since we don't need the residual
+                fused_add_norm_fn = rms_norm_fn if isinstance(self.norm_f, RMSNorm) else layer_norm_fn
+                hidden_states = fused_add_norm_fn(
+                    hidden_states,
+                    self.norm_f.weight,
+                    self.norm_f.bias,
+                    eps=self.norm_f.eps,
+                    residual=residual,
+                    prenorm=False,
+                    residual_in_fp32=self.residual_in_fp32,
+                )
+            return hidden_states
+
+    # This is a copy-paste of the Mamba SSM code with the usage of MixerModelOpenLM instead of MixerModel
+    class MambaLMHeadModelOpenLM(MambaLMHeadModel):
+        def __init__(
+            self,
+            config,
+            initializer_cfg=None,
+            device=None,
+            dtype=None,
+        ) -> None:
+            super().__init__(config, initializer_cfg, device, dtype)
+            d_model = config.d_model
+            n_layer = config.n_layer
+            vocab_size = config.vocab_size
+            ssm_cfg = config.ssm_cfg
+            rms_norm = config.rms_norm
+            residual_in_fp32 = config.residual_in_fp32
+            fused_add_norm = config.fused_add_norm
+            factory_kwargs = {"device": device, "dtype": dtype}
+            self.backbone = MixerModelOpenLM(
+                d_model=d_model,
+                n_layer=n_layer,
+                vocab_size=vocab_size,
+                ssm_cfg=ssm_cfg,
+                rms_norm=rms_norm,
+                initializer_cfg=initializer_cfg,
+                fused_add_norm=fused_add_norm,
+                residual_in_fp32=residual_in_fp32,
+                **factory_kwargs,
+            )
+        def forward(self, input_ids=None, inputs_embeds=None, inference_params=None, **kwargs):
+            hidden_state = self.backbone(input_ids, inputs_embeds, inference_params)
+            lm_logits = self.lm_head(hidden_state)
+            return lm_logits, hidden_state, inference_params
+
+    class Mamba(nn.Module):
+        # Experimental architecture, please "pip install mamba-ssm"
+        # https://arxiv.org/abs/2312.00752
+        def __init__(self, params):
+            if MambaLMHeadModel is None:
+                raise ImportError(
+                    "MambaLMHeadModel is not available. Please install the 'mamba_ssm' package by running 'pip install mamba-ssm'."
+                )
+
+            super().__init__()
+            self.vocab_size = params.vocab_size
+            self.seq_len = params.seq_len
+            self.dim = params.d_model
+
+            self.model = MambaLMHeadModelOpenLM(params)
+
+        def reset_parameters(self):
+            return
+
+        def forward(self, input_ids, inputs_embeds=None, inference_params=None, **kwargs):
+            logits, hidden_state, inference_params = self.model(input_ids, inputs_embeds, inference_params, **kwargs)
+            return logits, hidden_state, inference_params
+
+else:
+
+    class Mamba(nn.Module):
+        # Experimental architecture, please "pip install mamba-ssm"
+        # https://arxiv.org/abs/2312.00752
+        def __init__(self, params):
             raise ImportError(
                 "MambaLMHeadModel is not available. Please install the 'mamba_ssm' package by running 'pip install mamba-ssm'."
             )
 
-        super().__init__()
-        self.seq_len = params.pop("seq_len")
-        self.vocab_size = params["vocab_size"]
+        def reset_parameters(self):
+            return
 
-        self.model = MambaLMHeadModel(**params)
-
-    def reset_parameters(self):
-        return
-
-    def forward(self, x):
-        out = self.model(x).logits
-        return out, None, None
+        def forward(self, input_ids, inputs_embeds=None, inference_params=None, **kwargs):
+            raise ImportError(
+                "MambaLMHeadModel is not available. Please install the 'mamba_ssm' package by running 'pip install mamba-ssm'."
+            )
 
 
 def create_model(args):

@@ -28,7 +28,7 @@ def test_generate_kv_cache(wiki_page, context_len, max_gen_len):
             "top_p": 1.0,
             "use_cache": False,
             # Model params that might not be in config:
-            "model_norm": "gain_only_layer_norm",
+            "norm_type": "gain_only_layer_norm",
             "qk_norm": False,
             "positional_embedding_type": "rotary",
             "ffn_type": "swiglu",

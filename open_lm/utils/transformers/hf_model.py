@@ -3,11 +3,21 @@ from torch.utils.checkpoint import checkpoint
 from transformers import PreTrainedModel
 from transformers.modeling_outputs import CausalLMOutputWithPast
 from open_lm.utils.transformers.hf_config import OpenLMConfig
-from open_lm.model import Transformer, create_params
+from open_lm.model import Transformer, create_params, Params, MambaParams, Mamba
 import torch
 import torch.nn as nn
 from typing import Union, Tuple, Optional, List
 import os
+
+
+def is_attention_mask_right(attention_mask):
+    # Get the first zero index in each sequence
+    first_zero_index = torch.min(attention_mask, dim=1).indices
+    # Sum each sequence mask
+    sum_values = torch.sum(attention_mask, dim=1)
+    # Check if the sum of the mask is equal to the first zero index (meaning that the rest of the sequence after the first 0 is also 0)
+    is_valid_sequence = (sum_values % attention_mask.shape[1] == first_zero_index).all()
+    return is_valid_sequence
 
 
 class OpenLMModel(PreTrainedModel):
@@ -17,13 +27,18 @@ class OpenLMModel(PreTrainedModel):
         # This has to be done before init as it sets makes sure hf config is correct
         if hasattr(config, "params"):
             params = config.params
+        elif hasattr(config, "model"):
+            params = create_params(config)
         else:
             params = create_params(Namespace(**config.params_args_dict))
         config.set_params(params)
         super().__init__(config)
 
         self.supports_gradient_checkpointing = True
-        self.model = Transformer(params)
+        if isinstance(params, Params):
+            self.model = Transformer(params)
+        elif isinstance(params, MambaParams):
+            self.model = Mamba(params)
 
     @property
     def gradient_checkpointing(self):
@@ -47,10 +62,16 @@ class OpenLMforCausalLM(OpenLMModel):
         self.post_init()
 
     def get_input_embeddings(self):
-        return self.model.tok_embeddings
+        if isinstance(self.model, Mamba):
+            return self.model.model.backbone.embedding
+        else:
+            return self.model.tok_embeddings
 
     def set_input_embeddings(self, value):
-        self.model.tok_embeddings = value
+        if isinstance(self.model, Mamba):
+            self.model.model.backbone.embedding = value
+        else:
+            self.model.tok_embeddings = value
 
     def get_output_embeddings(self):
         return self.model.get_output_embeddings()
@@ -98,6 +119,14 @@ class OpenLMforCausalLM(OpenLMModel):
         ```"""
         assert position_ids is None, "Position IDs are not supported"
         # decoder outputs consists of (dec_features, layer_state, dec_hidden, dec_attn)
+
+        if attention_mask is not None and is_attention_mask_right(attention_mask):
+            # The masking can be done on the loss only
+            loss_mask = attention_mask
+            attention_mask = None
+        else:
+            loss_mask = None
+
         logits, _, past_key_values = self.model(
             input_ids=input_ids,
             inputs_embeds=inputs_embeds,
@@ -109,10 +138,17 @@ class OpenLMforCausalLM(OpenLMModel):
         if labels is not None:
             shift_logits = logits[..., :-1, :].contiguous()
             shift_labels = labels[..., 1:].contiguous()
-            loss_fct = nn.CrossEntropyLoss()
             shift_logits = shift_logits.view(-1, shift_logits.size(-1))
             shift_labels = shift_labels.view(-1).to(shift_logits.device)
-            loss = loss_fct(shift_logits, shift_labels)
+            if loss_mask is not None:
+                shift_mask = loss_mask[..., 1:].contiguous()
+                loss_fct = nn.CrossEntropyLoss(reduction="none")
+                loss = loss_fct(shift_logits, shift_labels)
+                shift_mask = torch.logical_and(shift_mask.view(-1), shift_labels != -100)
+                loss = loss[shift_mask.view(-1)].sum() / shift_mask.sum()
+            else:
+                loss_fct = nn.CrossEntropyLoss()
+                loss = loss_fct(shift_logits, shift_labels)
 
         output = CausalLMOutputWithPast(logits=logits, past_key_values=past_key_values, loss=loss)
         return output
