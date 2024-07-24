@@ -27,6 +27,8 @@ class OpenLMModel(PreTrainedModel):
         # This has to be done before init as it sets makes sure hf config is correct
         if hasattr(config, "params"):
             params = config.params
+        elif hasattr(config, "model"):
+            params = create_params(config)
         else:
             params = create_params(Namespace(**config.params_args_dict))
         config.set_params(params)
