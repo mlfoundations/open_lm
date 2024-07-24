@@ -478,7 +478,7 @@ def create_params(args):
             vocab_size=cfg["vocab_size"],
             post_embed_norm=cfg["post_embed_norm"],
             weight_tying=cfg["weight_tying"],
-            norm_type=get_norm_class(cfg.get("model_norm", args.model_norm)),
+            norm_type=get_norm_class(cfg.get("norm_type", args.norm_type)),
             attn_func=get_attn_func(
                 args.attn_name, args.attn_activation, args.attn_seq_scalar, args.attn_seq_scalar_alpha
             ),

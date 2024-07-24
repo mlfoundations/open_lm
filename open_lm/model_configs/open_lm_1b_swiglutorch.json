@@ -6,5 +6,6 @@
     "vocab_size": 50432,
     "post_embed_norm": false,
     "weight_tying": false,
+    "norm_type": "gain_only_lp_layer_norm",
     "ffn_type": "swiglu_torch"
 }

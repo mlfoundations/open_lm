@@ -24,7 +24,7 @@ def tiny_args():
             "train_num_samples": 64,
             "batch_size": 4,
             # Model params that might not be in config:
-            "model_norm": "default_layer_norm",
+            "norm_type": "default_layer_norm",
             "qk_norm": False,
             "positional_embedding_type": "rotary",
             "ffn_type": "swiglu",
