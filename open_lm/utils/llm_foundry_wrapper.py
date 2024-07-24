@@ -3,7 +3,7 @@
 
 """Implements a Hugging Causal LM wrapped inside a :class:`.ComposerModel`."""
 
-from typing import Mapping, Union
+from typing import Mapping, Union, List
 from llmfoundry.eval.metrics.nlp import (
     InContextLearningLMAccuracy,
     InContextLearningLMExpectedCalibrationError,
@@ -16,6 +16,8 @@ from composer.metrics.nlp import (
     LanguagePerplexity,
 )
 from transformers import PreTrainedTokenizer, PreTrainedTokenizerFast
+from transformers import StoppingCriteria, StoppingCriteriaList
+import torch
 
 from composer.models.huggingface import HuggingFaceModel
 
@@ -38,6 +40,13 @@ EVAL_METRICS = [
     InContextLearningMCExpectedCalibrationError(),
 ]
 
+class CustomStopTokensCriteria(StoppingCriteria):
+    def __init__(self, stop_tokens: List[str]) -> None:
+        self.stop_tokens = stop_tokens
+
+    def __call__(self, generated_tokens: torch.Tensor, *args, **kwargs) -> bool:
+        return any(token in self.stop_tokens for token in generated_tokens.flatten())
+
 
 class SimpleComposerOpenLMCausalLM(HuggingFaceModel):
     def __init__(self, model, tokenizer):
@@ -50,4 +59,9 @@ class SimpleComposerOpenLMCausalLM(HuggingFaceModel):
         )
 
     def generate(self, input_ids=None, inputs_embeds=None, **kwargs):
-        return super().generate(input_ids=input_ids, **kwargs)
+        stop_token = self.tokenizer.eos_token_id
+        stop_criteria = CustomStopTokensCriteria([stop_token])
+        stop_criteria_list = StoppingCriteriaList([stop_criteria])
+        if "stopping_criteria" in kwargs:
+            stop_criteria_list += kwargs.pop("stopping_criteria")
+        return super().generate(input_ids=input_ids, stopping_criteria=stop_criteria_list, **kwargs)

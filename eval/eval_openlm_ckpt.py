@@ -123,6 +123,7 @@ def main():
 
     state_dict = checkpoint["state_dict"]
     state_dict = {x.replace("module.", ""): y for x, y in state_dict.items()}
+    state_dict = {x.replace("_orig_mod.", ""): y for x, y in state_dict.items()}
     open_lm.model.load_state_dict(state_dict)
     open_lm.model.eval()
 
