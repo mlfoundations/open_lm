@@ -17,7 +17,7 @@ def is_attention_mask_right(attention_mask):
     sum_values = torch.sum(attention_mask, dim=1)
     # Check if the sum of the mask is equal to the first zero index (meaning that the rest of the sequence after the first 0 is also 0)
     is_valid_sequence = (sum_values % attention_mask.shape[1] == first_zero_index).all()
-    
+
     return is_valid_sequence
 
 
@@ -144,7 +144,7 @@ class OpenLMforCausalLM(OpenLMModel):
                 loss_fct = nn.CrossEntropyLoss(reduction="none")
                 loss = loss_fct(shift_logits, shift_labels)
                 shift_mask = torch.logical_and(shift_mask.view(-1), shift_labels != -100)
-                loss = loss[shift_mask.view(-1)].sum()/shift_mask.sum()
+                loss = loss[shift_mask.view(-1)].sum() / shift_mask.sum()
             else:
                 loss_fct = nn.CrossEntropyLoss()
                 loss = loss_fct(shift_logits, shift_labels)

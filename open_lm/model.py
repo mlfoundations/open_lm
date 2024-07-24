@@ -496,17 +496,16 @@ def create_params(args):
             moe_top_k=cfg.get("moe_top_k", args.moe_top_k),
         )
 
+
 if MambaLMHeadModel is not None:
-    # This is a copy-paste of the Mamba SSM code with the addition of inputs_embeds
+    # This is a copy-paste of the Mamba SSM code with the addition of inputs_embeds
     class MixerModelOpenLM(MixerModel):
         def forward(self, input_ids=None, inputs_embeds=None, inference_params=None, **kwargs):
             assert input_ids is not None or inputs_embeds is not None
             hidden_states = self.embedding(input_ids) if inputs_embeds is None else inputs_embeds
             residual = None
             for layer in self.layers:
-                hidden_states, residual = layer(
-                    hidden_states, residual, inference_params=inference_params
-                )
+                hidden_states, residual = layer(hidden_states, residual, inference_params=inference_params)
             if not self.fused_add_norm:
                 residual = (hidden_states + residual) if residual is not None else hidden_states
                 hidden_states = self.norm_f(residual.to(dtype=self.norm_f.weight.dtype))
@@ -524,8 +523,7 @@ if MambaLMHeadModel is not None:
                 )
             return hidden_states
 
-
-    # This is a copy-paste of the Mamba SSM code with the usage of MixerModelOpenLM instead of MixerModel
+    # This is a copy-paste of the Mamba SSM code with the usage of MixerModelOpenLM instead of MixerModel
     class MambaLMHeadModelOpenLM(MambaLMHeadModel):
         def __init__(
             self,
@@ -554,11 +552,11 @@ if MambaLMHeadModel is not None:
                 residual_in_fp32=residual_in_fp32,
                 **factory_kwargs,
             )
+
         def forward(self, input_ids=None, inputs_embeds=None, inference_params=None, **kwargs):
             hidden_state = self.backbone(input_ids, inputs_embeds, inference_params)
             lm_logits = self.lm_head(hidden_state)
             return lm_logits, hidden_state, inference_params
-
 
     class Mamba(nn.Module):
         # Experimental architecture, please "pip install mamba-ssm"
@@ -582,7 +580,9 @@ if MambaLMHeadModel is not None:
         def forward(self, input_ids, inputs_embeds=None, inference_params=None, **kwargs):
             logits, hidden_state, inference_params = self.model(input_ids, inputs_embeds, inference_params, **kwargs)
             return logits, hidden_state, inference_params
+
 else:
+
     class Mamba(nn.Module):
         # Experimental architecture, please "pip install mamba-ssm"
         # https://arxiv.org/abs/2312.00752
