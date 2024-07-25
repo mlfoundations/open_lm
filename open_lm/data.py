@@ -550,9 +550,7 @@ class JSONLDataset(Dataset):
     def __init__(self, file_path, tokenizer, seq_len, padding_side):
         self.padding_side = padding_side
         self.urls = [file_path]
-        # self.eot_token = "<|endoftext|>"
         self.eot_token = 0
-        # self.pad_token = "<|pad|>"
         self.pad_token = 1
         self.ignore_tok = -100
         self.tokenizer = tokenizer
@@ -573,23 +571,17 @@ class JSONLDataset(Dataset):
         return torch.tensor(data), torch.tensor(long_answer_tokens)
 
     def create_chunks(self, item):
-        # question = item['question']
-        # contexts = item['contexts']
-        # long_answer = item['long_answer']
-
-        # input_tokens = self.tokenizer(''.join(contexts)) + self.tokenizer(question) + self.tokenizer(long_answer) + [self.eot_token]
-        # target_tokens = self.tokenizer(long_answer) + [self.eot_token]
         inputs = self.tokenizer(item['instruction'] + item['input'])
         outputs = self.tokenizer(item['output']) + [self.eot_token]
 
         input_tokens = inputs + outputs
         target_tokens = [self.ignore_tok] * len(inputs) + outputs
-        #  如果总令牌数超过块大小,从CONTEXTS中删除一些
+        #  if the tokens exceed the chunksize, truncate to chunksize
         assert len(input_tokens) == len(target_tokens)
         input_tokens = input_tokens[-self.seq_len:]
         target_tokens = target_tokens[-self.seq_len:]
 
-        # 如果输入或目标小于块大小,进行填充
+        # if the input is less than chunksize, auto padding
         input_tokens = self.pad_input(input_tokens, self.pad_token)
         target_tokens = self.pad_input(target_tokens, self.ignore_tok)
         return input_tokens, target_tokens
@@ -609,11 +601,8 @@ class JSONLDataset(Dataset):
         return len(self.data)
     
     def __getitem__(self, idx):
-        # input_ids = torch.tensor(self.data)
-        # target_ids = torch.tensor(self.long_answer_tokens)# 检查输入和目标数据的尺寸是否一致
         input_ids = self.data[idx]
-        target_ids = self.long_answer_tokens[idx]# 检查输入和目标数据的尺寸是否一致
-         
+        target_ids = self.long_answer_tokens[idx]
         if len(input_ids) != len(target_ids):
             raise ValueError(f"Input and target sizes do not match at index {idx}: {input_ids.size()} vs {target_ids.size()}")
         
@@ -625,8 +614,7 @@ def get_jsonl_dataloader(args, is_train, tokenizer=None, floor=True, epoch=0, da
     datasets = [JSONLDataset(file_path, tokenizer, args.seq_len, args.padding_side) for file_path in file_paths]
 
     if is_train:
-        # Wrap the datasets with RandomMix if there are multiple datasets
-        # dataset = concatenate_datasets(datasets)
+        # todo if the dataset is consists of a list
         dataset = datasets[0]
     # Initialize shared_epoch
 
@@ -653,16 +641,6 @@ def get_jsonl_dataloader(args, is_train, tokenizer=None, floor=True, epoch=0, da
         total_num_samples = len(dataset)
 
     # Create the dataloader
-    '''
-    if args.seed is not None:
-        generator = torch.Generator()
-        generator.manual_seed(args.seed + (0 if shared_epoch is None else shared_epoch.get_value()) * args.world_size + args.rank)
-        worker_init_fn = seed_worker
-    else:
-        generator = None
-        worker_init_fn = None
-    '''
-
     sampler = DistributedSampler(dataset) if args.distributed and is_train else None
     shuffle = is_train and sampler is None
     # shuffle = True
@@ -670,13 +648,10 @@ def get_jsonl_dataloader(args, is_train, tokenizer=None, floor=True, epoch=0, da
         dataset,
         batch_size=args.per_gpu_batch_size if is_train else args.per_gpu_val_batch_size,
         shuffle=shuffle,
-        # shuffle=False,
         num_workers=args.workers,
         pin_memory=True,
         sampler=sampler,
         drop_last=is_train,
-        # generator=generator,
-        # worker_init_fn=worker_init_fn,
     )
 
     dataloader.num_batches = total_num_batches

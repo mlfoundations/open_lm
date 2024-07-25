@@ -131,14 +131,6 @@ def train_one_epoch(
                 forward_start = time.time()
                 if args.dataset_type == "jsonl":
                     inputs, targets = batch
-                    # for input in inputs:
-                    #     max_label_length = max(len(l) for l in input)
-                    # mod_inputs = []
-                    # mod_targets = []
-                    # for input, target in zip(inputs, targets):
-                    #     assert len(input) == len(target)
-                    #     mod_inputs.append(input + [1] * (max_label_length - len(input)))
-                    #     mod_targets.append(target + [-100] * (max_label_length - len(target)))
                     inputs = torch.LongTensor(inputs).to(device)
                     targets = torch.LongTensor(targets).to(device)
 
@@ -147,12 +139,12 @@ def train_one_epoch(
                     assert inputs.size() == targets.size()
                     if is_master(args):
                         if i == 0:
-                            print("enter customed jsonl step")
-                            print("inputs id of first forward on")
-                            print("current inputs")
-                            print(inputs[:3, :500])
-                            print("current targets")
-                            print(targets[:3, :500])
+                            logging.info("enter customed jsonl step")
+                            logging.info("inputs id of first forward on")
+                            logging.info("current inputs")
+                            logging.info(inputs[:3, :500])
+                            logging.info("current targets")
+                            logging.info(targets[:3, :500])
                 else:
                     (texts,) = batch
                     if is_master(args):
