@@ -62,8 +62,8 @@ def train_one_epoch(
     data["train"].set_epoch(epoch)  # set epoch in process safe manner via sampler or shared_epoch
     dataloader = data["train"].dataloader
     num_batches_per_epoch = dataloader.num_batches
-    sample_digits = math.ceil(math.log(dataloader.num_samples + 1, 10))
 
+    sample_digits = math.ceil(math.log(dataloader.num_samples + 1, 10))
     losses_m = AverageMeter()
     load_balancing_losses_m = AverageMeter()
     batch_time_m = AverageMeter()
@@ -116,31 +116,54 @@ def train_one_epoch(
 
         if args.world_size > 1:
             dist.all_reduce(has_data, op=ReduceOp.SUM)
+        # if is_master(args):
+        #     print("current has data", has_data)
         if has_data < args.world_size:
             break
 
-        (texts,) = batch
-        texts = torch.LongTensor(texts).to(device)
+        # (texts,) = batch
+
+        # texts = torch.LongTensor(texts).to(device)
         data_time_m.update(time.time() - end)
         optimizer.zero_grad()
-
         if args.accum_freq == 1:
             with autocast():
                 forward_start = time.time()
-                inputs, targets = sample_chunk(texts, args)
+                if args.dataset_type == "jsonl":
+                    inputs, targets = batch
+                    inputs = torch.LongTensor(inputs).to(device)
+                    targets = torch.LongTensor(targets).to(device)
+
+                    inputs = inputs[:, :-1]
+                    targets = targets[:, 1:]
+                    assert inputs.size() == targets.size()
+                    if is_master(args):
+                        if i == 0:
+                            logging.info("enter customed jsonl step")
+                            logging.info("inputs id of first forward on")
+                            logging.info("current inputs")
+                            logging.info(inputs[:3, :500])
+                            logging.info("current targets")
+                            logging.info(targets[:3, :500])
+                else:
+                    (texts,) = batch
+                    if is_master(args):
+                        pass
+                    texts = torch.LongTensor(texts).to(device)
+                    inputs, targets = sample_chunk(texts, args)
                 out, _, _ = model(inputs)
+                if is_master(args) and i == 0:
+                    pass
                 forward_time_m.update(time.time() - forward_start)
 
                 if args.log_logit_mean:
                     logit_m.update(torch.mean(out).item())
-
                 total_lm_loss = loss(out.reshape(-1, args.vocab_size), targets.reshape(-1))
                 total_loss = total_lm_loss
                 if args.moe_freq > 0:
                     total_load_balancing_loss = batched_load_balancing_loss(moe_args)
                     clear_load_balancing_loss()
                     total_loss += total_load_balancing_loss
-
             backward_start = time.time()
             backward(total_loss, scaler)
             backward_time_m.update(time.time() - backward_start)
@@ -158,8 +181,9 @@ def train_one_epoch(
             assert args.per_gpu_batch_size % args.accum_freq == 0, "Per-GPU batch size must be divisible by accum_freq"
             per_batch = args.per_gpu_batch_size // args.accum_freq
 
-            inputs, targets = sample_chunk(texts, args)
-
+            # inputs, targets = sample_chunk(texts, args)
+            inputs, targets = batch
+            
             forward_total_time = 0
             backward_total_time = 0
             for ii in range(args.accum_freq):
@@ -280,8 +304,6 @@ def train_one_epoch(
         step += 1
         if is_master(args):
             batch_size = len(inputs)
-            # update the loss meter with the global loss tensor every iteration, so that the logging is of the avg of loss of the last
-            # args.log_every_n_steps iterations
             if args.moe_freq > 0:
                 losses_m.update(global_loss_tensor.item() - total_load_balancing_loss.item(), batch_size)
                 load_balancing_losses_m.update(total_load_balancing_loss.item(), batch_size)

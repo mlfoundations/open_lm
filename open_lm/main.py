@@ -1,3 +1,4 @@
+import argparse
 import atexit
 import logging
 import os
@@ -10,11 +11,12 @@ import numpy as np
 from pathlib import Path
 import json
 import traceback
-
 import fsspec
 import torch
 from torch import optim
 from torch.cuda.amp import GradScaler
+import os
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 import torch.distributed as dist
 
@@ -29,7 +31,9 @@ from torch.distributed.fsdp import (
 )
 from torch.distributed.fsdp.wrap import transformer_auto_wrap_policy
 
-from open_lm.data import proc_token
+from transformers import GPTNeoXTokenizerFast
+
+from open_lm.data import get_dataset_fn, proc_token
 from open_lm.model import Block
 from open_lm.losses import CrossEntropyLossWithZLoss
 from open_lm.utils.averaging_utils import ModelAverager
@@ -132,7 +136,7 @@ def load_model(args, model, different_seed=False):
             model.module.load_state_dict(sd)
         else:
             model.load_state_dict(sd)
-        logging.info(f"=> resuming checkpoint '{args.resume}' (epoch {start_epoch})")
+        logging.info(f"=> resuming checkpoint '{args.resume}' (epoch {start_epoch})(step {global_step})")
     else:
         # loading a bare (model only) checkpoint for fine-tune or evaluation
         start_epoch, global_step = 0, 0
@@ -302,9 +306,16 @@ def cleanup(sync_process, distributed=False):
     if distributed and torch.distributed.is_initialized():
         torch.distributed.destroy_process_group()
 
+def tokenize_eleutherai(tokenizer, string):
+    return tokenizer(string).input_ids
+
 
 def main(args):
+    # parser = argparse.ArgumentParser()
+    # parser.add_argument("--tokenizer", type=str, default="EleutherAI/gpt-neox-20b")
+
     args = parse_args(args)
+    # args = parser.parse_args()
 
     requires_training = args.train_data or args.dataset_type == "synthetic" or args.dataset_manifest is not None
 
@@ -468,12 +479,13 @@ def main(args):
 
     model = None
     if args.hf_model is not None:
+        print("loading huggingface model")
         model = create_wrapped_hf_model(args)
     else:
         # Optional: Use meta device
+        print("loading customized model")
         with torch.device("meta" if args.experimental_meta_device and args.fsdp else args.device):
             model = create_model(args)
-
     args.vocab_size = model.vocab_size
     args.seq_len = model.seq_len
     if args.train_num_samples is not None:
@@ -586,11 +598,15 @@ def main(args):
     # optionally resume model from a checkpoint
     start_epoch, global_step = 0, 0
     shard_shuffle_seed = args.seed
+
     if args.resume is not None:
+        if is_master(args):
+            logging.info("=> loading from a trained model.")
         start_epoch, global_step, shard_shuffle_seed = load_model(args, model)
 
     elif args.pretrained is not None:
-        print("=> loading from a pre-trained model.")
+        if is_master(args):
+            logging.info("=> loading from a pre-trained model.")
         args.resume = args.pretrained
         # this flag continues training from the pre-trained model.
         if args.load_pretrained_state:
@@ -598,6 +614,9 @@ def main(args):
         else:
             load_model(args, model, different_seed=True)
             args.resume = None
+
+        if is_master(args):
+            print("global_step", global_step)
     elif args.average is not None:
         num_models_to_average = len(args.average)
         print(
@@ -657,11 +676,21 @@ def main(args):
 
     # initialize datasets
     # use tokenizer=None because the data is already pre-tokenized.
+    
+    tokenizer_type = getattr(args, "tokenizer", "EleutherAI/gpt-neox-20b")
+    enc = GPTNeoXTokenizerFast.from_pretrained(f"{tokenizer_type}")
+    if is_master(args):
+        logging.info(f"current encoder name is:{tokenizer_type}")
+        logging.info(f"padding side is :{enc.padding_side}")
+    args.padding_side = enc.padding_side
+    tokenizer = lambda x: tokenize_eleutherai(enc, x)
+
 
     data = get_data(
         args,
         epoch=start_epoch,
-        tokenizer=None,
+        # tokenizer=None,
+        tokenizer=tokenizer,
         skip_train=args.dataset_manifest is not None,
         floor=args.dataset_manifest is not None,
     )
@@ -693,8 +722,10 @@ def main(args):
         if args.dataset_manifest is not None:
             total_steps = (args.train_num_samples * args.epochs) // args.global_batch_size
         else:
-            total_steps = (data["train"].dataloader.num_batches) * args.epochs
-
+            # would enter this branch
+            total_steps = data["train"].dataloader.num_batches * args.epochs
+        if is_master(args):
+            logging.info(f"total steps required by training is {total_steps}")
         if args.lr_scheduler == "cosine":
             scheduler = cosine_lr(
                 optimizer,
@@ -774,6 +805,22 @@ def main(args):
     done_training = global_step >= total_steps
     epoch = start_epoch
     num_ckpt_too_few_tokens = 0
+    # if "val_list" in data and (epoch % args.val_frequency == 0 or done_training):
+    #     # validate based on frequency and always validate the last checkpoint
+    #     if is_master(args):
+    #         logging.info("Process the eval step")
+    #     try:
+    #         evaluation_metrics = evaluate_loop(model, data["val_list"], epoch, args, writer)
+    #
+    #         if is_master(args):
+    #             with fsspec.open(os.path.join(args.checkpoint_path, "results.jsonl"), "a") as f:
+    #                 f.write(f"{json.dumps(evaluation_metrics)}\n")
+    #
+    #     except Exception as e:
+    #         if is_master(args):
+    #             logging.error(e)
+    #             logging.error(traceback.format_exc())
+    #             logging.warning("evaluation failed! continuing to save_checkpoint")
     while not done_training:
         if is_master(args):
             logging.info(f"Start epoch {epoch}")
@@ -808,9 +855,12 @@ def main(args):
             args.train_data = train_data_string_per_source
 
             # Draw num_samples_per_source at most from dataset - rounded down to guarantee uniqueness.
-            data["train"] = get_wds_dataset(
-                args, True, epoch, force_num_samples=num_samples_per_source, data_key=args.data_key, floor=True
+            data["train"] = get_dataset_fn(args.dataset_type)(
+                args, is_train=True, epoch=epoch, tokenizer=tokenizer, data_key=args.data_key, floor=True
             )
+            # data["train"] = get_wds_dataset(
+            #     args, True, epoch, force_num_samples=num_samples_per_source, data_key=args.data_key, floor=True
+            # )
 
         prev_step = global_step
         if is_master(args):
@@ -859,6 +909,8 @@ def main(args):
         evaluation_metrics = []
         if "val_list" in data and (epoch % args.val_frequency == 0 or done_training):
             # validate based on frequency and always validate the last checkpoint
+            if is_master(args):
+                logging.info("Process the eval step")
             try:
                 evaluation_metrics = evaluate_loop(model, data["val_list"], epoch, args, writer)
 

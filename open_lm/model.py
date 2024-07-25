@@ -427,7 +427,7 @@ def create_params(args):
     if args.model.endswith(".json"):
         _rescan_model_configs(model_config_paths=args.model)
         args.model = Path(args.model).stem
-
+    # print(f"_MODEL_CONFIGS{_MODEL_CONFIGS}")
     if args.model in _MODEL_CONFIGS:
         cfg = deepcopy(_MODEL_CONFIGS[args.model])
     else:

@@ -55,20 +55,34 @@ def evaluate(model, data, start_epoch, args, writer):
         if i == dataloader.num_batches and not exhaust_loader:
             break
 
-        (texts,) = batch
-        texts = torch.LongTensor(texts).to(device)
 
         data_time_m.update(time.time() - end)
 
         with autocast():
-            inputs, targets = sample_chunk(texts, args)
+            if args.dataset_type == "jsonl":
+                inputs, targets = batch
+                inputs = torch.LongTensor(inputs).to(device)
+                targets = torch.LongTensor(targets).to(device)
+                inputs = inputs[:, :-1]
+                targets = targets[:, 1:]
+                if is_master(args) and i == 0:
+                    for target in targets:
+                        print("decode", target[target!=-100])
+            else:
+                (texts,) = batch
+                texts = torch.LongTensor(texts).to(device)
+                inputs, targets = sample_chunk(texts, args)
 
             out, _, _ = model(inputs)  # [per_gpu_bs, seq_len, vocab_size]
 
             bs, seq_len = targets.shape
 
+
             targets = targets.reshape(-1)
             total_loss = loss(out.reshape(-1, args.vocab_size), targets)  # [bs * seq_len]
+            if is_master(args) and i == 0:
+                print("total_loss", total_loss)
+                print("loss not equal to zero", total_loss[total_loss!=0.0])
 
             # cross entropy ignores -100 values in loss computation
             mask = targets != -100

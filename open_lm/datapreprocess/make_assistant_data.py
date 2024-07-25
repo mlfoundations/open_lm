@@ -70,10 +70,17 @@ def process_files(file_list, buffer, enc, buffer_lock):
 
         with get_item_reader(file_name) as item_reader:
             for item in item_reader:
-                string = item["text"]
                 try:
-                    tokens = remaining_tokens + enc(string) + [eot_token]
+                    # Extract and concatenate the relevant fields
+                    tokens = remaining_tokens + \
+                        enc(item["QUESTION"]) +\
+                        enc(item["CONTEXTS"]) +\
+                        enc(item["LONG_ANSWER"]) +\
+                        [eot_token]
+                    
                     remaining_tokens = []
+                    # tokens = torch.tensor(tokens).unsqueeze(0)  # Shape: (1, seq_len + 1)
+                    
                 except:
                     print("Failed to encode string.")
                     continue

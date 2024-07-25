@@ -4,14 +4,14 @@
 """Implements a Hugging Causal LM wrapped inside a :class:`.ComposerModel`."""
 
 from typing import Mapping, Union
-from llmfoundry.eval.metrics.nlp import (
+
+from composer.metrics.nlp import (
     InContextLearningLMAccuracy,
     InContextLearningLMExpectedCalibrationError,
     InContextLearningMCExpectedCalibrationError,
     InContextLearningMultipleChoiceAccuracy,
-    InContextLearningGenerationExactMatchAccuracy,
-)
-from composer.metrics.nlp import (
+    InContextLearningQAAccuracy,
+    InContextLearningCodeEvalAccuracy,
     LanguageCrossEntropy,
     LanguagePerplexity,
 )
@@ -33,9 +33,10 @@ EVAL_METRICS = [
     LanguagePerplexity(),
     InContextLearningLMAccuracy(),
     InContextLearningMultipleChoiceAccuracy(),
-    InContextLearningGenerationExactMatchAccuracy(),
+    InContextLearningQAAccuracy(),
     InContextLearningLMExpectedCalibrationError(),
     InContextLearningMCExpectedCalibrationError(),
+    InContextLearningCodeEvalAccuracy(),
 ]
 
 
