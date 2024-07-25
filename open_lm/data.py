@@ -626,10 +626,6 @@ def get_jsonl_dataloader(args, is_train, tokenizer=None, floor=True, epoch=0, da
 
     if is_train:
         # Wrap the datasets with RandomMix if there are multiple datasets
-        '''
-        if len(datasets) > 1:
-            datasets = [RandomMix(datasets, probs=args.train_data_mix_weights, longest=True)]
-        '''
         # dataset = concatenate_datasets(datasets)
         dataset = datasets[0]
     # Initialize shared_epoch
