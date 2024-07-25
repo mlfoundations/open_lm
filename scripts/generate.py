@@ -3,9 +3,11 @@
 import argparse
 import json
 import builtins as __builtin__
-
 import torch
 
+import sys, os
+current_working_directory = os.getcwd()
+sys.path.append(f"{current_working_directory}")
 from composer.utils import dist, get_device
 from open_lm.utils.transformers.hf_model import OpenLMforCausalLM
 from open_lm.utils.transformers.hf_config import OpenLMConfig
@@ -14,6 +16,9 @@ from open_lm.model import create_params
 from open_lm.params import add_model_args
 from transformers import GPTNeoXTokenizerFast, LlamaTokenizerFast
 
+import os
+
+
 
 builtin_print = __builtin__.print
 
@@ -21,7 +26,8 @@ builtin_print = __builtin__.print
 @torch.inference_mode()
 def run_model(open_lm: OpenLMforCausalLM, tokenizer, args):
     dist.initialize_dist(get_device(None), timeout=600)
-    input = tokenizer(args.input_text)
+    input_text_loads = json.loads(args.input_text)
+    input = tokenizer(input_text_loads['instruction'] + input_text_loads['input'])
     input = {k: torch.tensor(v).unsqueeze(0).cuda() for k, v in input.items()}
     composer_model = SimpleComposerOpenLMCausalLM(open_lm, tokenizer)
     composer_model = composer_model.cuda()
@@ -32,17 +38,20 @@ def run_model(open_lm: OpenLMforCausalLM, tokenizer, args):
         "max_new_tokens": args.max_gen_len,
         "use_cache": args.use_cache,
         "num_beams": args.num_beams,
+
     }
     # If these are set when temperature is 0, they will trigger a warning and be ignored
     if args.temperature > 0:
         generate_args["temperature"] = args.temperature
         generate_args["top_p"] = args.top_p
-
+    print("input_ids:", input["input_ids"])
     output = composer_model.generate(
         input["input_ids"],
         **generate_args,
+        eos_token_id=[0],
     )
-    output = tokenizer.decode(output[0].cpu().numpy())
+    print(f'current output:{output[0][len(input["input_ids"][0]): -1].cpu().numpy()}')
+    output = tokenizer.decode(output[0][len(input["input_ids"][0]): -1].cpu().numpy())
     print("-" * 50)
     print("\t\t Model output:")
     print("-" * 50)
@@ -56,7 +65,7 @@ def main():
 
     parser.add_argument("--input-text", required=True)
     parser.add_argument("--max-gen-len", default=200, type=int)
-    parser.add_argument("--temperature", default=0.8, type=float)
+    parser.add_argument("--temperature", default=0.7, type=float)
     parser.add_argument("--top-p", default=0.95, type=float)
     parser.add_argument("--use-cache", default=False, action="store_true")
     parser.add_argument("--tokenizer", default="EleutherAI/gpt-neox-20b", type=str)

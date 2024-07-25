@@ -320,7 +320,7 @@ def parse_args(args):
     )
     parser.add_argument(
         "--dataset-type",
-        choices=["webdataset", "auto", "synthetic"],
+        choices=["webdataset", "auto", "synthetic","jsonl"],
         default="auto",
         help="Which type of dataset to process.",
     )
@@ -704,7 +704,7 @@ def parse_args(args):
     parser.add_argument(
         "--distill-model",
         default=None,
-        help="Which model arch to distill from, if any.",
+            help="Which model arch to distill from, if any.",
     )
     parser.add_argument(
         "--distill-pretrained",

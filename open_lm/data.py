@@ -13,6 +13,7 @@ from multiprocessing import Value
 from functools import partial
 from itertools import islice
 import copy
+from datasets import concatenate_datasets
 
 import numpy as np
 import pandas as pd
@@ -545,21 +546,165 @@ def get_synthetic_dataset(args, is_train, epoch, tokenizer, data_key, floor):
     return DataInfo(dataloader, sampler)
 
 
+class JSONLDataset(Dataset):
+    def __init__(self, file_path, tokenizer, seq_len, padding_side):
+        self.padding_side = padding_side
+        self.urls = [file_path]
+        # self.eot_token = "<|endoftext|>"
+        self.eot_token = 0
+        # self.pad_token = "<|pad|>"
+        self.pad_token = 1
+        self.ignore_tok = -100
+        self.tokenizer = tokenizer
+        self.seq_len = seq_len
+        self.data, self.long_answer_tokens = self.load_data(file_path)
+        print(f"Loaded {len(self.data)} samples from {file_path}")
+    
+    def load_data(self, file_path):
+        data = []
+        long_answer_tokens = []
+        with open(file_path, 'r') as f:
+            for line in f:
+                item = json.loads(line.strip())
+                chunks, long_answer = self.create_chunks(item)
+                data.append(chunks)
+                long_answer_tokens.append(long_answer)
+        # return data, long_answer_tokens
+        return torch.tensor(data), torch.tensor(long_answer_tokens)
+
+    def create_chunks(self, item):
+        # question = item['question']
+        # contexts = item['contexts']
+        # long_answer = item['long_answer']
+
+        # input_tokens = self.tokenizer(''.join(contexts)) + self.tokenizer(question) + self.tokenizer(long_answer) + [self.eot_token]
+        # target_tokens = self.tokenizer(long_answer) + [self.eot_token]
+        inputs = self.tokenizer(item['instruction'] + item['input'])
+        outputs = self.tokenizer(item['output']) + [self.eot_token]
+
+        input_tokens = inputs + outputs
+        target_tokens = [self.ignore_tok] * len(inputs) + outputs
+        #  如果总令牌数超过块大小,从CONTEXTS中删除一些
+        assert len(input_tokens) == len(target_tokens)
+        input_tokens = input_tokens[-self.seq_len:]
+        target_tokens = target_tokens[-self.seq_len:]
+
+        # 如果输入或目标小于块大小,进行填充
+        input_tokens = self.pad_input(input_tokens, self.pad_token)
+        target_tokens = self.pad_input(target_tokens, self.ignore_tok)
+        return input_tokens, target_tokens
+
+    def pad_input(self, tokens, pad_token):
+        if len(tokens) < self.seq_len:
+            padding = [pad_token] * (self.seq_len - len(tokens))
+            if self.padding_side == "right":
+                tokens = tokens + padding
+            elif self.padding_side == "left":
+                tokens = padding + tokens
+            else:
+                raise Exception("PADDING SIDE should either be left or right")
+        return tokens
+
+    def __len__(self):
+        return len(self.data)
+    
+    def __getitem__(self, idx):
+        # input_ids = torch.tensor(self.data)
+        # target_ids = torch.tensor(self.long_answer_tokens)# 检查输入和目标数据的尺寸是否一致
+        input_ids = self.data[idx]
+        target_ids = self.long_answer_tokens[idx]# 检查输入和目标数据的尺寸是否一致
+         
+        if len(input_ids) != len(target_ids):
+            raise ValueError(f"Input and target sizes do not match at index {idx}: {input_ids.size()} vs {target_ids.size()}")
+        
+        return input_ids, target_ids
+
+
+def get_jsonl_dataloader(args, is_train, tokenizer=None, floor=True, epoch=0, data_key="json", force_num_samples=None):
+    file_paths = args.train_data if is_train else args.val_data
+    datasets = [JSONLDataset(file_path, tokenizer, args.seq_len, args.padding_side) for file_path in file_paths]
+
+    if is_train:
+        # Wrap the datasets with RandomMix if there are multiple datasets
+        '''
+        if len(datasets) > 1:
+            datasets = [RandomMix(datasets, probs=args.train_data_mix_weights, longest=True)]
+        '''
+        # dataset = concatenate_datasets(datasets)
+        dataset = datasets[0]
+    # Initialize shared_epoch
+
+    if is_train:
+        shared_epoch = SharedEpoch(epoch=epoch)
+    else:
+        shared_epoch = None
+
+    if is_train:
+        global_batch_size = args.per_gpu_batch_size * args.world_size
+        round_fn = math.floor if floor else math.ceil
+        total_num_batches = 0
+        total_num_samples = 0
+        # for dataset in datasets:  ## dataset has already been concated
+        num_worker_batches = round_fn(len(dataset) / (global_batch_size * max(1, args.workers)))
+        num_batches = num_worker_batches * max(1, args.workers)
+        num_samples = num_batches * global_batch_size
+        total_num_batches += num_batches
+        total_num_samples += num_samples
+    else:
+        # For validation, just use the original dataset
+        dataset = datasets[0]
+        total_num_batches = math.ceil(len(dataset) / (args.per_gpu_val_batch_size * args.world_size))
+        total_num_samples = len(dataset)
+
+    # Create the dataloader
+    '''
+    if args.seed is not None:
+        generator = torch.Generator()
+        generator.manual_seed(args.seed + (0 if shared_epoch is None else shared_epoch.get_value()) * args.world_size + args.rank)
+        worker_init_fn = seed_worker
+    else:
+        generator = None
+        worker_init_fn = None
+    '''
+
+    sampler = DistributedSampler(dataset) if args.distributed and is_train else None
+    shuffle = is_train and sampler is None
+    # shuffle = True
+    dataloader = DataLoader(
+        dataset,
+        batch_size=args.per_gpu_batch_size if is_train else args.per_gpu_val_batch_size,
+        shuffle=shuffle,
+        # shuffle=False,
+        num_workers=args.workers,
+        pin_memory=True,
+        sampler=sampler,
+        drop_last=is_train,
+        # generator=generator,
+        # worker_init_fn=worker_init_fn,
+    )
+
+    dataloader.num_batches = total_num_batches
+    dataloader.num_samples = total_num_samples
+    return DataInfo(dataloader=dataloader, shared_epoch=shared_epoch, sampler=sampler)
+
+
 def get_dataset_fn(dataset_type):
     if dataset_type == "synthetic":
         return get_synthetic_dataset
+    elif dataset_type == "jsonl":
+        return get_jsonl_dataloader
     else:
         return get_wds_dataset
 
 
 def get_data(args, epoch=0, tokenizer=None, skip_train=False, floor=True):
     data = {}
-
     if skip_train:
         data["train"] = None
     else:
         if args.train_data or args.dataset_type == "synthetic":
             # train data is treated as a shard list where all data is combined and tained on
+            args.train_num_samples = 1000
             data["train"] = get_dataset_fn(args.dataset_type)(
                 args, is_train=True, epoch=epoch, tokenizer=tokenizer, data_key=args.data_key, floor=floor
             )
@@ -711,8 +856,9 @@ def sample_chunk(chunk, args):
     else:
         raise Exception(f"Invalid sequence length: Sequence length {args.seq_len} > {chunk.shape[1]} Chunk size")
 
-    inputs = chunk[:, start_idx : start_idx + args.seq_len]
-    targets = chunk[:, start_idx + 1 : start_idx + args.seq_len + 1]
+    inputs = chunk[:, start_idx: start_idx + args.seq_len]
+    targets = chunk[:, start_idx + 1: start_idx + args.seq_len + 1]
+
 
     # replace elements to be masked with with -100 (pytorch default xent ignore value)
     if args.target_mask_left is not None or args.target_mask_individual is not None:
