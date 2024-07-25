@@ -84,7 +84,7 @@ def test_training_deterministic():
         42,
         "--data-key",
         "json",
-        "--norm-type",
+        "--model-norm",
         "gain_only_layer_norm",
     ]
     args = [str(x) for x in args]
@@ -141,7 +141,7 @@ def test_good_resume_shard_shuffle():
         42,
         "--data-key",
         "json",
-        "--norm-type",
+        "--model-norm",
         "gain_only_layer_norm",
     ]
     args = [str(x) for x in args]

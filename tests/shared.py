@@ -18,7 +18,7 @@ class MockTrainArgs:
         # fmt: off
         args = parse_args([
             "--model", model,
-            "--norm-type", "gain_only_layer_norm",
+            "--model-norm", "gain_only_layer_norm",
             "--train-data", data_path,
             "--precision", "fp32",
             "--wd", "0.033",

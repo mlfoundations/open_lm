@@ -88,7 +88,7 @@ class Params:
     seq_len: int = 2048
     post_embed_norm: bool = False
     weight_tying: bool = False
-    norm_type: nn.Module = nn.LayerNorm
+    model_norm: nn.Module = nn.LayerNorm
     attn_func: Callable = torch_attn
     apply_qk_norm: bool = False
     moe_loss_weight: float = 0.1
@@ -144,7 +144,7 @@ class CustomAttn(nn.Module):
 
         # initialize norm layers for queries and keys if needed
         self.q_norm = (
-            args.norm_type(
+            args.model_norm(
                 args.n_heads * self.head_dim,
                 eps=args.norm_eps,
             )
@@ -152,7 +152,7 @@ class CustomAttn(nn.Module):
             else nn.Identity()
         )
         self.k_norm = (
-            args.norm_type(
+            args.model_norm(
                 args.n_heads * self.head_dim,
                 eps=args.norm_eps,
             )
@@ -297,11 +297,11 @@ class Block(nn.Module):
             self.feed_forward = MoE(moe_args)
 
         self.layer_id = layer_id
-        self.attention_norm = args.norm_type(
+        self.attention_norm = args.model_norm(
             args.dim,
             eps=args.norm_eps,
         )
-        self.ffn_norm = args.norm_type(
+        self.ffn_norm = args.model_norm(
             args.dim,
             eps=args.norm_eps,
         )
@@ -353,7 +353,7 @@ class Transformer(nn.Module, PyTorchModelHubMixin):
         self.moe_num_experts = params.moe_num_experts
         self.seq_len = params.seq_len
         self.post_embed_norm = (
-            params.norm_type(
+            params.model_norm(
                 params.dim,
                 eps=params.norm_eps,
             )
@@ -374,7 +374,7 @@ class Transformer(nn.Module, PyTorchModelHubMixin):
             self.layers.append(Block(layer_id, params))
 
         # get class for normalization layers
-        self.norm = params.norm_type(
+        self.norm = params.model_norm(
             params.dim,
             eps=params.norm_eps,
         )
@@ -478,7 +478,7 @@ def create_params(args):
             vocab_size=cfg["vocab_size"],
             post_embed_norm=cfg["post_embed_norm"],
             weight_tying=cfg["weight_tying"],
-            norm_type=get_norm_class(cfg.get("norm_type", args.norm_type)),
+            model_norm=get_norm_class(cfg.get("model_norm", args.model_norm)),
             attn_func=get_attn_func(
                 args.attn_name, args.attn_activation, args.attn_seq_scalar, args.attn_seq_scalar_alpha
             ),

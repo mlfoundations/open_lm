@@ -24,7 +24,7 @@ def args():
             "use_cache": False,
             "num_beams": 1,
             # Model params that might not be in config:
-            "norm_type": "default_layer_norm",
+            "model_norm": "default_layer_norm",
             "qk_norm": False,
             "positional_embedding_type": "rotary",
             "ffn_type": "swiglu",
