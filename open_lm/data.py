@@ -704,7 +704,7 @@ def mask_sequence(chunk, start_idx, args, ignore_tok=-100):
 
 
 def sample_chunk(chunk, args):
-    if chunk.shape[1] == args.seq_len + 1 or args.get("start_chunk_at_0", False):
+    if chunk.shape[1] == args.seq_len + 1 or args.start_chunk_at_0:
         start_idx = 0
     elif chunk.shape[1] > args.seq_len + 1:
         start_idx = torch.randint(0, chunk.shape[1] - args.seq_len, (1,)).item()
