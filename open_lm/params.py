@@ -735,6 +735,12 @@ def parse_args(args):
         help="Mask the loss for a special pad token. Useful for sequences shorter than sequence lenght.",
     )
     parser.add_argument(
+        "--start-chunk-at-0",
+        default=False,
+        action="store_true",
+        help="If true, when loading from a larger sequence size than the training sequence size, start the chunk at 0 instead of sampling a random subsequence.",
+    )
+    parser.add_argument(
         "--ignore-parse-errors",
         action="store_true",
         default=False,
