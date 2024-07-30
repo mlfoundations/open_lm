@@ -445,6 +445,11 @@ def parse_args(args):
         help="How often to run evaluation with val-data (in epochs). Last epoch validated if val-data provided.",
     )
     parser.add_argument(
+        "--eval-first",
+        action="store_true",
+        help="Run evaluation before training. May help to avoid issue around torchcompile + FSDP + AMP.",
+    )
+    parser.add_argument(
         "--global-val-batch-size",
         type=int,
         default=None,

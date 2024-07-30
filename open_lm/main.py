@@ -740,8 +740,8 @@ def main(args):
         wandb.save(params_file)
         logging.debug("Finished loading wandb.")
 
-    if not requires_training:
-        if not args.resume:
+    if not requires_training or args.eval_first:
+        if not args.resume and not requires_training:
             logging.info("No training required, exiting.")
             cleanup(remote_sync_process, args.distributed)
             return
@@ -759,8 +759,9 @@ def main(args):
             with fsspec.open(os.path.join(checkpoint_root, "results.jsonl"), "a") as f:
                 f.write(f"{json.dumps(metrics)}\n")
 
-        cleanup(remote_sync_process, args.distributed)
-        return
+        if not requires_training:
+            cleanup(remote_sync_process, args.distributed)
+            return
 
     loss = torch.nn.CrossEntropyLoss()
     if args.z_loss_coefficient != 0.0:
