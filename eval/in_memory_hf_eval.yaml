@@ -31,7 +31,7 @@ fsdp_config:
 icl_tasks:
 -
   label: mmlu
-  dataset_uri: local_data/mmlu.jsonl # ADD YOUR OWN DATASET URI
+  dataset_uri: eval/local_data/mmlu.jsonl # ADD YOUR OWN DATASET URI
   num_fewshot: [0]
   icl_task_type: multiple_choice
   continuation_delimiter: 'Answer: ' # this separates questions from answers

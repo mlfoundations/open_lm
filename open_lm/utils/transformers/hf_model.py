@@ -99,19 +99,6 @@ class OpenLMforCausalLM(OpenLMModel):
         assert position_ids is None, "Position IDs are not supported"
         # decoder outputs consists of (dec_features, layer_state, dec_hidden, dec_attn)
 
-        # If input_ids are all 0 after a certain point, we can skip that
-        num_zeros = 0
-        if input_ids is not None:
-            # Find indices of the last non-zero element in each row
-            last_nonzero_indices = torch.max(torch.nonzero(input_ids, as_tuple=True)[1])
-            if last_nonzero_indices < input_ids.shape[1] - 1:
-                num_zeros = input_ids.shape[1] - last_nonzero_indices - 1
-                input_ids = input_ids[:, : last_nonzero_indices + 1]
-                if attention_mask is not None:
-                    attention_mask = attention_mask[:, : last_nonzero_indices + 1]
-                if labels is not None:
-                    labels = labels[:, : last_nonzero_indices + 1]
-
         logits, _, past_key_values = self.model(
             input_ids=input_ids,
             inputs_embeds=inputs_embeds,
@@ -130,12 +117,6 @@ class OpenLMforCausalLM(OpenLMModel):
             loss = loss_fct(shift_logits, shift_labels)
 
         output = CausalLMOutputWithPast(logits=logits, past_key_values=past_key_values, loss=loss)
-
-        # Add back the 0 that we removed
-        if num_zeros:
-            fake_logits = torch.zeros(logits.shape[0], num_zeros, logits.shape[2], device=logits.device)
-            fake_logits[:, :, 0] = 1
-            output.logits = torch.cat([output.logits, fake_logits], dim=1)
 
         return output
 
