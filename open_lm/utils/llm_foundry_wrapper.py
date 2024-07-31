@@ -3,7 +3,7 @@
 
 """Implements a Hugging Causal LM wrapped inside a :class:`.ComposerModel`."""
 
-from typing import Mapping, Union
+from typing import Union
 from llmfoundry.eval.metrics.nlp import (
     InContextLearningLMAccuracy,
     InContextLearningLMExpectedCalibrationError,
