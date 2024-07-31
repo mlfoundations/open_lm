@@ -746,7 +746,7 @@ def main(args):
             cleanup(remote_sync_process, args.distributed)
             return
         logging.info("No training required, evaluating instead.")
-        checkpoint_root = os.path.dirname(args.resume)
+        checkpoint_root = os.path.dirname(args.resume) if args.resume is not None else args.checkpoint_path
 
         if averagers is not None:
             k = next(iter(averagers.avgs_dict.keys()))
