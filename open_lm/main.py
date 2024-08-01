@@ -753,7 +753,8 @@ def main(args):
             logging.info(f"=> evaluation avg {k}")
             model = averagers.avgs_dict[k].av_model
         metrics = evaluate_loop(model, data["val_list"], start_epoch, args, writer)
-        metrics["average"] = k if averagers is not None else "none"
+        print(metrics)
+        #metrics["average"] = k if averagers is not None else "none"
 
         if is_master(args):
             with fsspec.open(os.path.join(checkpoint_root, "results.jsonl"), "a") as f:
