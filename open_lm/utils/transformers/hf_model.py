@@ -98,6 +98,7 @@ class OpenLMforCausalLM(OpenLMModel):
         ```"""
         assert position_ids is None, "Position IDs are not supported"
         # decoder outputs consists of (dec_features, layer_state, dec_hidden, dec_attn)
+
         logits, _, past_key_values = self.model(
             input_ids=input_ids,
             inputs_embeds=inputs_embeds,
@@ -105,6 +106,7 @@ class OpenLMforCausalLM(OpenLMModel):
             use_cache=use_cache,
             attention_mask=attention_mask,
         )
+
         loss = None
         if labels is not None:
             shift_logits = logits[..., :-1, :].contiguous()
@@ -115,6 +117,7 @@ class OpenLMforCausalLM(OpenLMModel):
             loss = loss_fct(shift_logits, shift_labels)
 
         output = CausalLMOutputWithPast(logits=logits, past_key_values=past_key_values, loss=loss)
+
         return output
 
     def prepare_inputs_for_generation(

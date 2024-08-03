@@ -1,0 +1,14 @@
+{
+    "hidden_dim": 2048,
+    "n_layers": 24,
+    "n_heads": 16,
+    "seq_len": 2048,
+    "vocab_size": 50432,
+    "post_embed_norm": false,
+    "weight_tying": false,
+    "model_norm": "gain_only_lp_layer_norm",
+    "norm_type": "gain_only_lp_layer_norm",
+    "ffn_type": "swiglu_torch",
+    "qk_norm": true,
+    "positional_embedding_type": "rotary"
+}

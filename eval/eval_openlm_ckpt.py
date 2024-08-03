@@ -46,8 +46,9 @@ def evaluate(model, tokenizer, cfg):
 
     composer_model = SimpleComposerOpenLMCausalLM(model, tokenizer)
 
+    cfg_icl_tasks = [dict(i) for i in cfg.icl_tasks]
     evaluators, logger_keys = build_icl_evaluators(
-        cfg.icl_tasks, tokenizer, cfg.max_seq_len, cfg.device_eval_batch_size
+        cfg_icl_tasks, tokenizer, cfg.max_seq_len, cfg.device_eval_batch_size
     )
 
     in_memory_logger = InMemoryLogger()  # track metrics in the in_memory_logger
@@ -123,6 +124,7 @@ def main():
 
     state_dict = checkpoint["state_dict"]
     state_dict = {x.replace("module.", ""): y for x, y in state_dict.items()}
+    state_dict = {x.replace("_orig_mod.", ""): y for x, y in state_dict.items()}
     open_lm.model.load_state_dict(state_dict)
     open_lm.model.eval()
 
