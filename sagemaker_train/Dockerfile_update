@@ -9,6 +9,8 @@ COPY . /opt/ml/code/
 # RUN pip install -e /opt/ml/code/
 
 # Prevent sagemaker from installing requirements again.
+RUN pip install s3fs>=2023.6.0
+RUN pip install --upgrade s3fs
 RUN rm /opt/ml/code/setup.py
 RUN rm /opt/ml/code/requirements.txt
 

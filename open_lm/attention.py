@@ -4,6 +4,15 @@ import torch
 from torch.nn import functional as F
 import xformers.ops as xops
 
+# Adding flag if using TE FP8
+using_te = False
+try:
+    import transformer_engine.pytorch as te
+
+    using_te = True
+except ImportError as ie:
+    using_te = False
+
 
 def get_rectangular_causal_mask(shape, q_seq_len, k_seq_len, device, dtype):
     """Create a rectangular causal mask.
@@ -137,6 +146,55 @@ def torch_attn(queries, keys, values, is_causal, attention_mask=None):
         )
 
 
+def torch_attn_te(queries, keys, values, is_causal, attention_mask=None):
+    _, num_q_heads, _, _ = queries.shape
+    _, _, hidden_dim_k, _ = values.shape
+    scaleddotproductattn_module = te.DotProductAttention(num_attention_heads=num_q_heads, kv_channels=hidden_dim_k)
+    if is_causal and keys.shape[1] > queries.shape[1] > 1:
+        q_seq_len = queries.shape[1]
+        k_seq_len = keys.shape[1]
+        # Same as above, we would like to use:
+        # mask = xops.fmha.attn_bias.LowerTriangularFromBottomRightMask().materialize((1, 1, q_seq_len, k_seq_len), queries.dtype, queries.device)
+        mask = get_rectangular_causal_mask((1, 1), q_seq_len, k_seq_len, queries.device, queries.dtype)
+        if attention_mask is not None:
+            apply_attention_mask_(mask, attention_mask, queries_dtype=queries.dtype)
+        return (
+            scaleddotproductattn_module(
+                queries.transpose(1, 2), keys.transpose(1, 2), values.transpose(1, 2), attention_mask=mask
+            )
+            .transpose(1, 2)
+            .contiguous()
+        )
+    else:
+        if attention_mask is None:
+            bias = None
+            # If we only have one query, assume we don't need to be in causal mode (can attend to all keys).
+            if queries.shape == 1:
+                is_causal = False
+        else:
+            if not is_causal:
+                raise NotImplementedError("attention_mask with is_causal=False is not yet implemented.")
+            # Build causal mask that assumes queries are in the end of the sequence.
+            batch, q_seq_len, heads, _ = queries.shape
+            k_seq_len = keys.shape[1]
+            bias = get_rectangular_causal_mask((batch, heads), q_seq_len, k_seq_len, queries.device, queries.dtype)
+            if attention_mask is not None:
+                apply_attention_mask_(bias, attention_mask, queries_dtype=queries.dtype)
+            # We apply causal mask in attention instead of using is_causal=True.
+            is_causal = False
+        return (
+            scaleddotproductattn_module(
+                queries.transpose(1, 2),
+                keys.transpose(1, 2),
+                values.transpose(1, 2),
+                attention_mask=bias,
+                attn_mask_type="causal" if is_causal else None,
+            )
+            .transpose(1, 2)
+            .contiguous()
+        )
+
+
 ATTN_ACTIVATIONS = {
     "relu": F.relu,
     "relu_squared": lambda x: torch.pow(F.relu(x), 2),
@@ -189,12 +247,7 @@ def custom_attn(
     return torch.einsum("bhqk,bkhd->bqhd", attn_weight, values)
 
 
-def get_attn_func(
-    attn_name,
-    attn_activation=None,
-    attn_seq_scalar=None,
-    alpha=None,
-):
+def get_attn_func(attn_name, attn_activation=None, attn_seq_scalar=None, alpha=None, use_fp8=False):
     if attn_name == "auto":
         return xformers_attn if torch.cuda.is_available() else torch_attn
     elif attn_name == "xformers_attn":
@@ -206,6 +259,8 @@ def get_attn_func(
         # call .contiguous() on the output tensor. [#188]
         return lambda *args, **kwargs: xformers_attn(*args, **kwargs).contiguous()
     elif attn_name == "torch_attn":
+        # if using_te and use_fp8:
+        #     return torch_attn_te
         return torch_attn
     elif attn_name == "custom_attn":
         assert (

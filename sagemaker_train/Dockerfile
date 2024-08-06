@@ -1,7 +1,7 @@
 ARG AWS_REGION
 
 # SageMaker PyTorch image
-FROM 763104351884.dkr.ecr.${AWS_REGION}.amazonaws.com/pytorch-training:2.1.0-gpu-py310-cu121-ubuntu20.04-sagemaker
+FROM 763104351884.dkr.ecr.${AWS_REGION}.amazonaws.com/pytorch-training:2.2.0-gpu-py310-cu121-ubuntu20.04-sagemaker
 
 # Run custom installation of libraries
 # RUN pip install xxx
@@ -26,6 +26,8 @@ RUN rm /opt/ml/code/setup.py
 RUN pip install -r /opt/ml/code/requirements.txt
 RUN pip uninstall flash-attn -y
 RUN pip install flash-attn>=2.2
+RUN pip install s3fs>=2023.6.0
+RUN pip install --upgrade s3fs
 # # Prevent sagemaker from installing requirements again.
 # RUN rm /opt/ml/code/setup.py
 RUN rm /opt/ml/code/requirements.txt

@@ -35,6 +35,24 @@ try:  # optional import
 except ImportError:
     MambaLMHeadModel = None
 
+# Adding flag if using TE FP8
+using_te = False
+LinearTE = nn.Linear
+try:
+    import transformer_engine.pytorch as te
+
+    using_te = True
+
+    class LinearTE(te.Linear):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+
+        def forward(self, inp: torch.Tensor, is_first_microbatch: bool = True):
+            return super().forward(inp, is_first_microbatch=True)
+
+except ImportError as ie:
+    using_te = False
+
 # from openclip
 _MODEL_CONFIG_PATHS = [Path(__file__).parent / f"model_configs/"]
 _MODEL_CONFIGS = {}  # directory (model_name: config) of model architecture configs
@@ -86,7 +104,9 @@ class Params:
     seq_len: int = 2048
     post_embed_norm: bool = False
     weight_tying: bool = False
-    norm_type: nn.Module = nn.LayerNorm
+    norm_type: nn.Module = te.LayerNorm if using_te else nn.LayerNorm
+    linear_type: nn.Module = LinearTE if using_te else nn.Linear
+    te_device: str = "cuda" if using_te else None
     attn_func: Callable = xformers_attn if torch.cuda.is_available() else torch_attn
     apply_qk_norm: bool = False
     moe_loss_weight: float = 0.1
@@ -119,8 +139,8 @@ class CustomAttn(nn.Module):
         super().__init__()
         self.n_heads = args.n_heads
         self.head_dim = args.dim // args.n_heads
-        self.in_proj = nn.Linear(args.dim, 3 * args.n_heads * self.head_dim, bias=False)
-        self.out_proj = nn.Linear(args.n_heads * self.head_dim, args.dim, bias=False)
+        self.in_proj = args.linear_type(args.dim, 3 * args.n_heads * self.head_dim, bias=False, device=args.te_device)
+        self.out_proj = args.linear_type(args.n_heads * self.head_dim, args.dim, bias=False, device=args.te_device)
         self.pos_embed = get_pos_embed(args)
         self.attn_fn = args.attn_func
         self.apply_qk_norm = args.apply_qk_norm
@@ -130,6 +150,7 @@ class CustomAttn(nn.Module):
             args.norm_type(
                 args.n_heads * self.head_dim,
                 eps=args.norm_eps,
+                device=args.te_device,
             )
             if self.apply_qk_norm
             else nn.Identity()
@@ -138,6 +159,7 @@ class CustomAttn(nn.Module):
             args.norm_type(
                 args.n_heads * self.head_dim,
                 eps=args.norm_eps,
+                device=args.te_device,
             )
             if self.apply_qk_norm
             else nn.Identity()
@@ -195,13 +217,13 @@ class GemmaMLP(nn.Module):
     Modified from https://github.com/google/gemma_pytorch/blob/01062c9ef4cf89ac0c985b25a734164ede017d0b/gemma/model.py#L182-L201
     """
 
-    def __init__(self, dim: int, hidden_dim: int, layer_id: int):
+    def __init__(self, dim: int, hidden_dim: int, layer_id: int, args: Params):
         super().__init__()
         self.dim = dim
         self.hidden_dim = hidden_dim
-        self.gate_proj = nn.Linear(dim, hidden_dim)
-        self.up_proj = nn.Linear(dim, hidden_dim)
-        self.down_proj = nn.Linear(hidden_dim, dim)
+        self.gate_proj = nn.Linear(dim, hidden_dim, device=args.te_device)
+        self.up_proj = nn.Linear(dim, hidden_dim, device=args.te_device)
+        self.down_proj = nn.Linear(hidden_dim, dim, device=args.te_device)
         self._layer_id = layer_id
 
     def forward(self, x):
@@ -225,10 +247,10 @@ class GemmaMLP(nn.Module):
 # Same as pseudocode provided from xformers SwiGLU
 # https://github.com/facebookresearch/xformers
 class SwiGLUTorch(nn.Module):
-    def __init__(self, in_dim, hidden_dim, out_dim, bias=True):
+    def __init__(self, in_dim, hidden_dim, out_dim, args: Params = Params, bias=True):
         super().__init__()
-        self.w12 = nn.Linear(in_dim, 2 * hidden_dim, bias=bias)
-        self.w3 = nn.Linear(hidden_dim, out_dim, bias=bias)
+        self.w12 = nn.Linear(in_dim, 2 * hidden_dim, bias=bias, device=args.te_device)
+        self.w3 = nn.Linear(hidden_dim, out_dim, bias=bias, device=args.te_device)
 
     def forward(self, x):
         gate, x = self.w12(x).chunk(2, dim=-1)
@@ -252,17 +274,17 @@ class Block(nn.Module):
         elif args.ffn_type == "swiglu_torch":
             # this follows llama / lit llama -- go to multiple of 256
             self.hidden_dim = 256 * ((int(2 * 4 * args.dim / 3) + 256 - 1) // 256)
-            self.feed_forward = SwiGLUTorch(args.dim, self.hidden_dim, args.dim, bias=False)
+            self.feed_forward = SwiGLUTorch(args.dim, self.hidden_dim, args.dim, args, bias=False)
         elif args.ffn_type == "gelu":
             # Follows mosaic mpt7b, but without a bias.
             self.hidden_dim = args.dim * 4
-            self._ff_w1 = nn.Linear(args.dim, self.hidden_dim, bias=False)
-            self._ff_w2 = nn.Linear(self.hidden_dim, args.dim, bias=False)
+            self._ff_w1 = nn.Linear(args.dim, self.hidden_dim, bias=False, device=args.te_device)
+            self._ff_w2 = nn.Linear(self.hidden_dim, args.dim, bias=False, device=args.te_device)
             self.feed_forward = nn.Sequential(self._ff_w1, nn.GELU(approximate="none"), self._ff_w2)
         elif args.ffn_type == "gemma_geglu":
             # this follows llama / lit llama -- go to multiple of 256
             self.hidden_dim = 256 * ((int(2 * 4 * args.dim / 3) + 256 - 1) // 256)
-            self.feed_forward = GemmaMLP(args.dim, self.hidden_dim, layer_id)
+            self.feed_forward = GemmaMLP(args.dim, self.hidden_dim, layer_id, args)
         elif args.ffn_type == "moe":
             moe_args = MoEArgs(
                 hidden_size=args.dim,
@@ -283,10 +305,12 @@ class Block(nn.Module):
         self.attention_norm = args.norm_type(
             args.dim,
             eps=args.norm_eps,
+            device=args.te_device,
         )
         self.ffn_norm = args.norm_type(
             args.dim,
             eps=args.norm_eps,
+            device=args.te_device,
         )
         self.attention.seq_len = args.seq_len
         self.reset_parameters()
@@ -455,9 +479,15 @@ def create_params(args):
             vocab_size=cfg["vocab_size"],
             post_embed_norm=cfg["post_embed_norm"],
             weight_tying=cfg["weight_tying"],
-            norm_type=get_norm_class(cfg.get("model_norm", args.model_norm)),
+            norm_type=get_norm_class(cfg.get("model_norm", args.model_norm), args.use_fp8),
+            linear_type=LinearTE if (using_te and args.use_fp8) else nn.Linear,
+            te_device="cuda" if (using_te and args.use_fp8) else None,
             attn_func=get_attn_func(
-                args.attn_name, args.attn_activation, args.attn_seq_scalar, args.attn_seq_scalar_alpha
+                args.attn_name,
+                args.attn_activation,
+                args.attn_seq_scalar,
+                args.attn_seq_scalar_alpha,
+                use_fp8=args.use_fp8,
             ),
             apply_qk_norm=cfg.get("qk_norm", args.qk_norm),
             positional_embedding_type=cfg.get("positional_embedding_type", args.positional_embedding_type),
@@ -495,10 +525,23 @@ class Mamba(nn.Module):
         return out, None, None
 
 
-def create_model(args):
+def te_linear_ops(model, exclude_modules=["output"], tensor_parallel_group=None):
+    for name, module in model.named_children():
+        if len(list(module.children())) > 0:
+            te_linear_ops(module, exclude_modules, tensor_parallel_group)
+        if isinstance(module, te.Linear):
+            model._modules[name].set_tensor_parallel_group(tensor_parallel_group)
+    return model
+
+
+def create_model(args, tensor_parallel_group=None):
     if "mamba" in args.model:
         model = Mamba(create_params(args))
+        if tensor_parallel_group is not None and using_te:
+            model = te_linear_ops(model.to(torch.bfloat16).cuda(), tensor_parallel_group)
         return model
     else:
         model = Transformer(create_params(args))
+        if tensor_parallel_group is not None and using_te:
+            model = te_linear_ops(model.to(torch.bfloat16).cuda(), tensor_parallel_group)
         return model

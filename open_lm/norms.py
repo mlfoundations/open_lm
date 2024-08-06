@@ -8,6 +8,15 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.nn.parameter import Parameter
 
+# Adding flag if using TE FP8
+using_te = False
+try:
+    import transformer_engine.pytorch as te
+
+    using_te = True
+except ImportError as ie:
+    using_te = False
+
 
 class LayerNorm(nn.Module):
     # NOTE: taken from official pytorch implementation and modified
@@ -98,6 +107,30 @@ def _cast_if_autocast_enabled(tensor):
     return tensor
 
 
+class LayerNormTE(LayerNorm):
+    def forward(self, x):
+        layer_norm_module = te.LayerNorm(self.normalized_shape, eps=self.eps, device="cuda", params_dtype=x.dtype)
+        output_tensor = layer_norm_module(x)
+        if self.weight is not None and self.bias is not None:
+            output_tensor = output_tensor * self.weight + self.bias
+        return output_tensor
+
+
+class LPLayerNormTE(LayerNorm):
+    def forward(self, x):
+        module_device = x.device
+        downcast_x = _cast_if_autocast_enabled(x)
+        downcast_weight = _cast_if_autocast_enabled(self.weight) if self.weight is not None else self.weight
+        downcast_bias = _cast_if_autocast_enabled(self.bias) if self.bias is not None else self.bias
+        layer_norm_module = te.LayerNorm(
+            self.normalized_shape, eps=self.eps, device="cuda", params_dtype=downcast_x.dtype
+        )
+        output_tensor = layer_norm_module(downcast_x)
+        if downcast_weight is not None and downcast_bias is not None:
+            output_tensor = output_tensor * downcast_weight + downcast_bias
+        return output_tensor
+
+
 class RmsNorm(nn.Module):
     def __init__(
         self,
@@ -133,17 +166,25 @@ class RmsNorm(nn.Module):
         return "{normalized_shape}, eps={eps} ".format(**self.__dict__)
 
 
-def get_norm_class(model_norm):
+def get_norm_class(model_norm, use_fp8=False):
     if model_norm == "default_layer_norm":
         return torch.nn.LayerNorm
     elif model_norm == "lp_layer_norm":
+        if use_fp8 and using_te:
+            return LPLayerNormTE
         return LPLayerNorm
     elif model_norm == "gain_only_lp_layer_norm":
+        if use_fp8 and using_te:
+            return partial(LPLayerNormTE, elementwise_gain=True, elementwise_bias=False)
         return partial(LPLayerNorm, elementwise_gain=True, elementwise_bias=False)
     elif model_norm == "gain_only_layer_norm":
+        if use_fp8 and using_te:
+            return partial(LayerNormTE, elementwise_gain=True, elementwise_bias=False)
         return partial(LayerNorm, elementwise_gain=True, elementwise_bias=False)
 
     elif model_norm == "no_wb_layer_norm":
+        if use_fp8 and using_te:
+            return partial(LayerNormTE, elementwise_gain=False, elementwise_bias=False)
         return partial(LayerNorm, elementwise_gain=False, elementwise_bias=False)
 
     elif model_norm == "rms_norm":
