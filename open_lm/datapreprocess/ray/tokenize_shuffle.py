@@ -496,7 +496,7 @@ def glob_files(path, suffixes):
 def write_manifest(jsonl_lines, args):
     "Write manifest to provided output path."
 
-    output_path = os.path.join(args.output.strip("/"), "manifest.jsonl")
+    output_path = os.path.join(args.output.rstrip("/"), "manifest.jsonl")
 
     if output_path.startswith("s3://"):
         # Use boto3 for S3 paths
