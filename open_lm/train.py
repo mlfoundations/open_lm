@@ -242,15 +242,15 @@ def train_one_epoch(
         if scaler is not None:
             if args.grad_clip_norm is not None:
                 scaler.unscale_(optimizer)
-                torch.nn.utils.clip_grad_norm_(model.parameters(), args.grad_clip_norm, model_norm=2.0)
+                torch.nn.utils.clip_grad_norm_(model.parameters(), args.grad_clip_norm, norm_type=2.0)
             scaler.step(optimizer)
             scaler.update()
         else:
             if args.grad_clip_norm is not None:
                 if isinstance(model, FSDP):
-                    model.clip_grad_norm_(args.grad_clip_norm, model_norm=2.0)
+                    model.clip_grad_norm_(args.grad_clip_norm, norm_type=2.0)
                 else:
-                    torch.nn.utils.clip_grad_norm_(model.parameters(), args.grad_clip_norm, model_norm=2.0)
+                    torch.nn.utils.clip_grad_norm_(model.parameters(), args.grad_clip_norm, norm_type=2.0)
             optimizer.step()
         optim_step_time_m.update(time.time() - optim_step_start)
 
