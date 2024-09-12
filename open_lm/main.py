@@ -816,26 +816,30 @@ def main(args):
         if is_master(args):
             logging.info(f"=> epoch {epoch}, training on {args.train_data}")
 
-        if args.distributed:
-            dist.barrier()
+        if args.skip_ckpt <= 0:
+            if args.distributed:
+                dist.barrier()
 
-        success, global_step = train_one_epoch(
-            model,
-            data,
-            loss,
-            averagers=averagers,
-            epoch=epoch,
-            step=global_step,
-            optimizer=optimizer,
-            scaler=scaler,
-            scheduler=scheduler,
-            total_steps=total_steps,
-            args=args,
-            tb_writer=writer,
-        )
+            success, global_step = train_one_epoch(
+                model,
+                data,
+                loss,
+                averagers=averagers,
+                epoch=epoch,
+                step=global_step,
+                optimizer=optimizer,
+                scaler=scaler,
+                scheduler=scheduler,
+                total_steps=total_steps,
+                args=args,
+                tb_writer=writer,
+            )
 
-        if args.distributed:
-            dist.barrier()
+            if args.distributed:
+                dist.barrier()
+        else:
+            args.skip_ckpt = args.skip_ckpt - 1
+            success = True
 
         done_training = global_step >= total_steps
         steps_done_epoch = global_step - prev_step

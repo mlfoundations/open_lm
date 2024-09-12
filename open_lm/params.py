@@ -762,6 +762,12 @@ def parse_args(args):
         action="store_true",
         help="If set, allow model to do multiple data passes over our dataset, in order to reach the desired number of tokens.",
     )
+    parser.add_argument(
+        "--skip-ckpt",
+        type=int,
+        default=0,
+        help="Skip this many checkpoints when training (useful when trying to skip bad epochs).",
+    )
 
     parser.add_argument(
         "--averagers",
