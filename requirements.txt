@@ -23,4 +23,3 @@ transformers
 s3fs
 wikipedia
 ipython
-mosaicml
