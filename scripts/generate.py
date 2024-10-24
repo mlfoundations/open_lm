@@ -66,6 +66,8 @@ def main():
     args = parser.parse_args()
     print("Loading model into the right classes...")
     open_lm = OpenLMforCausalLM(OpenLMConfig(create_params(args)))
+    print(open_lm.config)
+    breakpoint()
 
     if "gpt-neox-20b" in args.tokenizer:
         tokenizer = GPTNeoXTokenizerFast.from_pretrained("EleutherAI/gpt-neox-20b")

@@ -3,7 +3,7 @@ from typing import List, Optional, Dict
 from argparse import Namespace
 
 from transformers import PretrainedConfig
-
+import transformers
 from open_lm.model import Params, create_params
 
 
@@ -37,8 +37,23 @@ class OpenLMConfig(PretrainedConfig):
 
         if params is not None:
             self.params = params
-
+        elif params_args is not None:
+            self.params = create_params(params_args)
+        elif params_args_dict is not None:
+            self.params = create_params(Namespace(**params_args_dict))
+        else:
+            # Default params configuration
+            self.params = Params()
+        
     def set_params(self, params: Params):
+        self.params = params
         self.tie_word_embeddings = params.weight_tying
         for field in fields(params.__class__):
             setattr(self, field.name, getattr(params, field.name))
+        
+    def to_dict(self):
+        return {
+            "transformers_version": transformers.__version__,
+            **self.params.to_dict(),
+        }
+            

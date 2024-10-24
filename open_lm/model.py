@@ -3,7 +3,7 @@ import json
 import re
 from copy import deepcopy
 from pathlib import Path
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, asdict
 from typing import Callable
 
 import torch
@@ -77,6 +77,21 @@ def _rescan_model_configs(model_config_paths=None):
 _rescan_model_configs()  # initial populate of model config registry
 
 
+@dataclass
+class AttnParams:
+    name: str = "auto"
+    activation: str = None
+    seq_scalar: str = "none"
+    seq_scalar_alpha: float = 1.0
+
+    def to_dict(self):
+        return {
+            "name": self.name,
+            "activation": self.activation,
+            "seq_scalar": self.seq_scalar,
+            "seq_scalar_alpha": self.seq_scalar_alpha,
+        }
+
 # args and default params follow llama (except with LayerNorm instead of RmsNorm)
 @dataclass
 class Params:
@@ -88,8 +103,8 @@ class Params:
     seq_len: int = 2048
     post_embed_norm: bool = False
     weight_tying: bool = False
-    model_norm: nn.Module = nn.LayerNorm
-    attn_func: Callable = torch_attn
+    model_norm: str = "default_layer_norm"
+    attn_params: AttnParams = field(default_factory=AttnParams)
     apply_qk_norm: bool = False
     moe_loss_weight: float = 0.1
     moe_capacity_factor: float = 1.25
@@ -100,6 +115,12 @@ class Params:
     moe_freq: int = 0
     positional_embedding_type: str = "rotary"
     ffn_type: str = "swiglu"
+    
+    def to_dict(self):
+        return {
+            **asdict(self),
+            "attn_params": self.attn_params.to_dict(),
+        }
 
 
 @dataclass
@@ -139,12 +160,18 @@ class CustomAttn(nn.Module):
         self.in_proj = nn.Linear(args.dim, 3 * args.n_heads * self.head_dim, bias=False)
         self.out_proj = nn.Linear(args.n_heads * self.head_dim, args.dim, bias=False)
         self.pos_embed = get_pos_embed(args)
-        self.attn_fn = args.attn_func
+        self.attn_fn = get_attn_func(
+            args.attn_params.name,
+            args.attn_params.activation,
+            args.attn_params.seq_scalar,
+            args.attn_params.seq_scalar_alpha,
+        )
         self.apply_qk_norm = args.apply_qk_norm
 
         # initialize norm layers for queries and keys if needed
+        NormClass = get_norm_class(args.model_norm)
         self.q_norm = (
-            args.model_norm(
+            NormClass(
                 args.n_heads * self.head_dim,
                 eps=args.norm_eps,
             )
@@ -152,7 +179,7 @@ class CustomAttn(nn.Module):
             else nn.Identity()
         )
         self.k_norm = (
-            args.model_norm(
+            NormClass(
                 args.n_heads * self.head_dim,
                 eps=args.norm_eps,
             )
@@ -297,11 +324,12 @@ class Block(nn.Module):
             self.feed_forward = MoE(moe_args)
 
         self.layer_id = layer_id
-        self.attention_norm = args.model_norm(
+        NormClass = get_norm_class(args.model_norm)
+        self.attention_norm = NormClass(
             args.dim,
             eps=args.norm_eps,
         )
-        self.ffn_norm = args.model_norm(
+        self.ffn_norm = NormClass(
             args.dim,
             eps=args.norm_eps,
         )
@@ -352,8 +380,9 @@ class Transformer(nn.Module, PyTorchModelHubMixin):
         self.n_layers = params.n_layers
         self.moe_num_experts = params.moe_num_experts
         self.seq_len = params.seq_len
+        NormClass = get_norm_class(params.model_norm)
         self.post_embed_norm = (
-            params.model_norm(
+            NormClass(
                 params.dim,
                 eps=params.norm_eps,
             )
@@ -374,7 +403,7 @@ class Transformer(nn.Module, PyTorchModelHubMixin):
             self.layers.append(Block(layer_id, params))
 
         # get class for normalization layers
-        self.norm = params.model_norm(
+        self.norm = NormClass(
             params.dim,
             eps=params.norm_eps,
         )
@@ -478,9 +507,12 @@ def create_params(args):
             vocab_size=cfg["vocab_size"],
             post_embed_norm=cfg["post_embed_norm"],
             weight_tying=cfg["weight_tying"],
-            model_norm=get_norm_class(cfg.get("model_norm", args.model_norm)),
-            attn_func=get_attn_func(
-                args.attn_name, args.attn_activation, args.attn_seq_scalar, args.attn_seq_scalar_alpha
+            model_norm=cfg.get("model_norm", args.model_norm),
+            attn_params=AttnParams(
+                cfg.get("attn_name", args.attn_name),
+                cfg.get("attn_activation", args.attn_activation),
+                cfg.get("attn_seq_scalar", args.attn_seq_scalar),
+                cfg.get("attn_seq_scalar_alpha", args.attn_seq_scalar_alpha),
             ),
             apply_qk_norm=cfg.get("qk_norm", args.qk_norm),
             positional_embedding_type=cfg.get("positional_embedding_type", args.positional_embedding_type),
@@ -631,3 +663,4 @@ def create_model(args):
     else:
         model = Transformer(create_params(args))
         return model
+
