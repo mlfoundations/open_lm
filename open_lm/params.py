@@ -59,6 +59,12 @@ def add_model_args(parser):
         help="Type of positional embedding to use. This might be overridden by the model config.",
     )
     parser.add_argument(
+        "--rotary-freq",
+        type=float,
+        default=10000,
+        help="Frequency for rotary positional embeddings. This might be overridden by the model config.",
+    )
+    parser.add_argument(
         "--moe-freq",
         type=int,
         default=0,
