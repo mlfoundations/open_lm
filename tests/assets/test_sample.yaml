@@ -1,0 +1,13 @@
+sources:
+  - source: "SOURCE_A"
+    markers: ["source_a"]
+  - source: "SOURCE_B"
+    markers: ["source_b"]
+  - source: "UNKNOWN"
+    markers: []  # No specific markers for UNKNOWN
+
+sampling_frequencies:
+  SOURCE_A: 2.0
+  SOURCE_B: 0.5
+  UNKNOWN: 0
+
