@@ -1,6 +1,7 @@
 import atexit
 import logging
 import os
+import shutil
 import re
 import sys
 import random
@@ -48,7 +49,7 @@ from open_lm.model import create_model
 
 from open_lm.utils.transformers.hf_wrapper import create_wrapped_hf_model
 from open_lm.data import get_data, get_wds_dataset
-from open_lm.distributed import is_master, init_distributed_device, broadcast_object
+from open_lm.distributed import is_master, is_local_master, init_distributed_device, broadcast_object
 from open_lm.logger import setup_logging
 from open_lm.params import parse_args
 from open_lm.scheduler import cosine_lr, const_lr
@@ -57,6 +58,7 @@ from open_lm.evaluate import evaluate_loop
 from open_lm.file_utils import (
     pt_load,
     check_exists,
+    download_data_to_local,
     start_sync_process,
     remote_sync_with_expon_backoff,
     get_metadata_file,
@@ -795,6 +797,12 @@ def main(args):
                 shard_shuffle_seed=args.shard_shuffle_seed,
             )
 
+            if args.temp_local_data_dir is not None:
+                download_rank = is_master(args) if args.local_dir_shared_across_nodes else is_local_master(args)
+                train_data_string_per_source = download_data_to_local(
+                    train_data_string_per_source, args.temp_local_data_dir, only_rename=not download_rank
+                )
+
             # In the distributed case, make sure that all nodes receive the same string
             if args.distributed:
                 all_source_strings = ["" for _ in range(args.world_size)]
@@ -918,6 +926,13 @@ def main(args):
             raise RuntimeError(
                 f"{num_ckpt_too_few_tokens} checkpoints happened where the number of tokens seen was {1 - args.data_tolerate_error_p} of expected. This is likely due to transient errors e.g. reading from S3."
             )
+
+        if args.temp_local_data_dir is not None:
+            cleanup_rank = is_master(args) if args.local_dir_shared_across_nodes else is_local_master(args)
+            if cleanup_rank:
+                shutil.rmtree(args.temp_local_data_dir)
+        if args.distributed:
+            dist.barrier()
 
         if done_training:
             if is_master(args):
