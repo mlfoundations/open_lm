@@ -98,6 +98,7 @@ class Params:
     moe_freq: int = 0
     positional_embedding_type: str = "rotary"
     ffn_type: str = "swiglu"
+    mqa: bool = False
 
 
 def get_pos_embed(args: Params):
@@ -119,7 +120,11 @@ class CustomAttn(nn.Module):
         super().__init__()
         self.n_heads = args.n_heads
         self.head_dim = args.dim // args.n_heads
-        self.in_proj = nn.Linear(args.dim, 3 * args.n_heads * self.head_dim, bias=False)
+        self.mqa = args.mqa
+        if not self.mqa:
+            self.in_proj = nn.Linear(args.dim, 3 * args.n_heads * self.head_dim, bias=False)
+        else:
+            self.in_proj = nn.Linear(args.dim, (args.n_heads + 2) * self.head_dim, bias=False)
         self.out_proj = nn.Linear(args.n_heads * self.head_dim, args.dim, bias=False)
         self.pos_embed = get_pos_embed(args)
         self.attn_fn = args.attn_func
@@ -136,7 +141,7 @@ class CustomAttn(nn.Module):
         )
         self.k_norm = (
             args.norm_type(
-                args.n_heads * self.head_dim,
+                args.n_heads * self.head_dim if not self.mqa else self.head_dim,
                 eps=args.norm_eps,
             )
             if self.apply_qk_norm
@@ -157,14 +162,26 @@ class CustomAttn(nn.Module):
 
     def forward(self, x: torch.Tensor, is_causal=True, past_key_value=None, use_cache=False, attention_mask=None):
         batchsize, q_len, _ = x.shape
-        queries, keys, vals = self.in_proj(x).chunk(3, dim=-1)
+        if not self.mqa:
+            queries, keys, vals = self.in_proj(x).chunk(3, dim=-1)
+        else:
+            qkv = self.in_proj(x)
+            queries = qkv[..., : -2 * self.head_dim]
+            keys = qkv[..., -2 * self.head_dim : -self.head_dim]
+            vals = qkv[..., -self.head_dim :]
 
         queries = self.q_norm(queries)
         keys = self.k_norm(keys)
 
         queries = queries.view(batchsize, q_len, self.n_heads, self.head_dim)
-        keys = keys.view(batchsize, q_len, self.n_heads, self.head_dim)
-        vals = vals.view(batchsize, q_len, self.n_heads, self.head_dim)
+        if not self.mqa:
+            keys = keys.view(batchsize, q_len, self.n_heads, self.head_dim)
+            vals = vals.view(batchsize, q_len, self.n_heads, self.head_dim)
+        else:
+            keys = keys.view(batchsize, q_len, 1, self.head_dim)
+            vals = vals.view(batchsize, q_len, 1, self.head_dim)
+            keys = keys.expand(-1, -1, self.n_heads, -1)
+            vals = keys.expand(-1, -1, self.n_heads, -1)
 
         past_length = 0 if past_key_value is None else past_key_value[0].shape[1]
         queries, keys, vals = self.pos_embed(queries, keys, vals, offset=past_length)
@@ -260,8 +277,8 @@ class Block(nn.Module):
             self._ff_w2 = nn.Linear(self.hidden_dim, args.dim, bias=False)
             self.feed_forward = nn.Sequential(self._ff_w1, nn.GELU(approximate="none"), self._ff_w2)
         elif args.ffn_type == "gemma_geglu":
-            # this follows llama / lit llama -- go to multiple of 256
-            self.hidden_dim = 256 * ((int(2 * 4 * args.dim / 3) + 256 - 1) // 256)
+            # this is from the Griffin paper - hidden_dim is always 3 * dim
+            self.hidden_dim = 3 * args.dim
             self.feed_forward = GemmaMLP(args.dim, self.hidden_dim, layer_id)
         elif args.ffn_type == "moe":
             moe_args = MoEArgs(
@@ -469,6 +486,7 @@ def create_params(args):
             moe_capacity_factor=cfg.get("moe_capacity_factor", args.moe_capacity_factor),
             moe_freq=cfg.get("moe_freq", args.moe_freq),
             moe_top_k=cfg.get("moe_top_k", args.moe_top_k),
+            mqa="mqa" in args.attn_name,
         )
 
 
