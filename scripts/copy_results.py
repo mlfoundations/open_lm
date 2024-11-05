@@ -2,6 +2,7 @@ import os
 import shutil
 import argparse
 
+
 def check_directories(base_path, output_path):
     dirs_with_results = []
     dirs_without_results = []
@@ -23,23 +24,26 @@ def check_directories(base_path, output_path):
         result_file = contains_results_file(dir_path)
         if result_file:
             dirs_with_results.append(directory)
-            
+
             # Create the output directory if it doesn't exist
             os.makedirs(output_path, exist_ok=True)
 
             # Copy the result file to the destination
             dest_path = os.path.join(output_path, f"{directory}.json")
-            shutil.copyfile(result_file, dest_path)
+            if not os.path.exists(dest_path):
+                shutil.copyfile(result_file, dest_path)
 
         else:
             dirs_without_results.append(directory)
 
     return dirs_with_results, dirs_without_results
 
+
 def main(bucket="6"):
     # Define the base directory and output directory
-    base_directory = f'lm_eval_logs/mbm_paper_finetune{bucket}/'
-    output_directory = f'results/mbm_paper_texteval{bucket}/'
+    base_directory = f"lm_eval_logs/mbm_paper_finetune{bucket}/"
+    output_directory = f"results/mbm_paper_texteval{bucket}/"
+    os.makedirs(output_directory, exist_ok=True)
 
     # Get the directories that contain or don't contain "results_"
     with_results, without_results = check_directories(base_directory, output_directory)
@@ -50,12 +54,13 @@ def main(bucket="6"):
     for dir in without_results:
         print(dir)
 
+
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Copy results files from directories with 'results_' to a new directory.")
-    parser.add_argument("--bucket", type=str, default="6", help="Bucket number for the logs.")
+    parser = argparse.ArgumentParser(
+        description="Copy results files from directories with 'results_' to a new directory."
+    )
+    parser.add_argument("--bucket", type=str, default="1b", help="Bucket number for the logs.")
     args = parser.parse_args()
     if args.bucket != "":
         args.bucket = f"_{args.bucket}"
     main(args.bucket)
-
-

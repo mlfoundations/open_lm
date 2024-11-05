@@ -2,7 +2,7 @@
 python scripts/copy_results.py --bucket 1b
 aws s3 sync results/mbm_paper_texteval_1b/ s3://tri-ml-datasets/mbm/exp_data/eval/text_only/mbm_paper_texteval_1b/
 
-python scripts/copy_results.py --bucket 1
+python scripts/copy_results.py --bucket ""
 aws s3 sync results/mbm_paper_texteval_1/ s3://tri-ml-datasets/mbm/exp_data/eval/text_only/mbm_paper_texteval_1/
 
 python scripts/copy_results.py --bucket 2

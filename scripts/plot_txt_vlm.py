@@ -4,6 +4,7 @@ import re
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 import numpy as np
+import argparse
 
 def get_value_from_json(file_path, key_list):
     """Extracts the value from a JSON file given a list of nested keys."""
@@ -27,7 +28,8 @@ def extract_epoch_from_name(dirname):
     """Extracts the epoch number from the directory name (assumed format 'epochs=<number>')."""
     match = re.search(r'epochs=(\d+)', dirname)
     if match:
-        return int(match.group(1))
+        epoch = int(match.group(1))
+        return epoch
     return None
 
 
@@ -144,12 +146,13 @@ def plot_values(x_vals, y_vals, epoch_vals, mult_vals, x_label, y_label, plot_na
     cbar.set_ticklabels(sorted(set(epoch_vals)))
 
     # Generate the title based on key_list_1's second entry
-    title = f"{key_list_1[1]} acc_norm vs VQA accuracy (Colored by Epoch)"
+    title = f"{x_label} vs {y_label} (Colored by Epoch)"
     plt.title(title)
     plt.xlabel(x_label)
     plt.ylabel(y_label)
     plt.grid(True)
     plt.legend(loc='lower left')  # Add legend for mult shapes at the bottom left
+    print(f"Saving plot to {plot_name}")
     plt.savefig(plot_name)
     plt.show()
 
@@ -165,18 +168,26 @@ def main(base_directory_1, base_directory_2, key_list_1, key_list_2, name_exclud
     os.makedirs(f"results/mbm_plot_{bucket}/", exist_ok=True)
     plot_name = f'results/mbm_plot_{bucket}/{key_list_1[1]}_vs_{key_list_2[0]}{name_exc}{name_inc}.png'
 
-    x_label = f"{key_list_1[1]} acc_norm"
-    y_label = f"{key_list_2[0]} accuracy"
+    x_label = f"{key_list_1[1]} (text)"
+    y_label = f"{key_list_2[0]} (VLM)"
 
     # Plot the results with color mapping for epoch numbers
     plot_values(x_values, y_values, epoch_values, mult_values, x_label=x_label, y_label=y_label, plot_name=plot_name)
 
 # Example usage:
 if __name__ == "__main__":
-    bucket = "1b"
-    base_directory_1 = f'results/mbm_paper_texteval_{bucket}/'
-    base_directory_2 = f'results/mbm_paper_eval_{bucket}/aggregated/'
-    key_list_1 = ["results", "hellaswag", "acc_norm,none"]
-    key_list_2 = ["vqa-v2_vqa-v2-full", "accuracy"]
+    def parse_arguments():
+        parser = argparse.ArgumentParser(description='Plot values from JSON files.')
+        parser.add_argument('--bucket', type=str, default='1b', help='Bucket name')
+        parser.add_argument('--base_dir_1', type=str, default='results/mbm_paper_texteval_1b/', help='Base directory 1')
+        parser.add_argument('--base_dir_2', type=str, default='results/mbm_paper_eval_1b/aggregated/', help='Base directory 2')
+        parser.add_argument('--key_list_1', type=str, nargs='+', default=['', 'z-score', 'value'], help='Key list 1')
+        parser.add_argument('--key_list_2', type=str, nargs='+', default=['z-score', 'value'], help='Key list 2')
+        parser.add_argument('--name_exclude', type=str, nargs='+', default=[], help='Name exclude list')
+        parser.add_argument('--name_include', type=str, nargs='+', default=[], help='Name include list')
+        return parser.parse_args()
 
-    main(base_directory_1, base_directory_2, key_list_1, key_list_2, name_exclude=[], name_include=[])
+    if __name__ == "__main__":
+        args = parse_arguments()
+        print(args)
+        main(args.base_dir_1, args.base_dir_2, args.key_list_1, args.key_list_2, args.name_exclude, args.name_include)

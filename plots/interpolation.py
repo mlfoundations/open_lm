@@ -64,14 +64,14 @@ if __name__ == "__main__":
             label="OpenLM-1B" if "3B" in base else "OpenLM-3B",
         )
 
-    ax.set_xlabel("Base evaluation set (perplexity)", fontsize=12)
-    ax.set_ylabel("Chat evaluation set (perplexity)", fontsize=12)
+    ax.set_xlabel("Base evaluation set (perplexity)", fontsize=14)
+    ax.set_ylabel("Chat evaluation set (perplexity)", fontsize=14)
 
     ax.tick_params(axis="x", labelsize=11)
     ax.tick_params(axis="y", labelsize=11)
     ax.grid()
 
-    ax.legend(fontsize=12)
+    ax.legend(fontsize=14)
 
     # Add a colorbar
     cbar = plt.colorbar(scatter)

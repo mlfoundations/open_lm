@@ -13,299 +13,174 @@ export PYTHONPATH=/home/jean/codes/lm-evaluation-harness:/home/jean/codes/mbm-pr
 # ) &
 
 model_names=(
+    "llava-multimodal+datacomp1b_caption_dclm-0p10_0p90-1b-fused-siglip-warm=0-lr=0p0009788970261355868-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=4+stage-finetune+x7"
+    ##### 11
+    # "llava-multimodal+datacompdr1b_caption_llava_dclm-0p16_0p04_0p80-1b-fused-siglip-warm=0-lr=0p0009788970261355868-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=1+stage-finetune+x7"
+    # "llava-multimodal+datacompdr1b_caption_llava_dclm-0p16_0p04_0p80-1b-fused-siglip-warm=0-lr=0p0009788970261355868-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=2+stage-finetune+x7"
+    # "llava-multimodal+datacompdr1b_caption_llava_dclm-0p16_0p04_0p80-1b-fused-siglip-warm=0-lr=0p0009788970261355868-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=4+stage-finetune+x7"
+    # "llava-multimodal+datacompdr1b_caption_llava_dclm-0p16_0p04_0p80-1b-fused-siglip-warm=0-lr=0p0034466737184832607-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=1+stage-finetune+x7"
+    # "llava-multimodal+datacompdr1b_caption_llava_dclm-0p16_0p04_0p80-1b-fused-siglip-warm=0-lr=0p0034466737184832607-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=2+stage-finetune+x7"
+    # "llava-multimodal+datacompdr1b_caption_llava_dclm-0p16_0p04_0p80-1b-fused-siglip-warm=0-lr=0p0034466737184832607-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=4+stage-finetune+x7"
+    # "llava-multimodal+datacompdr1b_caption_llava_dclm-0p16_0p04_0p80-1b-fused-siglip-warm=0-lr=0p006499974971416897-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=1+stage-finetune+x7"
+    # "llava-multimodal+datacompdr1b_caption_llava_dclm-0p16_0p04_0p80-1b-fused-siglip-warm=0-lr=0p006499974971416897-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=2+stage-finetune+x7"
+    # "llava-multimodal+datacompdr1b_caption_llava_dclm-0p16_0p04_0p80-1b-fused-siglip-warm=0-lr=0p006499974971416897-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=4+stage-finetune+x7"
+    # "llava-multimodal+datacompdr1b_caption_llava_dclm-0p16_0p04_0p80-1b-fused-siglip-warm=0-lr=0p009080349589287376-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=1+stage-finetune+x7"
+    # "llava-multimodal+datacompdr1b_caption_llava_dclm-0p16_0p04_0p80-1b-fused-siglip-warm=0-lr=0p009080349589287376-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=2+stage-finetune+x7"
+    # "llava-multimodal+datacompdr1b_caption_llava_dclm-0p16_0p04_0p80-1b-fused-siglip-warm=0-lr=0p009080349589287376-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=4+stage-finetune+x7"
+    # "llava-multimodal+datacompdr1b_caption_llava_dclm-0p16_0p04_0p80-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=1+stage-finetune+x7"
+    # "llava-multimodal+datacompdr1b_caption_llava_dclm-0p16_0p04_0p80-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=2+stage-finetune+x7"
+    # "llava-multimodal+datacompdr1b_caption_llava_dclm-0p16_0p04_0p80-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=4+stage-finetune+x7"
+    # "llava-multimodal+datacompdr1b_caption_llava_dclm-0p16_0p04_0p80-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1-m=bucket6+epochs=1+stage-finetune+x7"
+    # "llava-multimodal+datacompdr1b_caption_llava_dclm-0p16_0p04_0p80-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1-m=bucket6+epochs=2+stage-finetune+x7"
+    # "llava-multimodal+datacompdr1b_caption_llava_dclm-0p16_0p04_0p80-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1-m=bucket6+epochs=4+stage-finetune+x7"
+    # "llava-multimodal+datacompdr1b_caption_dclm-0p20_0p80-1b-fused-siglip-warm=0-lr=0p0009788970261355868-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=1+stage-finetune+x7"
+    # "llava-multimodal+datacompdr1b_caption_dclm-0p20_0p80-1b-fused-siglip-warm=0-lr=0p0009788970261355868-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=2+stage-finetune+x7"
+    # "llava-multimodal+datacompdr1b_caption_dclm-0p20_0p80-1b-fused-siglip-warm=0-lr=0p0009788970261355868-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=4+stage-finetune+x7"
+    # "llava-multimodal+datacompdr1b_caption_dclm-0p20_0p80-1b-fused-siglip-warm=0-lr=0p0034466737184832607-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=1+stage-finetune+x7"
+    # "llava-multimodal+datacompdr1b_caption_dclm-0p20_0p80-1b-fused-siglip-warm=0-lr=0p0034466737184832607-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=2+stage-finetune+x7"
+    # "llava-multimodal+datacompdr1b_caption_dclm-0p20_0p80-1b-fused-siglip-warm=0-lr=0p0034466737184832607-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=4+stage-finetune+x7"
+    # "llava-multimodal+datacompdr1b_caption_dclm-0p20_0p80-1b-fused-siglip-warm=0-lr=0p006499974971416897-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=1+stage-finetune+x7"
+    # "llava-multimodal+datacompdr1b_caption_dclm-0p20_0p80-1b-fused-siglip-warm=0-lr=0p006499974971416897-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=2+stage-finetune+x7"
+    # "llava-multimodal+datacompdr1b_caption_dclm-0p20_0p80-1b-fused-siglip-warm=0-lr=0p006499974971416897-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=4+stage-finetune+x7"
+    # "llava-multimodal+datacompdr1b_caption_dclm-0p20_0p80-1b-fused-siglip-warm=0-lr=0p009080349589287376-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=1+stage-finetune+x7"
+    
 
-    ############################################### 8
-    # "llava-multimodal+datacompdr1b_caption-1b-fused-siglip-warm=0-lr=0p0009788970261355868-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=1+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption-1b-fused-siglip-warm=0-lr=0p0009788970261355868-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=2+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption-1b-fused-siglip-warm=0-lr=0p0009788970261355868-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=3+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption-1b-fused-siglip-warm=0-lr=0p0009788970261355868-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=4+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption-1b-fused-siglip-warm=0-lr=0p0034466737184832607-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=1+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption-1b-fused-siglip-warm=0-lr=0p0034466737184832607-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=2+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption-1b-fused-siglip-warm=0-lr=0p0034466737184832607-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=3+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption-1b-fused-siglip-warm=0-lr=0p0034466737184832607-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=4+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption-1b-fused-siglip-warm=0-lr=0p006499974971416897-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=1+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption-1b-fused-siglip-warm=0-lr=0p006499974971416897-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=2+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption-1b-fused-siglip-warm=0-lr=0p006499974971416897-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=3+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption-1b-fused-siglip-warm=0-lr=0p006499974971416897-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=4+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption-1b-fused-siglip-warm=0-lr=0p009080349589287376-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=1+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption-1b-fused-siglip-warm=0-lr=0p009080349589287376-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=2+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption-1b-fused-siglip-warm=0-lr=0p009080349589287376-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=3+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption-1b-fused-siglip-warm=0-lr=0p009080349589287376-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=4+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=1+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=2+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=3+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=4+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption_dclm-0p01_0p99-1b-fused-siglip-warm=0-lr=0p0009788970261355868-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=1+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption_dclm-0p01_0p99-1b-fused-siglip-warm=0-lr=0p0009788970261355868-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=2+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption_dclm-0p01_0p99-1b-fused-siglip-warm=0-lr=0p0009788970261355868-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=3+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption_dclm-0p01_0p99-1b-fused-siglip-warm=0-lr=0p0009788970261355868-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=4+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption_dclm-0p01_0p99-1b-fused-siglip-warm=0-lr=0p0034466737184832607-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=1+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption_dclm-0p01_0p99-1b-fused-siglip-warm=0-lr=0p0034466737184832607-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=2+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption_dclm-0p01_0p99-1b-fused-siglip-warm=0-lr=0p0034466737184832607-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=3+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption_dclm-0p01_0p99-1b-fused-siglip-warm=0-lr=0p0034466737184832607-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=4+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption_dclm-0p01_0p99-1b-fused-siglip-warm=0-lr=0p006499974971416897-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=1+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption_dclm-0p01_0p99-1b-fused-siglip-warm=0-lr=0p006499974971416897-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=2+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption_dclm-0p01_0p99-1b-fused-siglip-warm=0-lr=0p006499974971416897-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=3+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption_dclm-0p01_0p99-1b-fused-siglip-warm=0-lr=0p006499974971416897-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=4+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption_dclm-0p01_0p99-1b-fused-siglip-warm=0-lr=0p009080349589287376-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=1+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption_dclm-0p01_0p99-1b-fused-siglip-warm=0-lr=0p009080349589287376-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=2+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption_dclm-0p01_0p99-1b-fused-siglip-warm=0-lr=0p009080349589287376-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=3+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption_dclm-0p01_0p99-1b-fused-siglip-warm=0-lr=0p009080349589287376-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=4+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption_dclm-0p01_0p99-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=1+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption_dclm-0p01_0p99-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=2+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption_dclm-0p01_0p99-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=3+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption_dclm-0p01_0p99-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=4+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption_dclm-0p05_0p95-1b-fused-siglip-warm=0-lr=0p0009788970261355868-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=1+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption_dclm-0p05_0p95-1b-fused-siglip-warm=0-lr=0p0009788970261355868-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=2+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption_dclm-0p05_0p95-1b-fused-siglip-warm=0-lr=0p0009788970261355868-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=3+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption_dclm-0p05_0p95-1b-fused-siglip-warm=0-lr=0p0009788970261355868-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=4+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption_dclm-0p05_0p95-1b-fused-siglip-warm=0-lr=0p0034466737184832607-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=1+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption_dclm-0p05_0p95-1b-fused-siglip-warm=0-lr=0p0034466737184832607-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=2+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption_dclm-0p05_0p95-1b-fused-siglip-warm=0-lr=0p0034466737184832607-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=3+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption_dclm-0p05_0p95-1b-fused-siglip-warm=0-lr=0p0034466737184832607-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=4+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption_dclm-0p05_0p95-1b-fused-siglip-warm=0-lr=0p006499974971416897-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=1+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption_dclm-0p05_0p95-1b-fused-siglip-warm=0-lr=0p006499974971416897-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=2+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption_dclm-0p05_0p95-1b-fused-siglip-warm=0-lr=0p006499974971416897-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=3+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption_dclm-0p05_0p95-1b-fused-siglip-warm=0-lr=0p006499974971416897-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=4+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption_dclm-0p05_0p95-1b-fused-siglip-warm=0-lr=0p009080349589287376-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=1+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption_dclm-0p05_0p95-1b-fused-siglip-warm=0-lr=0p009080349589287376-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=2+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption_dclm-0p05_0p95-1b-fused-siglip-warm=0-lr=0p009080349589287376-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=3+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption_dclm-0p05_0p95-1b-fused-siglip-warm=0-lr=0p009080349589287376-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=4+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption_dclm-0p05_0p95-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=1+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption_dclm-0p05_0p95-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=2+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption_dclm-0p05_0p95-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=3+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption_dclm-0p05_0p95-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=4+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption_dclm-0p05_0p95-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1-m=bucket6+epochs=3+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption_dclm-0p05_0p95-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1-m=bucket6+epochs=4+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption_dclm-0p10_0p90-1b-fused-siglip-warm=0-lr=0p0009788970261355868-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=1+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption_dclm-0p10_0p90-1b-fused-siglip-warm=0-lr=0p0009788970261355868-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=2+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption_dclm-0p10_0p90-1b-fused-siglip-warm=0-lr=0p0009788970261355868-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=3+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption_dclm-0p10_0p90-1b-fused-siglip-warm=0-lr=0p0009788970261355868-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=4+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption_dclm-0p10_0p90-1b-fused-siglip-warm=0-lr=0p0034466737184832607-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=1+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption_dclm-0p10_0p90-1b-fused-siglip-warm=0-lr=0p0034466737184832607-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=2+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption_dclm-0p10_0p90-1b-fused-siglip-warm=0-lr=0p0034466737184832607-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=3+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption_dclm-0p10_0p90-1b-fused-siglip-warm=0-lr=0p0034466737184832607-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=4+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption_dclm-0p10_0p90-1b-fused-siglip-warm=0-lr=0p006499974971416897-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=1+stage-finetune+x7"
+    #### 8
+    # "llava-multimodal+datacompdr1b_caption_dclm-0p20_0p80-1b-fused-siglip-warm=0-lr=0p009080349589287376-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=2+stage-finetune+x7"
+    # "llava-multimodal+datacompdr1b_caption_dclm-0p20_0p80-1b-fused-siglip-warm=0-lr=0p009080349589287376-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=4+stage-finetune+x7"
+    # "llava-multimodal+datacompdr1b_caption_dclm-0p20_0p80-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=1+stage-finetune+x7"
+    # "llava-multimodal+datacompdr1b_caption_dclm-0p20_0p80-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=2+stage-finetune+x7"
+    # "llava-multimodal+datacompdr1b_caption_dclm-0p20_0p80-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=4+stage-finetune+x7"
+    # "llava-multimodal+datacompdr1b_caption_dclm-0p20_0p80-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1-m=bucket6+epochs=1+stage-finetune+x7"
+    # "llava-multimodal+datacompdr1b_caption_dclm-0p20_0p80-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1-m=bucket6+epochs=2+stage-finetune+x7"
+    # "llava-multimodal+datacompdr1b_caption_dclm-0p20_0p80-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1-m=bucket6+epochs=4+stage-finetune+x7"
+    # "llava-multimodal+llava_dclm-0p20_0p80-1b-fused-siglip-warm=0-lr=0p0009788970261355868-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=1+stage-finetune+x7"
+    # "llava-multimodal+llava_dclm-0p20_0p80-1b-fused-siglip-warm=0-lr=0p0009788970261355868-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=2+stage-finetune+x7"
+    # "llava-multimodal+llava_dclm-0p20_0p80-1b-fused-siglip-warm=0-lr=0p0009788970261355868-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=4+stage-finetune+x7"
+    # "llava-multimodal+llava_dclm-0p20_0p80-1b-fused-siglip-warm=0-lr=0p0034466737184832607-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=1+stage-finetune+x7"
+    # "llava-multimodal+llava_dclm-0p20_0p80-1b-fused-siglip-warm=0-lr=0p0034466737184832607-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=2+stage-finetune+x7"
+    # "llava-multimodal+llava_dclm-0p20_0p80-1b-fused-siglip-warm=0-lr=0p0034466737184832607-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=4+stage-finetune+x7"
+    # "llava-multimodal+llava_dclm-0p20_0p80-1b-fused-siglip-warm=0-lr=0p006499974971416897-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=1+stage-finetune+x7"
+    # "llava-multimodal+llava_dclm-0p20_0p80-1b-fused-siglip-warm=0-lr=0p006499974971416897-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=2+stage-finetune+x7"
+    # "llava-multimodal+llava_dclm-0p20_0p80-1b-fused-siglip-warm=0-lr=0p006499974971416897-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=4+stage-finetune+x7"
+    # "llava-multimodal+llava_dclm-0p20_0p80-1b-fused-siglip-warm=0-lr=0p009080349589287376-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=1+stage-finetune+x7"
+    # "llava-multimodal+llava_dclm-0p20_0p80-1b-fused-siglip-warm=0-lr=0p009080349589287376-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=2+stage-finetune+x7"
+    # "llava-multimodal+llava_dclm-0p20_0p80-1b-fused-siglip-warm=0-lr=0p009080349589287376-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=4+stage-finetune+x7"
+    # "llava-multimodal+llava_dclm-0p20_0p80-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=1+stage-finetune+x7"
+    # "llava-multimodal+llava_dclm-0p20_0p80-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=2+stage-finetune+x7"
+    # "llava-multimodal+llava_dclm-0p20_0p80-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=4+stage-finetune+x7"
+    # "llava-multimodal+llava_dclm-0p20_0p80-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1-m=bucket6+epochs=1+stage-finetune+x7"
+    # "llava-multimodal+llava_dclm-0p20_0p80-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1-m=bucket6+epochs=2+stage-finetune+x7"
+    # "llava-multimodal+llava_dclm-0p20_0p80-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1-m=bucket6+epochs=4+stage-finetune+x7"
 
-####################### 4
+#### 2
 
-    # "llava-multimodal+datacompdr1b_caption_dclm-0p10_0p90-1b-fused-siglip-warm=0-lr=0p006499974971416897-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=2+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption_dclm-0p10_0p90-1b-fused-siglip-warm=0-lr=0p006499974971416897-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=3+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption_dclm-0p10_0p90-1b-fused-siglip-warm=0-lr=0p006499974971416897-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=4+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption_dclm-0p10_0p90-1b-fused-siglip-warm=0-lr=0p009080349589287376-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=1+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption_dclm-0p10_0p90-1b-fused-siglip-warm=0-lr=0p009080349589287376-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=2+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption_dclm-0p10_0p90-1b-fused-siglip-warm=0-lr=0p009080349589287376-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=3+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption_dclm-0p10_0p90-1b-fused-siglip-warm=0-lr=0p009080349589287376-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=4+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption_dclm-0p10_0p90-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=1+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption_dclm-0p10_0p90-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=2+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption_dclm-0p10_0p90-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=3+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption_dclm-0p10_0p90-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=4+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption_llava-0p80_0p20-1b-fused-siglip-warm=0-lr=0p0009788970261355868-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=1+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption_llava-0p80_0p20-1b-fused-siglip-warm=0-lr=0p0009788970261355868-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=2+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption_llava-0p80_0p20-1b-fused-siglip-warm=0-lr=0p0009788970261355868-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=3+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption_llava-0p80_0p20-1b-fused-siglip-warm=0-lr=0p0009788970261355868-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=4+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption_llava-0p80_0p20-1b-fused-siglip-warm=0-lr=0p0034466737184832607-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=1+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption_llava-0p80_0p20-1b-fused-siglip-warm=0-lr=0p0034466737184832607-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=2+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption_llava-0p80_0p20-1b-fused-siglip-warm=0-lr=0p0034466737184832607-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=3+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption_llava-0p80_0p20-1b-fused-siglip-warm=0-lr=0p0034466737184832607-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=4+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption_llava-0p80_0p20-1b-fused-siglip-warm=0-lr=0p006499974971416897-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=1+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption_llava-0p80_0p20-1b-fused-siglip-warm=0-lr=0p006499974971416897-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=2+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption_llava-0p80_0p20-1b-fused-siglip-warm=0-lr=0p006499974971416897-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=3+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption_llava-0p80_0p20-1b-fused-siglip-warm=0-lr=0p006499974971416897-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=4+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption_llava-0p80_0p20-1b-fused-siglip-warm=0-lr=0p006499974971416897-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=5+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption_llava-0p80_0p20-1b-fused-siglip-warm=0-lr=0p009080349589287376-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=1+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption_llava-0p80_0p20-1b-fused-siglip-warm=0-lr=0p009080349589287376-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=2+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption_llava-0p80_0p20-1b-fused-siglip-warm=0-lr=0p009080349589287376-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=3+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption_llava-0p80_0p20-1b-fused-siglip-warm=0-lr=0p009080349589287376-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=4+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption_llava-0p80_0p20-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=1+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption_llava-0p80_0p20-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=2+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption_llava-0p80_0p20-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=3+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption_llava-0p80_0p20-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=4+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption_llava_dclm-0p008_0p002_0p99-1b-fused-siglip-warm=0-lr=0p0009788970261355868-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=1+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption_llava_dclm-0p008_0p002_0p99-1b-fused-siglip-warm=0-lr=0p0009788970261355868-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=2+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption_llava_dclm-0p008_0p002_0p99-1b-fused-siglip-warm=0-lr=0p0009788970261355868-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=3+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption_llava_dclm-0p008_0p002_0p99-1b-fused-siglip-warm=0-lr=0p0009788970261355868-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=4+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption_llava_dclm-0p008_0p002_0p99-1b-fused-siglip-warm=0-lr=0p0034466737184832607-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=1+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption_llava_dclm-0p008_0p002_0p99-1b-fused-siglip-warm=0-lr=0p0034466737184832607-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=2+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption_llava_dclm-0p008_0p002_0p99-1b-fused-siglip-warm=0-lr=0p0034466737184832607-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=3+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption_llava_dclm-0p008_0p002_0p99-1b-fused-siglip-warm=0-lr=0p0034466737184832607-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=4+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption_llava_dclm-0p008_0p002_0p99-1b-fused-siglip-warm=0-lr=0p006499974971416897-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=1+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption_llava_dclm-0p008_0p002_0p99-1b-fused-siglip-warm=0-lr=0p006499974971416897-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=2+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption_llava_dclm-0p008_0p002_0p99-1b-fused-siglip-warm=0-lr=0p006499974971416897-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=3+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption_llava_dclm-0p008_0p002_0p99-1b-fused-siglip-warm=0-lr=0p006499974971416897-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=4+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption_llava_dclm-0p008_0p002_0p99-1b-fused-siglip-warm=0-lr=0p006499974971416897-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=5+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption_llava_dclm-0p008_0p002_0p99-1b-fused-siglip-warm=0-lr=0p009080349589287376-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=1+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption_llava_dclm-0p008_0p002_0p99-1b-fused-siglip-warm=0-lr=0p009080349589287376-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=2+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption_llava_dclm-0p008_0p002_0p99-1b-fused-siglip-warm=0-lr=0p009080349589287376-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=3+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption_llava_dclm-0p008_0p002_0p99-1b-fused-siglip-warm=0-lr=0p009080349589287376-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=4+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption_llava_dclm-0p008_0p002_0p99-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=1+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption_llava_dclm-0p008_0p002_0p99-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=2+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption_llava_dclm-0p008_0p002_0p99-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=3+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption_llava_dclm-0p008_0p002_0p99-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=4+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption_llava_dclm-0p04_0p01_0p95-1b-fused-siglip-warm=0-lr=0p0009788970261355868-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=1+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption_llava_dclm-0p04_0p01_0p95-1b-fused-siglip-warm=0-lr=0p0009788970261355868-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=2+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption_llava_dclm-0p04_0p01_0p95-1b-fused-siglip-warm=0-lr=0p0009788970261355868-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=3+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption_llava_dclm-0p04_0p01_0p95-1b-fused-siglip-warm=0-lr=0p0009788970261355868-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=4+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption_llava_dclm-0p04_0p01_0p95-1b-fused-siglip-warm=0-lr=0p0034466737184832607-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=1+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption_llava_dclm-0p04_0p01_0p95-1b-fused-siglip-warm=0-lr=0p0034466737184832607-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=2+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption_llava_dclm-0p04_0p01_0p95-1b-fused-siglip-warm=0-lr=0p0034466737184832607-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=3+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption_llava_dclm-0p04_0p01_0p95-1b-fused-siglip-warm=0-lr=0p0034466737184832607-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=4+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption_llava_dclm-0p04_0p01_0p95-1b-fused-siglip-warm=0-lr=0p006499974971416897-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=1+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption_llava_dclm-0p04_0p01_0p95-1b-fused-siglip-warm=0-lr=0p006499974971416897-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=2+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption_llava_dclm-0p04_0p01_0p95-1b-fused-siglip-warm=0-lr=0p006499974971416897-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=3+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption_llava_dclm-0p04_0p01_0p95-1b-fused-siglip-warm=0-lr=0p006499974971416897-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=4+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption_llava_dclm-0p04_0p01_0p95-1b-fused-siglip-warm=0-lr=0p006499974971416897-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=5+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption_llava_dclm-0p04_0p01_0p95-1b-fused-siglip-warm=0-lr=0p009080349589287376-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=1+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption_llava_dclm-0p04_0p01_0p95-1b-fused-siglip-warm=0-lr=0p009080349589287376-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=2+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption_llava_dclm-0p04_0p01_0p95-1b-fused-siglip-warm=0-lr=0p009080349589287376-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=3+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption_llava_dclm-0p04_0p01_0p95-1b-fused-siglip-warm=0-lr=0p009080349589287376-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=4+stage-finetune+x7"
-    # "llava-multimodal+datacompdr1b_caption_llava_dclm-0p04_0p01_0p95-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=1+stage-finetune+x7"
+# llava-multimodal+datacompdr1b_caption_llava_dclm-0p008_0p002_0p99-1b-fused-siglip-warm=0-lr=0p009080349589287376-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=4+stage-finetune+x7
+# llava-multimodal+datacompdr1b_caption_dclm-0p10_0p90-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1-m=bucket6+epochs=2+stage-finetune+x7
+# llava-multimodal+datacompdr1b_caption_llava_dclm-0p008_0p002_0p99-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1-m=bucket6+epochs=2+stage-finetune+x7
+# llava-multimodal+datacompdr1b_caption_dclm-0p10_0p90-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1-m=bucket6+epochs=1+stage-finetune+x7
+# llava-multimodal+datacompdr1b_caption-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1-m=bucket6+epochs=3+stage-finetune+x7
+# llava-multimodal+llava_dclm-0p05_0p95-1b-fused-siglip-warm=0-lr=0p0009788970261355868-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=4+stage-finetune+x7
+# llava-multimodal+datacompdr1b_caption_llava-0p80_0p20-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=4+stage-finetune+x7
+# llava-multimodal+datacompdr1b_caption_llava-0p80_0p20-1b-fused-siglip-warm=0-lr=0p009080349589287376-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=2+stage-finetune+x7
+# llava-multimodal+datacompdr1b_caption_dclm-0p01_0p99-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1-m=bucket6+epochs=3+stage-finetune+x7
+# llava-multimodal+datacompdr1b_caption_dclm-0p05_0p95-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1-m=bucket6+epochs=1+stage-finetune+x7
+# llava-multimodal+datacompdr1b_caption_llava_dclm-0p04_0p01_0p95-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1-m=bucket6+epochs=1+stage-finetune+x7
+# llava-multimodal+datacompdr1b_caption_dclm-0p01_0p99-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1-m=bucket6+epochs=4+stage-finetune+x7
+# llava-multimodal+datacompdr1b_caption_llava_dclm-0p04_0p01_0p95-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1-m=bucket6+epochs=2+stage-finetune+x7
+# llava-multimodal+datacompdr1b_caption_dclm-0p10_0p90-1b-fused-siglip-warm=0-lr=0p009080349589287376-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=2+stage-finetune+x7
+# llava-multimodal+datacompdr1b_caption_llava_dclm-0p008_0p002_0p99-1b-fused-siglip-warm=0-lr=0p0009788970261355868-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=3+stage-finetune+x7
+# llava-multimodal+datacompdr1b_caption_llava-0p80_0p20-1b-fused-siglip-warm=0-lr=0p006499974971416897-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=2+stage-finetune+x7
+# llava-multimodal+datacompdr1b_caption_llava_dclm-0p08_0p02_0p90-1b-fused-siglip-warm=0-lr=0p0009788970261355868-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=2+stage-finetune+x7
+# llava-multimodal+datacompdr1b_caption_llava-0p80_0p20-1b-fused-siglip-warm=0-lr=0p009080349589287376-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=1+stage-finetune+x7
+# llava-multimodal+datacompdr1b_caption_dclm-0p10_0p90-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=1+stage-finetune+x7
+# llava-multimodal+datacompdr1b_caption_llava_dclm-0p04_0p01_0p95-1b-fused-siglip-warm=0-lr=0p0034466737184832607-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=4+stage-finetune+x7
+# llava-multimodal+datacompdr1b_caption_llava_dclm-0p04_0p01_0p95-1b-fused-siglip-warm=0-lr=0p006499974971416897-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=3+stage-finetune+x7
+# llava-multimodal+datacompdr1b_caption_llava_dclm-0p008_0p002_0p99-1b-fused-siglip-warm=0-lr=0p009080349589287376-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=3+stage-finetune+x7
+# llava-multimodal+datacompdr1b_caption_llava_dclm-0p008_0p002_0p99-1b-fused-siglip-warm=0-lr=0p0034466737184832607-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=3+stage-finetune+x7
+# llava-multimodal+datacompdr1b_caption_llava_dclm-0p04_0p01_0p95-1b-fused-siglip-warm=0-lr=0p006499974971416897-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=2+stage-finetune+x7
+# llava-multimodal+datacompdr1b_caption_dclm-0p01_0p99-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1-m=bucket6+epochs=1+stage-finetune+x7
+# llava-multimodal+datacompdr1b_caption_llava_dclm-0p008_0p002_0p99-1b-fused-siglip-warm=0-lr=0p006499974971416897-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=1+stage-finetune+x7
+# llava-multimodal+datacompdr1b_caption_llava_dclm-0p04_0p01_0p95-1b-fused-siglip-warm=0-lr=0p0009788970261355868-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=4+stage-finetune+x7
+# llava-multimodal+datacompdr1b_caption_llava-0p80_0p20-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=2+stage-finetune+x7
+# llava-multimodal+datacompdr1b_caption_dclm-0p10_0p90-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=4+stage-finetune+x7
+# llava-multimodal+datacompdr1b_caption_llava_dclm-0p008_0p002_0p99-1b-fused-siglip-warm=0-lr=0p009080349589287376-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=2+stage-finetune+x7
+# llava-multimodal+datacompdr1b_caption_llava_dclm-0p04_0p01_0p95-1b-fused-siglip-warm=0-lr=0p009080349589287376-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=4+stage-finetune+x7
+# llava-multimodal+datacompdr1b_caption_dclm-0p10_0p90-1b-fused-siglip-warm=0-lr=0p009080349589287376-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=3+stage-finetune+x7
+# llava-multimodal+datacompdr1b_caption_llava_dclm-0p008_0p002_0p99-1b-fused-siglip-warm=0-lr=0p006499974971416897-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=2+stage-finetune+x7
+# llava-multimodal+datacompdr1b_caption_llava-0p80_0p20-1b-fused-siglip-warm=0-lr=0p0009788970261355868-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=4+stage-finetune+x7
+# llava-multimodal+datacompdr1b_caption-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1-m=bucket6+epochs=1+stage-finetune+x7
+# llava-multimodal+datacompdr1b_caption_llava_dclm-0p04_0p01_0p95-1b-fused-siglip-warm=0-lr=0p009080349589287376-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=2+stage-finetune+x7
+# llava-multimodal+datacompdr1b_caption_llava-0p80_0p20-1b-fused-siglip-warm=0-lr=0p006499974971416897-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=4+stage-finetune+x7
+# llava-multimodal+datacompdr1b_caption_llava_dclm-0p008_0p002_0p99-1b-fused-siglip-warm=0-lr=0p009080349589287376-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=1+stage-finetune+x7
+# llava-multimodal+datacompdr1b_caption_llava-0p80_0p20-1b-fused-siglip-warm=0-lr=0p0034466737184832607-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=3+stage-finetune+x7
+# llava-multimodal+datacompdr1b_caption_llava_dclm-0p008_0p002_0p99-1b-fused-siglip-warm=0-lr=0p0034466737184832607-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=2+stage-finetune+x7
+# llava-multimodal+llava_dclm-0p05_0p95-1b-fused-siglip-warm=0-lr=0p0009788970261355868-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=3+stage-finetune+x7
+# llava-multimodal+datacompdr1b_caption_llava_dclm-0p008_0p002_0p99-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=4+stage-finetune+x7
+# llava-multimodal+datacompdr1b_caption-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1-m=bucket6+epochs=2+stage-finetune+x7
+# llava-multimodal+datacompdr1b_caption_llava_dclm-0p08_0p02_0p90-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1-m=bucket6+epochs=4+stage-finetune+x7
+# llava-multimodal+datacompdr1b_caption_llava_dclm-0p04_0p01_0p95-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1-m=bucket6+epochs=3+stage-finetune+x7
+# llava-multimodal+datacompdr1b_caption_llava_dclm-0p08_0p02_0p90-1b-fused-siglip-warm=0-lr=0p0009788970261355868-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=4+stage-finetune+x7
+# llava-multimodal+datacompdr1b_caption_llava_dclm-0p008_0p002_0p99-1b-fused-siglip-warm=0-lr=0p006499974971416897-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=5+stage-finetune+x7
+# llava-multimodal+llava_dclm-0p01_0p99-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=1+stage-finetune+x7
+# llava-multimodal+datacompdr1b_caption_dclm-0p10_0p90-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1-m=bucket6+epochs=3+stage-finetune+x7
+# llava-multimodal+datacompdr1b_caption_llava_dclm-0p08_0p02_0p90-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1-m=bucket6+epochs=2+stage-finetune+x7
+# llava-multimodal+datacompdr1b_caption_llava-0p80_0p20-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1-m=bucket6+epochs=4+stage-finetune+x7
+# llava-multimodal+datacompdr1b_caption_llava_dclm-0p08_0p02_0p90-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1-m=bucket6+epochs=3+stage-finetune+x7
 
-############################################################################################################ 8
+######## 11
 
-    "llava-multimodal+datacompdr1b_caption_llava_dclm-0p04_0p01_0p95-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=2+stage-finetune+x7"
-    "llava-multimodal+datacompdr1b_caption_llava_dclm-0p04_0p01_0p95-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=3+stage-finetune+x7"
-    "llava-multimodal+datacompdr1b_caption_llava_dclm-0p04_0p01_0p95-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=4+stage-finetune+x7"
-    "llava-multimodal+datacompdr1b_caption_llava_dclm-0p08_0p02_0p90-1b-fused-siglip-warm=0-lr=0p0034466737184832607-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=1+stage-finetune+x7"
-    "llava-multimodal+datacompdr1b_caption_llava_dclm-0p08_0p02_0p90-1b-fused-siglip-warm=0-lr=0p0034466737184832607-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=2+stage-finetune+x7"
-    "llava-multimodal+datacompdr1b_caption_llava_dclm-0p08_0p02_0p90-1b-fused-siglip-warm=0-lr=0p0034466737184832607-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=3+stage-finetune+x7"
-    "llava-multimodal+datacompdr1b_caption_llava_dclm-0p08_0p02_0p90-1b-fused-siglip-warm=0-lr=0p0034466737184832607-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=4+stage-finetune+x7"
-    "llava-multimodal+datacompdr1b_caption_llava_dclm-0p08_0p02_0p90-1b-fused-siglip-warm=0-lr=0p006499974971416897-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=1+stage-finetune+x7"
-    "llava-multimodal+datacompdr1b_caption_llava_dclm-0p08_0p02_0p90-1b-fused-siglip-warm=0-lr=0p006499974971416897-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=2+stage-finetune+x7"
-    "llava-multimodal+datacompdr1b_caption_llava_dclm-0p08_0p02_0p90-1b-fused-siglip-warm=0-lr=0p006499974971416897-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=3+stage-finetune+x7"
-    "llava-multimodal+datacompdr1b_caption_llava_dclm-0p08_0p02_0p90-1b-fused-siglip-warm=0-lr=0p006499974971416897-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=4+stage-finetune+x7"
-    "llava-multimodal+datacompdr1b_caption_llava_dclm-0p08_0p02_0p90-1b-fused-siglip-warm=0-lr=0p006499974971416897-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=5+stage-finetune+x7"
-    "llava-multimodal+datacompdr1b_caption_llava_dclm-0p08_0p02_0p90-1b-fused-siglip-warm=0-lr=0p009080349589287376-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=1+stage-finetune+x7"
-    "llava-multimodal+datacompdr1b_caption_llava_dclm-0p08_0p02_0p90-1b-fused-siglip-warm=0-lr=0p009080349589287376-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=2+stage-finetune+x7"
-    "llava-multimodal+datacompdr1b_caption_llava_dclm-0p08_0p02_0p90-1b-fused-siglip-warm=0-lr=0p009080349589287376-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=3+stage-finetune+x7"
-    "llava-multimodal+datacompdr1b_caption_llava_dclm-0p08_0p02_0p90-1b-fused-siglip-warm=0-lr=0p009080349589287376-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=4+stage-finetune+x7"
-    "llava-multimodal+datacompdr1b_caption_llava_dclm-0p08_0p02_0p90-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=1+stage-finetune+x7"
-    "llava-multimodal+datacompdr1b_caption_llava_dclm-0p08_0p02_0p90-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=2+stage-finetune+x7"
-    "llava-multimodal+datacompdr1b_caption_llava_dclm-0p08_0p02_0p90-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=3+stage-finetune+x7"
-    "llava-multimodal+datacompdr1b_caption_llava_dclm-0p08_0p02_0p90-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=4+stage-finetune+x7"
-    "llava-multimodal+dclm-1b-fused-siglip-warm=0-lr=0p0009788970261355868-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=1+stage-finetune+x7"
-    "llava-multimodal+dclm-1b-fused-siglip-warm=0-lr=0p0009788970261355868-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=2+stage-finetune+x7"
-    "llava-multimodal+dclm-1b-fused-siglip-warm=0-lr=0p0009788970261355868-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=3+stage-finetune+x7"
-    "llava-multimodal+dclm-1b-fused-siglip-warm=0-lr=0p0009788970261355868-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=4+stage-finetune+x7"
-    "llava-multimodal+dclm-1b-fused-siglip-warm=0-lr=0p0034466737184832607-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=1+stage-finetune+x7"
-    "llava-multimodal+dclm-1b-fused-siglip-warm=0-lr=0p0034466737184832607-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=2+stage-finetune+x7"
-    "llava-multimodal+dclm-1b-fused-siglip-warm=0-lr=0p0034466737184832607-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=3+stage-finetune+x7"
-    "llava-multimodal+dclm-1b-fused-siglip-warm=0-lr=0p0034466737184832607-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=4+stage-finetune+x7"
-    "llava-multimodal+dclm-1b-fused-siglip-warm=0-lr=0p006499974971416897-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=1+stage-finetune+x7"
-    "llava-multimodal+dclm-1b-fused-siglip-warm=0-lr=0p006499974971416897-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=2+stage-finetune+x7"
-    "llava-multimodal+dclm-1b-fused-siglip-warm=0-lr=0p006499974971416897-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=3+stage-finetune+x7"
-    "llava-multimodal+dclm-1b-fused-siglip-warm=0-lr=0p006499974971416897-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=4+stage-finetune+x7"
-    "llava-multimodal+dclm-1b-fused-siglip-warm=0-lr=0p006499974971416897-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=5+stage-finetune+x7"
-    "llava-multimodal+dclm-1b-fused-siglip-warm=0-lr=0p009080349589287376-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=1+stage-finetune+x7"
-    "llava-multimodal+dclm-1b-fused-siglip-warm=0-lr=0p009080349589287376-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=2+stage-finetune+x7"
-    "llava-multimodal+dclm-1b-fused-siglip-warm=0-lr=0p009080349589287376-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=3+stage-finetune+x7"
-    "llava-multimodal+dclm-1b-fused-siglip-warm=0-lr=0p009080349589287376-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=4+stage-finetune+x7"
-    "llava-multimodal+dclm-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=1+stage-finetune+x7"
-    "llava-multimodal+dclm-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=2+stage-finetune+x7"
-    "llava-multimodal+dclm-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=3+stage-finetune+x7"
-    "llava-multimodal+dclm-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=4+stage-finetune+x7"
-    "llava-multimodal+dclm-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1-m=bucket6+epochs=1+stage-finetune+x7"
-    "llava-multimodal+dclm-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1-m=bucket6+epochs=2+stage-finetune+x7"
-    "llava-multimodal+dclm-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1-m=bucket6+epochs=3+stage-finetune+x7"
-    "llava-multimodal+dclm-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1-m=bucket6+epochs=4+stage-finetune+x7"
-    "llava-multimodal+llava-1b-fused-siglip-warm=0-lr=0p0009788970261355868-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=1+stage-finetune+x7"
-    "llava-multimodal+llava-1b-fused-siglip-warm=0-lr=0p0009788970261355868-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=2+stage-finetune+x7"
-    "llava-multimodal+llava-1b-fused-siglip-warm=0-lr=0p0009788970261355868-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=3+stage-finetune+x7"
-    "llava-multimodal+llava-1b-fused-siglip-warm=0-lr=0p0009788970261355868-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=4+stage-finetune+x7"
-    "llava-multimodal+llava-1b-fused-siglip-warm=0-lr=0p0034466737184832607-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=1+stage-finetune+x7"
-    "llava-multimodal+llava-1b-fused-siglip-warm=0-lr=0p0034466737184832607-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=2+stage-finetune+x7"
-    "llava-multimodal+llava-1b-fused-siglip-warm=0-lr=0p0034466737184832607-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=3+stage-finetune+x7"
-    "llava-multimodal+llava-1b-fused-siglip-warm=0-lr=0p0034466737184832607-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=4+stage-finetune+x7"
-    "llava-multimodal+llava-1b-fused-siglip-warm=0-lr=0p006499974971416897-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=1+stage-finetune+x7"
-    "llava-multimodal+llava-1b-fused-siglip-warm=0-lr=0p006499974971416897-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=2+stage-finetune+x7"
-    "llava-multimodal+llava-1b-fused-siglip-warm=0-lr=0p006499974971416897-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=3+stage-finetune+x7"
-    "llava-multimodal+llava-1b-fused-siglip-warm=0-lr=0p006499974971416897-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=4+stage-finetune+x7"
-    "llava-multimodal+llava-1b-fused-siglip-warm=0-lr=0p009080349589287376-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=1+stage-finetune+x7"
-    "llava-multimodal+llava-1b-fused-siglip-warm=0-lr=0p009080349589287376-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=2+stage-finetune+x7"
-    "llava-multimodal+llava-1b-fused-siglip-warm=0-lr=0p009080349589287376-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=3+stage-finetune+x7"
-    "llava-multimodal+llava-1b-fused-siglip-warm=0-lr=0p009080349589287376-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=4+stage-finetune+x7"
-    "llava-multimodal+llava-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=1+stage-finetune+x7"
-    "llava-multimodal+llava-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=2+stage-finetune+x7"
-    "llava-multimodal+llava-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=3+stage-finetune+x7"
-    "llava-multimodal+llava-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=4+stage-finetune+x7"
-    "llava-multimodal+llava-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1-m=bucket6+epochs=1+stage-finetune+x7"
-    "llava-multimodal+llava-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1-m=bucket6+epochs=2+stage-finetune+x7"
-    "llava-multimodal+llava-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1-m=bucket6+epochs=3+stage-finetune+x7"
-    "llava-multimodal+llava-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1-m=bucket6+epochs=4+stage-finetune+x7"
-    "llava-multimodal+llava_dclm-0p01_0p99-1b-fused-siglip-warm=0-lr=0p0009788970261355868-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=1+stage-finetune+x7"
-
-############################################################################################################ 10
-
-    # "llava-multimodal+llava_dclm-0p01_0p99-1b-fused-siglip-warm=0-lr=0p0009788970261355868-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=2+stage-finetune+x7"
-    # "llava-multimodal+llava_dclm-0p01_0p99-1b-fused-siglip-warm=0-lr=0p0009788970261355868-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=3+stage-finetune+x7"
-    # "llava-multimodal+llava_dclm-0p01_0p99-1b-fused-siglip-warm=0-lr=0p0009788970261355868-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=4+stage-finetune+x7"
-    # "llava-multimodal+llava_dclm-0p01_0p99-1b-fused-siglip-warm=0-lr=0p0034466737184832607-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=1+stage-finetune+x7"
-    # "llava-multimodal+llava_dclm-0p01_0p99-1b-fused-siglip-warm=0-lr=0p0034466737184832607-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=2+stage-finetune+x7"
-    # "llava-multimodal+llava_dclm-0p01_0p99-1b-fused-siglip-warm=0-lr=0p0034466737184832607-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=3+stage-finetune+x7"
-    # "llava-multimodal+llava_dclm-0p01_0p99-1b-fused-siglip-warm=0-lr=0p0034466737184832607-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=4+stage-finetune+x7"
-    # "llava-multimodal+llava_dclm-0p01_0p99-1b-fused-siglip-warm=0-lr=0p006499974971416897-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=1+stage-finetune+x7"
-    # "llava-multimodal+llava_dclm-0p01_0p99-1b-fused-siglip-warm=0-lr=0p006499974971416897-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=2+stage-finetune+x7"
-    # "llava-multimodal+llava_dclm-0p01_0p99-1b-fused-siglip-warm=0-lr=0p006499974971416897-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=3+stage-finetune+x7"
-    # "llava-multimodal+llava_dclm-0p01_0p99-1b-fused-siglip-warm=0-lr=0p006499974971416897-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=4+stage-finetune+x7"
-    # "llava-multimodal+llava_dclm-0p01_0p99-1b-fused-siglip-warm=0-lr=0p009080349589287376-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=1+stage-finetune+x7"
-    # "llava-multimodal+llava_dclm-0p01_0p99-1b-fused-siglip-warm=0-lr=0p009080349589287376-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=2+stage-finetune+x7"
-    # "llava-multimodal+llava_dclm-0p01_0p99-1b-fused-siglip-warm=0-lr=0p009080349589287376-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=3+stage-finetune+x7"
-    # "llava-multimodal+llava_dclm-0p01_0p99-1b-fused-siglip-warm=0-lr=0p009080349589287376-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=4+stage-finetune+x7"
-    # "llava-multimodal+llava_dclm-0p01_0p99-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=1+stage-finetune+x7"
-    # "llava-multimodal+llava_dclm-0p01_0p99-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=2+stage-finetune+x7"
-    # "llava-multimodal+llava_dclm-0p01_0p99-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=3+stage-finetune+x7"
-    # "llava-multimodal+llava_dclm-0p01_0p99-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=4+stage-finetune+x7"
-    # "llava-multimodal+llava_dclm-0p01_0p99-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1-m=bucket6+epochs=1+stage-finetune+x7"
-    # "llava-multimodal+llava_dclm-0p01_0p99-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1-m=bucket6+epochs=2+stage-finetune+x7"
-    # "llava-multimodal+llava_dclm-0p01_0p99-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1-m=bucket6+epochs=3+stage-finetune+x7"
-    # "llava-multimodal+llava_dclm-0p01_0p99-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1-m=bucket6+epochs=4+stage-finetune+x7"
-    # "llava-multimodal+llava_dclm-0p05_0p95-1b-fused-siglip-warm=0-lr=0p0034466737184832607-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=1+stage-finetune+x7"
-    # "llava-multimodal+llava_dclm-0p05_0p95-1b-fused-siglip-warm=0-lr=0p0034466737184832607-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=2+stage-finetune+x7"
-    # "llava-multimodal+llava_dclm-0p05_0p95-1b-fused-siglip-warm=0-lr=0p0034466737184832607-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=3+stage-finetune+x7"
-    # "llava-multimodal+llava_dclm-0p05_0p95-1b-fused-siglip-warm=0-lr=0p0034466737184832607-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=4+stage-finetune+x7"
-    # "llava-multimodal+llava_dclm-0p05_0p95-1b-fused-siglip-warm=0-lr=0p006499974971416897-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=1+stage-finetune+x7"
-    # "llava-multimodal+llava_dclm-0p05_0p95-1b-fused-siglip-warm=0-lr=0p006499974971416897-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=2+stage-finetune+x7"
-    # "llava-multimodal+llava_dclm-0p05_0p95-1b-fused-siglip-warm=0-lr=0p006499974971416897-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=3+stage-finetune+x7"
-    # "llava-multimodal+llava_dclm-0p05_0p95-1b-fused-siglip-warm=0-lr=0p006499974971416897-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=4+stage-finetune+x7"
-    # "llava-multimodal+llava_dclm-0p05_0p95-1b-fused-siglip-warm=0-lr=0p009080349589287376-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=1+stage-finetune+x7"
-    # "llava-multimodal+llava_dclm-0p05_0p95-1b-fused-siglip-warm=0-lr=0p009080349589287376-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=2+stage-finetune+x7"
-    # "llava-multimodal+llava_dclm-0p05_0p95-1b-fused-siglip-warm=0-lr=0p009080349589287376-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=3+stage-finetune+x7"
-    # "llava-multimodal+llava_dclm-0p05_0p95-1b-fused-siglip-warm=0-lr=0p009080349589287376-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=4+stage-finetune+x7"
-    # "llava-multimodal+llava_dclm-0p05_0p95-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=1+stage-finetune+x7"
-    # "llava-multimodal+llava_dclm-0p05_0p95-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=2+stage-finetune+x7"
-    # "llava-multimodal+llava_dclm-0p05_0p95-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=3+stage-finetune+x7"
-    # "llava-multimodal+llava_dclm-0p05_0p95-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=4+stage-finetune+x7"
-    # "llava-multimodal+llava_dclm-0p05_0p95-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1-m=bucket6+epochs=1+stage-finetune+x7"
-    # "llava-multimodal+llava_dclm-0p05_0p95-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1-m=bucket6+epochs=2+stage-finetune+x7"
-    # "llava-multimodal+llava_dclm-0p05_0p95-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1-m=bucket6+epochs=3+stage-finetune+x7"
-    # "llava-multimodal+llava_dclm-0p05_0p95-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1-m=bucket6+epochs=4+stage-finetune+x7"
-    # "llava-multimodal+llava_dclm-0p10_0p90-1b-fused-siglip-warm=0-lr=0p0009788970261355868-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=1+stage-finetune+x7"
-    # "llava-multimodal+llava_dclm-0p10_0p90-1b-fused-siglip-warm=0-lr=0p0009788970261355868-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=2+stage-finetune+x7"
-    # "llava-multimodal+llava_dclm-0p10_0p90-1b-fused-siglip-warm=0-lr=0p0009788970261355868-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=3+stage-finetune+x7"
-    # "llava-multimodal+llava_dclm-0p10_0p90-1b-fused-siglip-warm=0-lr=0p0009788970261355868-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=4+stage-finetune+x7"
-    # "llava-multimodal+llava_dclm-0p10_0p90-1b-fused-siglip-warm=0-lr=0p0034466737184832607-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=1+stage-finetune+x7"
-    # "llava-multimodal+llava_dclm-0p10_0p90-1b-fused-siglip-warm=0-lr=0p0034466737184832607-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=2+stage-finetune+x7"
-    # "llava-multimodal+llava_dclm-0p10_0p90-1b-fused-siglip-warm=0-lr=0p0034466737184832607-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=3+stage-finetune+x7"
-    # "llava-multimodal+llava_dclm-0p10_0p90-1b-fused-siglip-warm=0-lr=0p0034466737184832607-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=4+stage-finetune+x7"
-    # "llava-multimodal+llava_dclm-0p10_0p90-1b-fused-siglip-warm=0-lr=0p006499974971416897-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=1+stage-finetune+x7"
-    # "llava-multimodal+llava_dclm-0p10_0p90-1b-fused-siglip-warm=0-lr=0p006499974971416897-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=2+stage-finetune+x7"
-    # "llava-multimodal+llava_dclm-0p10_0p90-1b-fused-siglip-warm=0-lr=0p006499974971416897-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=3+stage-finetune+x7"
-    # "llava-multimodal+llava_dclm-0p10_0p90-1b-fused-siglip-warm=0-lr=0p006499974971416897-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=4+stage-finetune+x7"
-    # "llava-multimodal+llava_dclm-0p10_0p90-1b-fused-siglip-warm=0-lr=0p009080349589287376-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=1+stage-finetune+x7"
-    # "llava-multimodal+llava_dclm-0p10_0p90-1b-fused-siglip-warm=0-lr=0p009080349589287376-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=2+stage-finetune+x7"
-    # "llava-multimodal+llava_dclm-0p10_0p90-1b-fused-siglip-warm=0-lr=0p009080349589287376-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=3+stage-finetune+x7"
-    # "llava-multimodal+llava_dclm-0p10_0p90-1b-fused-siglip-warm=0-lr=0p009080349589287376-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=4+stage-finetune+x7"
-    # "llava-multimodal+llava_dclm-0p10_0p90-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=1+stage-finetune+x7"
-    # "llava-multimodal+llava_dclm-0p10_0p90-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=2+stage-finetune+x7"
-    # "llava-multimodal+llava_dclm-0p10_0p90-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=3+stage-finetune+x7"
-    # "llava-multimodal+llava_dclm-0p10_0p90-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=4+stage-finetune+x7"
-    # "llava-multimodal+llava_dclm-0p10_0p90-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1-m=bucket6+epochs=1+stage-finetune+x7"
-    # "llava-multimodal+llava_dclm-0p10_0p90-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1-m=bucket6+epochs=2+stage-finetune+x7"
-    # "llava-multimodal+llava_dclm-0p10_0p90-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1-m=bucket6+epochs=3+stage-finetune+x7"
-    # "llava-multimodal+llava_dclm-0p10_0p90-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1-m=bucket6+epochs=4+stage-finetune+x7"
+# llava-multimodal+datacompdr1b_caption_llava_dclm-0p008_0p002_0p99-1b-fused-siglip-warm=0-lr=0p0009788970261355868-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=4+stage-finetune+x7
+# llava-multimodal+datacompdr1b_caption_dclm-0p05_0p95-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1-m=bucket6+epochs=2+stage-finetune+x7
+# llava-multimodal+datacompdr1b_caption_llava-0p80_0p20-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=3+stage-finetune+x7
+# llava-multimodal+datacompdr1b_caption_llava_dclm-0p008_0p002_0p99-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=2+stage-finetune+x7
+# llava-multimodal+datacompdr1b_caption_llava_dclm-0p04_0p01_0p95-1b-fused-siglip-warm=0-lr=0p006499974971416897-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=1+stage-finetune+x7
+# llava-multimodal+datacompdr1b_caption_llava_dclm-0p04_0p01_0p95-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1-m=bucket6+epochs=4+stage-finetune+x7
+# llava-multimodal+datacompdr1b_caption_llava_dclm-0p04_0p01_0p95-1b-fused-siglip-warm=0-lr=0p0034466737184832607-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=3+stage-finetune+x7
+# llava-multimodal+datacompdr1b_caption_llava_dclm-0p04_0p01_0p95-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=1+stage-finetune+x7
+# llava-multimodal+datacompdr1b_caption-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1-m=bucket6+epochs=4+stage-finetune+x7
+# llava-multimodal+datacompdr1b_caption_llava_dclm-0p04_0p01_0p95-1b-fused-siglip-warm=0-lr=0p009080349589287376-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=3+stage-finetune+x7
+# llava-multimodal+datacompdr1b_caption_llava_dclm-0p008_0p002_0p99-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1-m=bucket6+epochs=1+stage-finetune+x7
+# llava-multimodal+datacompdr1b_caption_dclm-0p10_0p90-1b-fused-siglip-warm=0-lr=0p009080349589287376-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=1+stage-finetune+x7
+# llava-multimodal+datacompdr1b_caption_llava_dclm-0p008_0p002_0p99-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=3+stage-finetune+x7
+# llava-multimodal+datacompdr1b_caption_llava_dclm-0p04_0p01_0p95-1b-fused-siglip-warm=0-lr=0p0009788970261355868-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=2+stage-finetune+x7
+# llava-multimodal+datacompdr1b_caption_llava-0p80_0p20-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1-m=bucket6+epochs=1+stage-finetune+x7
+# llava-multimodal+datacompdr1b_caption_llava_dclm-0p008_0p002_0p99-1b-fused-siglip-warm=0-lr=0p0009788970261355868-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=1+stage-finetune+x7
+# llava-multimodal+llava_dclm-0p05_0p95-1b-fused-siglip-warm=0-lr=0p0009788970261355868-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=2+stage-finetune+x7
+# llava-multimodal+datacompdr1b_caption_llava-0p80_0p20-1b-fused-siglip-warm=0-lr=0p006499974971416897-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=5+stage-finetune+x7
+# llava-multimodal+datacompdr1b_caption_llava_dclm-0p008_0p002_0p99-1b-fused-siglip-warm=0-lr=0p0009788970261355868-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=2+stage-finetune+x7
+# llava-multimodal+datacompdr1b_caption_dclm-0p01_0p99-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1-m=bucket6+epochs=2+stage-finetune+x7
+# llava-multimodal+llava_dclm-0p05_0p95-1b-fused-siglip-warm=0-lr=0p0009788970261355868-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=1+stage-finetune+x7
+# llava-multimodal+datacompdr1b_caption_llava-0p80_0p20-1b-fused-siglip-warm=0-lr=0p0034466737184832607-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=1+stage-finetune+x7
+# llava-multimodal+datacompdr1b_caption_llava_dclm-0p008_0p002_0p99-1b-fused-siglip-warm=0-lr=0p006499974971416897-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=4+stage-finetune+x7
+# llava-multimodal+datacompdr1b_caption_llava_dclm-0p008_0p002_0p99-1b-fused-siglip-warm=0-lr=0p0034466737184832607-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=1+stage-finetune+x7
+# llava-multimodal+datacompdr1b_caption_llava-0p80_0p20-1b-fused-siglip-warm=0-lr=0p006499974971416897-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=1+stage-finetune+x7
+# llava-multimodal+datacompdr1b_caption_llava-0p80_0p20-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1-m=bucket6+epochs=3+stage-finetune+x7
+# llava-multimodal+datacompdr1b_caption_llava-0p80_0p20-1b-fused-siglip-warm=0-lr=0p0034466737184832607-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=2+stage-finetune+x7
+# llava-multimodal+datacompdr1b_caption_llava_dclm-0p008_0p002_0p99-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1-m=bucket6+epochs=3+stage-finetune+x7
+# llava-multimodal+datacompdr1b_caption_llava_dclm-0p04_0p01_0p95-1b-fused-siglip-warm=0-lr=0p0009788970261355868-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=3+stage-finetune+x7
+# llava-multimodal+datacompdr1b_caption_llava_dclm-0p04_0p01_0p95-1b-fused-siglip-warm=0-lr=0p009080349589287376-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=1+stage-finetune+x7
+# llava-multimodal+datacompdr1b_caption_llava_dclm-0p04_0p01_0p95-1b-fused-siglip-warm=0-lr=0p006499974971416897-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=5+stage-finetune+x7
+# llava-multimodal+datacompdr1b_caption_llava_dclm-0p08_0p02_0p90-1b-fused-siglip-warm=0-lr=0p0009788970261355868-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=1+stage-finetune+x7
+# llava-multimodal+datacompdr1b_caption_llava_dclm-0p04_0p01_0p95-1b-fused-siglip-warm=0-lr=0p006499974971416897-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=4+stage-finetune+x7
+# llava-multimodal+datacompdr1b_caption_llava_dclm-0p008_0p002_0p99-1b-fused-siglip-warm=0-lr=0p006499974971416897-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=3+stage-finetune+x7
+# llava-multimodal+datacompdr1b_caption_llava_dclm-0p008_0p002_0p99-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=1+stage-finetune+x7
+# llava-multimodal+datacompdr1b_caption_llava_dclm-0p04_0p01_0p95-1b-fused-siglip-warm=0-lr=0p0034466737184832607-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=2+stage-finetune+x7
+# llava-multimodal+datacompdr1b_caption_dclm-0p10_0p90-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1-m=bucket6+epochs=4+stage-finetune+x7
+# llava-multimodal+datacompdr1b_caption_llava_dclm-0p08_0p02_0p90-1b-fused-siglip-warm=0-lr=0p0009788970261355868-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=3+stage-finetune+x7
+# llava-multimodal+datacompdr1b_caption_llava-0p80_0p20-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1-m=bucket6+epochs=2+stage-finetune+x7
+# llava-multimodal+datacompdr1b_caption_llava-0p80_0p20-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=1+stage-finetune+x7
+# llava-multimodal+datacompdr1b_caption_llava_dclm-0p04_0p01_0p95-1b-fused-siglip-warm=0-lr=0p0034466737184832607-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=1+stage-finetune+x7
+# llava-multimodal+datacompdr1b_caption_llava_dclm-0p008_0p002_0p99-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1-m=bucket6+epochs=4+stage-finetune+x7
+# llava-multimodal+datacompdr1b_caption_llava-0p80_0p20-1b-fused-siglip-warm=0-lr=0p009080349589287376-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=3+stage-finetune+x7
+# llava-multimodal+datacompdr1b_caption_llava_dclm-0p08_0p02_0p90-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1-m=bucket6+epochs=1+stage-finetune+x7
+# llava-multimodal+datacompdr1b_caption_llava-0p80_0p20-1b-fused-siglip-warm=0-lr=0p0034466737184832607-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=4+stage-finetune+x7
+# llava-multimodal+datacompdr1b_caption_dclm-0p10_0p90-1b-fused-siglip-warm=5000-lr=0p003-wd=0p033-cd=3e-05-bs=256-mult=1p0-seed=124-replacement=1+epochs=2+stage-finetune+x7
 )
-bucket_name=mbm_paper_finetune_1b
+bucket_name=mbm_paper_finetune_1b_paperpatch
 source_s3=s3://tri-ml-datasets/openlm
+source_s3_west=s3://tri-ml-datasets-uw2/openlm
+
 target_download=/datasets/jean/checkpoints/$bucket_name
 
 # Function to get the number of available GPUs
@@ -357,10 +232,14 @@ run_task() {
     mkdir -p lm_eval_logs/$bucket_name/$model_name
 
     echo "Downloading model from $source_s3/$bucket_name/$model_name"
-    aws s3 sync $source_s3/$bucket_name/$model_name/checkpoints/ $target_download/$model_name/checkpoints/ --exclude "*" --include "*latest-checkpoint.pt"
+    aws s3 sync "$source_s3/$bucket_name/$model_name/checkpoints/" "/datasets/jean/checkpoints/$bucket_name/$model_name/checkpoints/" --exclude "*" --include "*latest-checkpoint.pt"
+    aws s3 sync "$source_s3_west/$bucket_name/$model_name/checkpoints/" "/datasets/jean/checkpoints/$bucket_name/$model_name/checkpoints/" --exclude "*" --include "*latest-checkpoint.pt" --profile poweruser
     
     echo "Downloading params"
-    aws s3 cp $source_s3/$bucket_name/$model_name/config.json $target_download/$model_name/config.json
+    echo aws s3 cp "$source_s3/$bucket_name/$model_name/config.json" "/datasets/jean/checkpoints/$bucket_name/$model_name/config.json"
+    aws s3 cp "$source_s3/$bucket_name/$model_name/config.json" "/datasets/jean/checkpoints/$bucket_name/$model_name/config.json"
+    echo aws s3 cp --profile poweruser "$source_s3_west/$bucket_name/$model_name/config.json" "/datasets/jean/checkpoints/$bucket_name/$model_name/config.json"
+    aws s3 cp --profile poweruser "$source_s3_west/$bucket_name/$model_name/config.json" "/datasets/jean/checkpoints/$bucket_name/$model_name/config.json"
     
     echo "Running lm_eval for the $model_name model on GPU $gpu"
     CUDA_VISIBLE_DEVICES=$gpu lm_eval --model prismatic \

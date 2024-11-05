@@ -1,11 +1,12 @@
 sources=(
-    mbm_paper_eval
-    mbm_paper_eval_2
-    mbm_paper_eval_3
-    mbm_paper_eval_4
-    mbm_paper_eval_5
-    mbm_paper_eval_6
+    # mbm_paper_eval
+    # mbm_paper_eval_2
+    # mbm_paper_eval_3
+    # mbm_paper_eval_4
+    # mbm_paper_eval_5
+    # mbm_paper_eval_6
     mbm_paper_eval_1b
+    mbm_paper_eval_1b_paperpatch
 )
 for source in "${sources[@]}"; do
     mkdir -p results/$source/aggregated/
