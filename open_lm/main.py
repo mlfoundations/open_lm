@@ -179,7 +179,7 @@ def load_optimizer(args, model, optimizer, scaler):
             osd = checkpoint["optimizer"]
             if "_orig_mod" in next(iter(osd['state'].items()))[0]:
                 osd['state'] = {k.replace("_orig_mod.", ""): v for k, v in osd['state'].items()}
-                osd['param_groups'][1]['params'] = osd['state'].keys()
+                osd['param_groups'][1]['params'] = list(osd['state'].keys())
             if args.fsdp:
                 osd = FSDP.optim_state_dict_to_load(model=model, optim=optimizer, optim_state_dict=osd)
             optimizer.load_state_dict(osd)
