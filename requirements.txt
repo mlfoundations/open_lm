@@ -1,5 +1,4 @@
 torch
-xformers
 tiktoken
 wandb
 webdataset<0.2.90
