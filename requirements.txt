@@ -1,8 +1,8 @@
 torch
-xformers>=0.0.22
+xformers
 tiktoken
 wandb
-webdataset
+webdataset<0.2.90
 pandas==2.1.4
 fsspec
 tqdm
