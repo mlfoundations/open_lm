@@ -101,7 +101,8 @@ def jsonl_file_reader(fh: BinaryIO, content_key: str):
     with io.TextIOWrapper(fh, encoding="utf-8") as text_reader:
         with jsonlines.Reader(text_reader) as jsonl_reader:
             for item in jsonl_reader:
-                yield item[content_key]
+                if content_key in item:
+                    yield item[content_key]
 
 
 def zstd_compressed_reader(fh: BinaryIO, content_key: str):
@@ -115,7 +116,8 @@ def gzip_compressed_reader(fh: BinaryIO, content_key: str):
     with gzip.open(fh, "rb") as f_in:
         with jsonlines.Reader(f_in) as jsonl_reader:
             for item in jsonl_reader:
-                yield item[content_key]
+                if content_key in item:
+                    yield item[content_key]
 
 
 def tar_reader(fh: BinaryIO, content_key: str):
