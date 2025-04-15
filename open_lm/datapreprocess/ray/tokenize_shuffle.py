@@ -256,6 +256,7 @@ def preprocess(
     do_sample: bool = False,
     sources: enum.Enum = None,
     source_counter: GlobalCounter = None,
+    sentinels = None
 ):
     tokenizer_fn, vocab_size = tokenizer
     rng = random.Random(hash(key) + seed)
@@ -273,6 +274,15 @@ def preprocess(
         pbar = tqdm(file_reader(fh), mininterval=10)
         pbar.set_description(key)
         for string in pbar:
+           
+            # Skip if just whitespace
+            if not string.strip():
+                continue
+ 
+            # Skip based on sentinel values
+            if any(string == s for s in sentinels):
+                continue
+
             tokens = tokenizer_fn(string)
             tokens.append(EOT)
             buffer += tokens
@@ -456,7 +466,7 @@ def load_tokenizer(tokenizer):
     return (lambda x: enc(x).input_ids, enc.vocab_size)
 
 
-def glob_files(path, suffixes):
+def glob_files(path, suffixes, filters=None):
     """
     Glob files based on a given path and suffix.
     Supports both local and S3 paths.
@@ -481,6 +491,9 @@ def glob_files(path, suffixes):
 
         # Filter out the files based on the suffix
         matching_files = [f for f in all_files if any(f.endswith(suffix) for suffix in suffixes)]
+        
+        if filters:
+            matching_files = [m for m in matching_files if any(f in m for f in filters)]
     else:
         # Use glob for local paths
         matching_files = []
@@ -574,8 +587,11 @@ def main(args):
         "--ray_dashboard_host", type=str, default="127.0.0.1"
     )  # default is localhost; for slurm jobs do 0.0.0.0
     parser.add_argument("--suffixes", nargs="+", default=[".json", ".jsonl", ".zst", ".zstd", ".tar", ".gz"])
+    parser.add_argumnet("--filters", nargs="*")
+    parser.add_argument("--sentinels", nargs="*")
     parser.add_argument("--presort", action="store_true")
     parser.add_argument("--allow_imbalanced_write", action="store_true")
+   
 
     args = parser.parse_args(args)
     if args.do_sample:
@@ -611,7 +627,7 @@ def main(args):
     input_folders = args.input.split(",")
     input_paths = []
     for inp_folder in input_folders:
-        input_paths += glob_files(inp_folder, suffixes=args.suffixes)
+        input_paths += glob_files(inp_folder, suffixes=args.suffixes, filters=args.filters)
     input_paths = sorted(set(input_paths))
     rng = random.Random(args.seed)
     rng.shuffle(input_paths)  # shuffle before selecting subsets
@@ -661,6 +677,7 @@ def main(args):
             do_sample=args.do_sample,
             sources=Sources,
             source_counters=source_counters,
+            sentinels=args.sentinels
         )
     )
     ds = ds.map(add_hash)
