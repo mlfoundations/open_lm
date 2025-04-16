@@ -323,7 +323,7 @@ def preprocess(
         return []
 
 
-def process_keys(data, tokenizer, seqlen, seed, content_key, do_sample, sources=None, source_counters=None):
+def process_keys(data, tokenizer, seqlen, seed, content_key, do_sample, sources=None, source_counters=None, sentinels=None):
     path = data["path"]
 
     if path.startswith("s3"):
@@ -352,6 +352,7 @@ def process_keys(data, tokenizer, seqlen, seed, content_key, do_sample, sources=
             do_sample=do_sample,
             sources=sources,
             source_counter=source_counter,
+            sentinels=sentinels
         )
 
         # Ensure that all operations on the file handle are done within this block
@@ -587,7 +588,7 @@ def main(args):
         "--ray_dashboard_host", type=str, default="127.0.0.1"
     )  # default is localhost; for slurm jobs do 0.0.0.0
     parser.add_argument("--suffixes", nargs="+", default=[".json", ".jsonl", ".zst", ".zstd", ".tar", ".gz"])
-    parser.add_argumnet("--filters", nargs="*")
+    parser.add_argument("--filters", nargs="*")
     parser.add_argument("--sentinels", nargs="*")
     parser.add_argument("--presort", action="store_true")
     parser.add_argument("--allow_imbalanced_write", action="store_true")
