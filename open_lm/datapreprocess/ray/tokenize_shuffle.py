@@ -280,7 +280,7 @@ def preprocess(
                 continue
  
             # Skip based on sentinel values
-            if any(string == s for s in sentinels):
+            if sentinels and any(string == s for s in sentinels):
                 continue
 
             tokens = tokenizer_fn(string)
