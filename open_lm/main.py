@@ -211,7 +211,8 @@ def save_checkpoint(
 ):
     cpu_state, optim_state = None, None
     if args.logs and args.logs.lower() != "none" and args.fsdp:
-        save_policy = FullStateDictConfig(offload_to_cpu=True, rank0_only=True)
+        rank0_only = not args.log_local
+        save_policy = FullStateDictConfig(offload_to_cpu=True, rank0_only=rank0_only)
         with FSDP.state_dict_type(model, StateDictType.FULL_STATE_DICT, save_policy):
             cpu_state = model.state_dict()
             optim_state = FSDP.optim_state_dict(model, optimizer)
@@ -380,7 +381,7 @@ def main(args):
     args.tensorboard = "tensorboard" in args.report_to or "all" in args.report_to
     args.checkpoint_path = os.path.join(log_base_path, "checkpoints")
     args.failed_checkpoint_path = os.path.join(log_base_path, "checkpoints_failed")
-    if is_master(args):
+    if is_master(args, local=args.log_local):
         args.tensorboard_path = os.path.join(log_base_path, "tensorboard") if args.tensorboard else ""
         for dirname in [args.tensorboard_path, args.checkpoint_path, args.failed_checkpoint_path]:
             if dirname:
@@ -424,9 +425,9 @@ def main(args):
     # start the sync proces if remote-sync is not None
     remote_sync_process = None
     if is_master(args) and args.remote_sync is not None:
-        # first make sure it works
+        # first make sure it works: here, remote_sync_frequency is set to 0 for this initial test
         result = remote_sync_with_expon_backoff(
-            args.remote_sync_frequency,
+            0,
             os.path.join(args.logs, args.name),
             os.path.join(args.remote_sync, args.name),
             args.remote_sync_protocol,
@@ -572,7 +573,7 @@ def main(args):
     if args.resume is not None and averagers is not None:
         load_avg_models(args, averagers)
 
-    if is_master(args):
+    if is_master(args, local=args.log_local):
         logging.info(f"Model (has {sum(p.numel() for p in model.parameters() if p.requires_grad)} parameters):")
         logging.info(f"{str(model)}")
         logging.info("Params:")
@@ -717,7 +718,7 @@ def main(args):
             raise ValueError(f"Unknown scheduler, {args.lr_scheduler}. Available options are: cosine, const.")
 
     # determine if this worker should save logs and checkpoints. only do so if it is rank == 0
-    args.save_logs = args.logs and args.logs.lower() != "none" and is_master(args)
+    args.save_logs = args.logs and args.logs.lower() != "none" and is_master(args, local=args.log_local)
     writer = None
     if args.save_logs and args.tensorboard:
         assert tensorboard is not None, "Please install tensorboard."
@@ -931,8 +932,9 @@ def main(args):
     if remote_sync_process is not None:
         logging.info("Final remote sync.")
         terminate_sync_process(remote_sync_process)
+        # Can just pass in sync_every=0 for last sync, otherwise will unecessarily sleep.
         result = remote_sync_with_expon_backoff(
-            args.remote_sync_frequency,
+            0,
             os.path.join(args.logs, args.name),
             os.path.join(args.remote_sync, args.name),
             args.remote_sync_protocol,

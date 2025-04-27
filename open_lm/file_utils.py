@@ -76,7 +76,6 @@ def remote_sync_with_expon_backoff(sync_every, local_dir, remote_dir, protocol, 
         success = remote_sync(local_dir, remote_dir, protocol)
         if success:
             return True
-
     return False
 
 
