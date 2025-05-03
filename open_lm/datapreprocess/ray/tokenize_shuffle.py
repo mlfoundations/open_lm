@@ -276,7 +276,7 @@ def preprocess(
         for string in pbar:
            
             # Skip if just whitespace
-            if not string.strip():
+            if string is None or not string.strip():
                 continue
  
             # Skip based on sentinel values
