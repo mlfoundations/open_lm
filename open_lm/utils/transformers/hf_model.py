@@ -1,6 +1,6 @@
 from argparse import Namespace
 from torch.utils.checkpoint import checkpoint
-from transformers import PreTrainedModel
+from transformers import PreTrainedModel, GenerationMixin
 from transformers.modeling_outputs import CausalLMOutputWithPast
 from open_lm.utils.transformers.hf_config import OpenLMConfig
 from open_lm.model import Transformer, create_params
@@ -10,7 +10,7 @@ from typing import Union, Tuple, Optional, List
 import os
 
 
-class OpenLMModel(PreTrainedModel):
+class OpenLMModel(PreTrainedModel, GenerationMixin):
     config_class = OpenLMConfig
 
     def __init__(self, config):

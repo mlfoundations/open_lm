@@ -18,6 +18,10 @@ from .configuration_openlm import OpenLMConfig
 
 log = logging.getLogger(__name__)
 
+try:
+    from transformers.generation.utils import GenerationMixin
+except ImportError:
+    from transformers.generation import GenerationMixin
 
 def create_model_config_from_pretrained_config(config: OpenLMConfig):
     """
@@ -40,7 +44,7 @@ def create_model_config_from_pretrained_config(config: OpenLMConfig):
     return model_config
 
 
-class OpenLMForCausalLM(PreTrainedModel):
+class OpenLMForCausalLM(PreTrainedModel, GenerationMixin):
     """
     Extremely barebones HF model wrapper.
     """
