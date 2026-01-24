@@ -109,7 +109,7 @@ During training, the above command will pick shards to train on via sampling wit
 ```
 python -m open_lm.utils.make_wds_manifest --data-dir /preproc_data/
 ```
-This will create a file called ```manifest.jsonl``` under ```/preproc_data```. Training can then be done by sampling wihout replacement via the following example commands:
+This will create a file called ```manifest.jsonl``` under ```/preproc_data```. Training can then be done by sampling without replacement via the following example commands:
 ```
 >>> export CUDA_VISIBLE_DEVICES=0,1,2,3
 >>> torchrun --nproc-per-node 4 -m open_lm.main   \
