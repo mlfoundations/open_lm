@@ -296,7 +296,7 @@ def parse_args(args):
         nargs="+",
         default=None,
         help=(
-            "Path to file(s) with validation data. Note: each space seperated entry will be processed seperately and writen as seperate entries "
+            "Path to file(s) with validation data. Note: each space separated entry will be processed separately and written as separate entries "
             "in a results.jsonl file."
         ),
     )
