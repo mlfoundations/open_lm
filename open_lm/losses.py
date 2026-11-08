@@ -18,4 +18,7 @@ class CrossEntropyLossWithZLoss(CrossEntropyLoss):
         self.eps = eps
 
     def forward(self, input: Tensor, target: Tensor) -> Tensor:
-        return super().forward(input, target) + self.eps * torch.square(torch.logsumexp(input, dim=-1)).mean()
+        z_sq = torch.square(torch.logsumexp(input, dim=-1))
+        # Like the cross entropy term, do not regularize positions whose target is ignored.
+        valid = target != self.ignore_index
+        return super().forward(input, target) + self.eps * (z_sq * valid).sum() / valid.sum()
